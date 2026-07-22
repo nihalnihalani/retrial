@@ -10,6 +10,7 @@ import threading
 
 from .verifier import verify, confirm
 from .ledger import EvidenceLedger
+from .genome import Genome
 
 
 class TournamentCoordinator:
@@ -17,7 +18,7 @@ class TournamentCoordinator:
 
     def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.05,
                  min_trials=8, timeout=60, isolation="process", ledger=None,
-                 tournament_conc=None):
+                 tournament_conc=None, genome=None):
         self.pool = pool
         self.bus = bus
         self.max_trials = max_trials
@@ -34,6 +35,8 @@ class TournamentCoordinator:
         # Braintrust ledger: default on when the key is present; a disabled ledger
         # (or LEDGER=0) makes every logging call a silent no-op.
         self.ledger = ledger if ledger is not None else EvidenceLedger.from_env()
+        # Flake-genome store (the compounding flywheel), appended each run.
+        self.genome = genome if genome is not None else Genome.from_env()
 
     def _emit(self, event_type, payload):
         if self.bus is not None:
@@ -170,6 +173,9 @@ class TournamentCoordinator:
         # A winner only stands if the confirmation run also reads STABLE.
         if winner is not None and confirmation["verdict"] == "STABLE":
             verdict = "FIXED"
+            genome_cause = winner["cause_class"]
+            genome_final = confirmation["flake_rate"]
+            genome_model = winner.get("model")
             self._emit("winner_confirmed", {
                 "id": winner["id"],
                 "flake_rate": winner["flake_rate"],            # tournament round
@@ -185,6 +191,8 @@ class TournamentCoordinator:
             if results:
                 best = min(results.values(), key=lambda r: r["flake_rate"])
                 best_id = best["id"]
+                genome_cause = best["cause_class"]
+                genome_final = best["flake_rate"]
                 dossier = {
                     "flake_rate": best["flake_rate"],
                     "wilson_ci": best["wilson_ci"],
@@ -194,12 +202,15 @@ class TournamentCoordinator:
                 }
             else:
                 best_id = ""
+                genome_cause = None
+                genome_final = orig_rate
                 dossier = {
                     "flake_rate": orig_rate,
                     "wilson_ci": detect["wilson_ci"],
                     "trials": detect["trials"],
                     "reason": "no fix hypotheses were generated",
                 }
+            genome_model = None  # no winning model on a quarantine
             self._emit("quarantine_confirmed", {
                 "best_id": best_id,
                 "dossier": dossier,
@@ -226,4 +237,20 @@ class TournamentCoordinator:
             "winner_flake_rate": winner["flake_rate"] if winner else None,
             "num_hypotheses": len(results),
         })
+
+        # --- GENOME: append this run to the flywheel, then publish the aggregate ---
+        try:
+            self.genome.record(
+                test_name=test_name, verdict=verdict, cause_class=genome_cause,
+                orig_flake_rate=orig_rate, final_flake_rate=genome_final,
+                winner_model=genome_model)
+            agg = self.genome.aggregate()
+            self._emit("genome_updated", {
+                "runs": agg["runs"],
+                "by_cause_class": agg["by_cause_class"],
+            })
+            result["genome"] = agg
+        except Exception:
+            pass  # the genome must never break a tournament
+
         return result

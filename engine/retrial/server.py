@@ -32,6 +32,8 @@ from .events import EventBus
 from .pool import SandboxPool
 from .coordinator import TournamentCoordinator
 from .diagnosis import DiagnosisEngine
+from .prsmith import PRSmith
+from .genome import Genome
 
 # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
 # Degrades to a no-op when no key is configured — logging must never break the server.
@@ -51,6 +53,7 @@ TOURNAMENT_CONC = int(os.environ.get("TOURNAMENT_CONC", "8"))
 THRESHOLD = float(os.environ.get("THRESHOLD", "0.05"))
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
+PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
 
 # One process-wide bus: the tournament emits here, every /ws subscriber streams it.
 BUS = EventBus()
@@ -109,6 +112,7 @@ class TournamentRequest(BaseModel):
     seed_path: str
     hypotheses: list[dict] | None = None
     isolation: str | None = None  # "process" (default) | "sandbox"; falls back to env ISOLATION
+    open_pr: bool = False         # open a fix/quarantine PR (also enabled by env PRSMITH=1)
 
 
 @app.get("/health")
@@ -122,8 +126,14 @@ def health():
                  "prewarming": _pool_status["prewarming"]},
         "config": {"max_trials": MAX_TRIALS, "conc": CONC,
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
-                   "isolation": ISOLATION, "prewarm": PREWARM},
+                   "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH},
     }
+
+
+@app.get("/genome")
+def genome():
+    """Flywheel aggregates: runs, by_cause_class counts, model win-rates."""
+    return Genome.from_env().aggregate()
 
 
 @app.websocket("/ws")
@@ -167,6 +177,7 @@ def start_tournament(req: TournamentRequest):
     test_code = path.read_text()
     supplied = req.hypotheses or []
     isolation = req.isolation or ISOLATION
+    open_pr = req.open_pr or PRSMITH
     # Diagnose live only when no hypotheses were supplied AND Fireworks is available.
     engine = DiagnosisEngine()
     will_diagnose = (not supplied) and engine.available
@@ -197,8 +208,11 @@ def start_tournament(req: TournamentRequest):
                 pool, bus=BUS, max_trials=MAX_TRIALS, conc=CONC,
                 tournament_conc=TOURNAMENT_CONC,
                 threshold=THRESHOLD, isolation=isolation)
-            coord.run_tournament(test_code, hypotheses, test_name=path.name,
-                                 isolation=isolation)
+            result = coord.run_tournament(test_code, hypotheses, test_name=path.name,
+                                          isolation=isolation)
+            # After the verdict, optionally open a fix/quarantine PR (emits pr_opened).
+            if open_pr and result.get("verdict") in ("FIXED", "QUARANTINE"):
+                PRSmith(bus=BUS).open_pr(result, path.name)
         except Exception as e:
             BUS.emit("tournament_done", {"verdict": "ERROR", "error": str(e)[:200]})
         finally:
