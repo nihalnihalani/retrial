@@ -65,6 +65,7 @@ export interface WinnerConfirmed {
   id: string;
   flake_rate: number; // rate during the tournament round
   confirm_flake_rate: number; // rate during the dedicated confirmation round
+  confirm_trials?: number; // trials in the confirmation round, when reported
   wilson_ci?: WilsonCI; // CI of the confirmed winner
   orig_flake_rate?: number; // baseline flake before the fix
   braintrust_url?: string; // real Braintrust experiment permalink (the receipt)
@@ -150,6 +151,7 @@ export interface WinnerState {
   id: string;
   flakeRate: number;
   confirmFlakeRate: number;
+  confirmTrials: number | null;
   wilsonCi: WilsonCI | null;
   origFlakeRate: number | null;
   braintrustUrl: string | null;
