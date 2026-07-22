@@ -165,19 +165,11 @@ def start_tournament(req: TournamentRequest):
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"seed not found: {req.seed_path}")
     test_code = path.read_text()
-    hypotheses = req.hypotheses or []
+    supplied = req.hypotheses or []
     isolation = req.isolation or ISOLATION
-
-    # No hypotheses supplied and Fireworks is available -> diagnose live.
-    # If the key is absent or diagnosis fails, fall through with [] (the
-    # coordinator's detect-only quarantine path — never a hard error).
-    if not hypotheses:
-        engine = DiagnosisEngine()
-        if engine.available:
-            try:
-                hypotheses = engine.diagnose(test_code, path.name, log_tail="", n=4)
-            except Exception:
-                hypotheses = []
+    # Diagnose live only when no hypotheses were supplied AND Fireworks is available.
+    engine = DiagnosisEngine()
+    will_diagnose = (not supplied) and engine.available
 
     with _run_lock:
         if _running["active"]:
@@ -188,6 +180,16 @@ def start_tournament(req: TournamentRequest):
     def run():
         pool = _get_pool()
         try:
+            hypotheses = supplied
+            # Live diagnosis runs INSIDE the background thread so POST returns
+            # instantly. On absent key / failure, fall through with [] (the
+            # coordinator's detect-only quarantine path — never a hard error).
+            if will_diagnose:
+                BUS.emit("diagnosing", {"test_name": path.name, "n": 4})
+                try:
+                    hypotheses = engine.diagnose(test_code, path.name, log_tail="", n=4)
+                except Exception:
+                    hypotheses = []
             # Top up (never trims) so the run starts demo-ready even if boot
             # pre-warm was disabled or hasn't finished yet.
             pool.ensure_warm(min(CONC, MAX_TRIALS))
@@ -209,8 +211,9 @@ def start_tournament(req: TournamentRequest):
                              daemon=True).start()
 
     threading.Thread(target=run, daemon=True).start()
-    return {"status": "started", "test_name": path.name,
-            "num_hypotheses": len(hypotheses), "isolation": isolation}
+    return {"status": "started", "test_name": path.name, "isolation": isolation,
+            "diagnosing": will_diagnose,
+            "num_hypotheses": None if will_diagnose else len(supplied)}
 
 
 if __name__ == "__main__":
