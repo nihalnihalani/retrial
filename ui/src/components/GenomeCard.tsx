@@ -12,8 +12,12 @@ const CAUSE_LABEL: Record<string, string> = {
   timing: 'timing',
 };
 
-const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? '' : 's'}`;
 const label = (c: string) => CAUSE_LABEL[c] ?? c.replace(/_/g, ' ');
+
+// "1 order dependency" / "3 order dependencies" — handle consonant+y → ies.
+const pluralize = (word: string) =>
+  /[^aeiou]y$/.test(word) ? word.replace(/y$/, 'ies') : `${word}s`;
+const plural = (n: number, s: string) => `${n} ${n === 1 ? s : pluralize(s)}`;
 
 // The flywheel close: the repo's flake genome — which cause-classes this repo
 // keeps producing. Prefers the engine's cumulative genome_updated data (real,
