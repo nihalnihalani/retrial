@@ -28,7 +28,7 @@ flake (CI 36–66%); a single live run re-measures within that interval.
 | 2 | 0:15–0:30 | Board: run_started, detect grid filling green/red | Detect = the lie detector, Wilson CI |
 | 3 | 0:30–0:45 | Diagnose: hypothesis cards appear (Fireworks) | Competing root-cause hypotheses |
 | 4 | 0:45–1:10 | Tournament: parallel lanes filling, eliminations | The retrial — 6.1 trials/s, lanes converge |
-| 5 | 1:10–1:30 | Winner + confirmation round; Braintrust permalink | 48%→0/50, "≤7% at 95% confidence", the receipt |
+| 5 | 1:10–1:30 | Winner + confirmation round; Braintrust permalink | 50%→0/40, "≤8.8% at 95% confidence", the receipt |
 | 6 | 1:30–1:45 | Genome card + PR / CodeRabbit; tagline card | Flywheel + close |
 
 ---
@@ -56,7 +56,7 @@ Overlay text stamps in: **"Same test. Same code. Same second."**
 **SCREEN:** The tournament board. `run_started` fires; the **detect grid**
 starts filling — a wall of cells flickering green and red as trials land across
 the Daytona swarm. A live counter and a **Wilson confidence interval** tick
-alongside it, tightening as trials accumulate. It settles around **48% flake**.
+alongside it, tightening as trials accumulate. It settles around **50% flake**.
 
 **VO (0:15):**
 > "Retrial reruns it across a swarm of disposable Daytona sandboxes — a fresh
@@ -64,8 +64,8 @@ alongside it, tightening as trials accumulate. It settles around **48% flake**.
 > weeks of CI history. From sixty seconds of sandboxes."
 
 **VO (0:24):**
-> "Forty-eight percent, with a real confidence interval. That's the lie, made
-> into a number."
+> "Fifty percent, with a real confidence interval. That's the lie, made into a
+> number."
 
 ---
 
@@ -110,33 +110,32 @@ green.
 
 **SCREEN:** `winner_confirmed`. The winning lane runs a distinct **fresh
 confirmation round** (call it out visually — a new grid, all green). Numbers
-resolve: **48% → 0/50**, rendered as **"≤7% at 95% confidence."** Cut to the
+resolve: **50% → 0/40**, rendered as **"≤8.8% at 95% confidence."** Cut to the
 **Braintrust experiment permalink** — the dashboard showing the before/after
-rate across the swarm.
+rate across the swarm (the real shipped run carries 5 of these).
 
 **VO (1:10):**
 > "The winner runs a fresh confirmation round — because selection bias is real,
 > and we guard against it."
 
 **VO (1:18):**
-> "Forty-eight percent down to zero out of fifty. We report it honestly — at
-> most seven percent, ninety-five percent confidence. And here's the receipt:
-> the whole tournament, live in Braintrust. We didn't just fix it. We proved
-> it."
+> "Fifty percent down to zero out of forty. We report it honestly — at most
+> nine percent, ninety-five percent confidence. And here's the receipt: the
+> whole tournament, live in Braintrust. We didn't just fix it. We proved it."
 
 ---
 
 ## Shot 6 — Flywheel + close (1:30–1:45)
 
 **SCREEN:** The **flake genome** card slides in — cause-class taxonomy, model
-win-rates ("Kimi wins 63% of order-dependency fixes on your repo"). Quick
-glimpse of the opened **PR** with the evidence dossier + a **CodeRabbit** review
-badge. Land on the tagline card.
+win-rates (real data: `glm-5p2` 2-for-2 on order-dependency fixes). Quick
+glimpse of the **real opened PR — retrial#1** — with the evidence dossier +
+Braintrust permalinks + a **CodeRabbit** review badge. Land on the tagline card.
 
 **VO (1:30):**
-> "It ships a real pull request with the evidence attached, reviewed by
-> CodeRabbit. And every run teaches Retrial your repo's flake genome — so it
-> gets sharper the more you run it."
+> "It ships a real pull request — this one's live on our repo — with the
+> evidence attached, reviewed by CodeRabbit. And every run teaches Retrial your
+> repo's flake genome, so it gets sharper the more you run it."
 
 **VO (1:40), on the tagline card:**
 > "Every flaky test deserves a retrial. Fifty of them, actually."
@@ -154,8 +153,10 @@ badge. Land on the tagline card.
 - Never show or say **race condition** — measured 0/120, those don't flake on
   this substrate. The seed is an **order-dependency** flake; say "order
   dependency" or "scheduling-dependent," never "race."
-- The 51% is the calibrated lock; 48% is a representative single-run detect
-  reading inside the CI. Don't present 48% as separately calibrated.
+- The 51% is the calibrated lock; the ~50% on screen is that run's own detect
+  reading inside the CI. Don't present the per-run reading as separately
+  calibrated. The real shipped PR (retrial#1) shows 69%→0% — a different run's
+  numbers; don't splice them into the on-screen arc.
 - Prefer recording off a genuinely live `?live=1` run so the claim "nothing here
   is pre-recorded" stays true. If you fall back to replay for stability, don't
   make the "fully live" claim in the video's VO.

@@ -12,7 +12,7 @@ Public API:
 """
 from .pool import SandboxPool
 from .trial import run_trial, TrialRunner
-from .verifier import verify, confirm, wilson, Verifier
+from .verifier import verify, confirm, wilson, Verifier, verify_hermetic
 from .events import EventBus, EVENT_TYPES
 from .coordinator import TournamentCoordinator
 from .ledger import EvidenceLedger, LedgerRun
@@ -26,6 +26,7 @@ __all__ = [
     "TrialRunner",
     "verify",
     "confirm",
+    "verify_hermetic",
     "wilson",
     "Verifier",
     "EventBus",

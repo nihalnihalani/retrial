@@ -64,6 +64,9 @@ export interface WinnerConfirmed {
   id: string;
   flake_rate: number; // rate during the tournament round
   confirm_flake_rate: number; // rate during the dedicated confirmation round
+  wilson_ci?: WilsonCI; // CI of the confirmed winner
+  orig_flake_rate?: number; // baseline flake before the fix
+  braintrust_url?: string; // real Braintrust experiment permalink (the receipt)
 }
 
 // No fix stabilized the test — the no-dead-end path: quarantine WITH evidence.
@@ -76,6 +79,20 @@ export interface QuarantineConfirmed {
     trials: number;
     reason: string;
   };
+  braintrust_url?: string; // real Braintrust autopsy permalink
+}
+
+// Cumulative repo flake genome — the compounding flywheel.
+export interface GenomeUpdated {
+  type: 'genome_updated';
+  runs: number;
+  by_cause_class: Record<string, number>;
+}
+
+// Emitted when the fix / quarantine PR is actually opened.
+export interface PrOpened {
+  type: 'pr_opened';
+  url: string;
 }
 
 export interface TournamentDone {
@@ -92,6 +109,8 @@ export type RetrialEvent =
   | HypothesisEliminated
   | WinnerConfirmed
   | QuarantineConfirmed
+  | GenomeUpdated
+  | PrOpened
   | TournamentDone;
 
 // ---- Derived view state (built by the reducer) ----
@@ -129,6 +148,9 @@ export interface WinnerState {
   id: string;
   flakeRate: number;
   confirmFlakeRate: number;
+  wilsonCi: WilsonCI | null;
+  origFlakeRate: number | null;
+  braintrustUrl: string | null;
 }
 
 export interface QuarantineState {
@@ -137,6 +159,12 @@ export interface QuarantineState {
   wilsonCi: WilsonCI;
   trials: number;
   reason: string;
+  braintrustUrl: string | null;
+}
+
+export interface GenomeState {
+  runs: number;
+  byCauseClass: Record<string, number>;
 }
 
 export interface BoardState {
@@ -148,6 +176,8 @@ export interface BoardState {
   hypotheses: Hypothesis[];
   winner: WinnerState | null;
   quarantine: QuarantineState | null;
+  genome: GenomeState | null;
+  prUrl: string | null;
   tournamentDone: boolean;
 }
 

@@ -5,8 +5,9 @@ interface Props {
   n: number;
 }
 
-// Fireworks models that draft the competing hypotheses (from ARCHITECTURE.md).
-const MODEL_NAMES = ['GLM-5.2', 'Kimi K2.7', 'MiniMax M3', 'DeepSeek'];
+// Fireworks models that draft the competing hypotheses (the real lineup this
+// project runs: glm-5p2 / glm-5p1 / kimi-k2p6 / deepseek-v4-pro).
+const MODEL_NAMES = ['GLM-5.2', 'GLM-5.1', 'Kimi K2.6', 'DeepSeek V4'];
 
 // The cause-classes the models flicker through while they think. Purely
 // cosmetic — the real hypotheses arrive later as hypothesis_created events.
