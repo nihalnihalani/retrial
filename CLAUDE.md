@@ -77,6 +77,9 @@ Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Expe
 - DON'T commit `.env`, `calibration-results.json`, or `ui/node_modules` (gitignored — keep it that way).
 - DON'T touch `docs/VERDICT.md` / `docs/ADE-DESIGN.md` framing — superseded history; `docs/WINNING-IDEA.md` is the only product source of truth.
 
+## Demo controls (UI)
+Default URL = winning-path REPLAY, spotless console. `?mock=quarantine` = no-winner rehearsal. `?live=1` = attempt engine WS (falls back to replay). ↻ Replay button restarts cleanly. Mock test name must always be an ORDER-DEPENDENCY-class name (never race/timing — we measured those don't flake here and must not imply otherwise).
+
 ## Env keys (.env at repo root; coupon codes in .env.example comments)
 `DAYTONA_API_KEY` ✅ filled · `FIREWORKS_API_KEY` ⏳ (blocks DiagnosisEngine) · `BRAINTRUST_API_KEY` ⏳ · `ELEVENLABS_API_KEY` ⏳ · `GITHUB_TOKEN` (or gh CLI) for PRSmith.
 
