@@ -1,0 +1,8 @@
+daytona
+fastapi
+uvicorn[standard]
+openai
+braintrust
+autoevals
+python-dotenv
+httpx
