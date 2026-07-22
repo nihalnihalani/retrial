@@ -140,6 +140,12 @@ Braintrust permalinks + a **CodeRabbit** review badge. Land on the tagline card.
 **VO (1:40), on the tagline card:**
 > "Every flaky test deserves a retrial. Fifty of them, actually."
 
+**OPTIONAL — proof title card (≈5s, 1:45–1:50, only if under the 2:00 ceiling):**
+Silent full-screen text over the board, no VO (or a single line if room):
+> **On a real catalogued OSS flake, our tournament rediscovered the maintainer's
+> exact fix — and rejected the model that got it wrong.**
+> *penman v1.2.1 · IDoFT · 3 of 4 models converged · winner 0/25 · 57s*
+
 **SCREEN (end card):** RETRIAL · *the lie detector for flaky tests* ·
 `github.com/nihalnihalani/retrial`
 
