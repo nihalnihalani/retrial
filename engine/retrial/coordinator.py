@@ -29,12 +29,20 @@ class TournamentCoordinator:
         if self.bus is not None:
             self.bus.emit(event_type, payload)
 
-    def _verify(self, test_code, label, isolation):
+    def _verify(self, test_code, label, isolation, hypothesis_id=None, emit_trials=True):
         return verify(self.pool, test_code, self.max_trials, self.conc,
                       self.threshold, self.min_trials, self.bus, label,
-                      self.timeout, isolation)
+                      self.timeout, isolation, hypothesis_id, emit_trials)
 
-    def run_tournament(self, test_code, hypotheses, isolation=None):
+    def _elim_reason(self, r, orig_rate):
+        """Why the evidence knocked this hypothesis out of contention."""
+        if r["wilson_ci"][1] >= orig_rate:
+            return "confidence interval overlaps the original flake rate"
+        if r["verdict"] != "STABLE":
+            return "still flaky — CI does not clear the threshold"
+        return "another hypothesis reached a lower flake rate"
+
+    def run_tournament(self, test_code, hypotheses, isolation=None, test_name=None):
         """Execute the full tournament and return the complete result dict.
 
         `isolation` (per-seed, defaults to the coordinator's setting) selects
@@ -44,14 +52,22 @@ class TournamentCoordinator:
         slow or weak).
         """
         isolation = isolation or self.isolation
-        # --- DETECT: is the original test actually flaky? ---
-        detect = self._verify(test_code, label="detect", isolation=isolation)
+
+        self._emit("run_started", {
+            "test_name": test_name or "test",
+            "planned_trials": self.max_trials,
+        })
+
+        # --- DETECT: is the original test actually flaky? (hypothesis_id=None) ---
+        detect = self._verify(test_code, label="detect", isolation=isolation,
+                              hypothesis_id=None)
         orig_rate = detect["flake_rate"]
         self._emit("detect_done", {
             "flake_rate": orig_rate,
             "wilson_ci": detect["wilson_ci"],
-            "verdict": detect["verdict"],
             "trials": detect["trials"],
+            "fails": detect["fails"],
+            "verdict": detect["verdict"],
         })
 
         # --- VERIFY each hypothesis in parallel (one thread per lane) ---
@@ -64,7 +80,8 @@ class TournamentCoordinator:
                 "cause_class": h.get("cause_class"),
                 "explanation": h.get("explanation"),
             })
-            v = self._verify(h["patched_code"], label=h["id"], isolation=isolation)
+            v = self._verify(h["patched_code"], label=h["id"], isolation=isolation,
+                            hypothesis_id=h["id"])
             record = {
                 "id": h["id"],
                 "cause_class": h.get("cause_class"),
@@ -76,11 +93,11 @@ class TournamentCoordinator:
                 results[h["id"]] = record
             self._emit("hypothesis_verified", {
                 "id": h["id"],
-                "cause_class": h.get("cause_class"),
                 "flake_rate": v["flake_rate"],
                 "wilson_ci": v["wilson_ci"],
-                "verdict": v["verdict"],
                 "trials": v["trials"],
+                "cause_class": h.get("cause_class"),
+                "verdict": v["verdict"],
             })
 
         threads = [threading.Thread(target=race, args=(h,)) for h in hypotheses]
@@ -101,12 +118,13 @@ class TournamentCoordinator:
             if winner is None or r["id"] != winner["id"]:
                 self._emit("hypothesis_eliminated", {
                     "id": r["id"],
+                    "reason": self._elim_reason(r, orig_rate),
                     "cause_class": r["cause_class"],
                     "flake_rate": r["flake_rate"],
                     "wilson_ci": r["wilson_ci"],
                 })
 
-        # --- CONFIRM the winner with a fresh, independent run ---
+        # --- CONFIRM the winner with a fresh, independent run (trials suppressed) ---
         confirmation = None
         if winner is not None:
             confirmation = confirm(self.pool, winner["patched_code"],
@@ -114,20 +132,40 @@ class TournamentCoordinator:
                                    self.min_trials, self.bus,
                                    label=f"confirm:{winner['id']}",
                                    timeout=self.timeout, isolation=isolation)
-            self._emit("winner_confirmed", {
-                "id": winner["id"],
-                "cause_class": winner["cause_class"],
-                "flake_rate": confirmation["flake_rate"],
-                "wilson_ci": confirmation["wilson_ci"],
-                "verdict": confirmation["verdict"],
-                "orig_flake_rate": orig_rate,
-            })
 
         # A winner only stands if the confirmation run also reads STABLE.
         if winner is not None and confirmation["verdict"] == "STABLE":
             verdict = "FIXED"
+            self._emit("winner_confirmed", {
+                "id": winner["id"],
+                "flake_rate": winner["flake_rate"],            # tournament round
+                "confirm_flake_rate": confirmation["flake_rate"],  # confirmation round
+                "cause_class": winner["cause_class"],
+                "wilson_ci": confirmation["wilson_ci"],
+                "orig_flake_rate": orig_rate,
+            })
         else:
             verdict = "QUARANTINE"
+            # No fix stabilized the test — quarantine the least-bad candidate WITH evidence.
+            if results:
+                best = min(results.values(), key=lambda r: r["flake_rate"])
+                best_id = best["id"]
+                dossier = {
+                    "flake_rate": best["flake_rate"],
+                    "wilson_ci": best["wilson_ci"],
+                    "trials": best["trials"],
+                    "reason": f"no hypothesis stabilized the test below the "
+                              f"{self.threshold:.0%} threshold",
+                }
+            else:
+                best_id = ""
+                dossier = {
+                    "flake_rate": orig_rate,
+                    "wilson_ci": detect["wilson_ci"],
+                    "trials": detect["trials"],
+                    "reason": "no fix hypotheses were generated",
+                }
+            self._emit("quarantine_confirmed", {"best_id": best_id, "dossier": dossier})
             winner = None
 
         result = {
