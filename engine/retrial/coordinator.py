@@ -9,13 +9,14 @@ verdict is QUARANTINE (no dead-end: the evidence dossier is still produced).
 import threading
 
 from .verifier import verify, confirm
+from .ledger import EvidenceLedger
 
 
 class TournamentCoordinator:
     """Runs the detect -> diagnose-verify -> confirm tournament over hypotheses."""
 
     def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.05,
-                 min_trials=8, timeout=60, isolation="process"):
+                 min_trials=8, timeout=60, isolation="process", ledger=None):
         self.pool = pool
         self.bus = bus
         self.max_trials = max_trials
@@ -24,10 +25,29 @@ class TournamentCoordinator:
         self.min_trials = min_trials
         self.timeout = timeout
         self.isolation = isolation
+        # Braintrust ledger: default on when the key is present; a disabled ledger
+        # (or LEDGER=0) makes every logging call a silent no-op.
+        self.ledger = ledger if ledger is not None else EvidenceLedger.from_env()
 
     def _emit(self, event_type, payload):
         if self.bus is not None:
             self.bus.emit(event_type, payload)
+
+    def _log_series(self, ledger_run, series, v, cause_class=None):
+        """Replay a verify()'s valid trials into the ledger and finish the series'
+        Braintrust experiment. Returns the permalink (or None). Never raises."""
+        try:
+            idx = 0
+            for res in v["history"]:
+                if res["error"] is not None:
+                    continue
+                ledger_run.trial(series, idx, res["passed"])
+                idx += 1
+            return ledger_run.finish_hypothesis(
+                series, cause_class=cause_class, flake_rate=v["flake_rate"],
+                wilson_ci=v["wilson_ci"], verdict=v["verdict"])
+        except Exception:
+            return None
 
     def _verify(self, test_code, label, isolation, hypothesis_id=None, emit_trials=True):
         return verify(self.pool, test_code, self.max_trials, self.conc,
@@ -52,9 +72,11 @@ class TournamentCoordinator:
         slow or weak).
         """
         isolation = isolation or self.isolation
+        test_name = test_name or "test"
+        ledger_run = self.ledger.run(test_name)
 
         self._emit("run_started", {
-            "test_name": test_name or "test",
+            "test_name": test_name,
             "planned_trials": self.max_trials,
         })
 
@@ -62,6 +84,7 @@ class TournamentCoordinator:
         detect = self._verify(test_code, label="detect", isolation=isolation,
                               hypothesis_id=None)
         orig_rate = detect["flake_rate"]
+        self._log_series(ledger_run, "detect", detect, cause_class="original")
         self._emit("detect_done", {
             "flake_rate": orig_rate,
             "wilson_ci": detect["wilson_ci"],
@@ -91,6 +114,8 @@ class TournamentCoordinator:
             }
             with results_lock:
                 results[h["id"]] = record
+            # Flush this lane's Braintrust experiment (thread-safe; own series).
+            self._log_series(ledger_run, h["id"], v, cause_class=h.get("cause_class"))
             self._emit("hypothesis_verified", {
                 "id": h["id"],
                 "flake_rate": v["flake_rate"],
@@ -143,6 +168,7 @@ class TournamentCoordinator:
                 "cause_class": winner["cause_class"],
                 "wilson_ci": confirmation["wilson_ci"],
                 "orig_flake_rate": orig_rate,
+                "braintrust_url": ledger_run.permalink(winner["id"]),
             })
         else:
             verdict = "QUARANTINE"
@@ -165,7 +191,11 @@ class TournamentCoordinator:
                     "trials": detect["trials"],
                     "reason": "no fix hypotheses were generated",
                 }
-            self._emit("quarantine_confirmed", {"best_id": best_id, "dossier": dossier})
+            self._emit("quarantine_confirmed", {
+                "best_id": best_id,
+                "dossier": dossier,
+                "braintrust_url": ledger_run.permalink(best_id) if best_id else None,
+            })
             winner = None
 
         result = {
@@ -175,6 +205,10 @@ class TournamentCoordinator:
             "hypotheses": list(results.values()),
             "winner": winner,
             "confirmation": confirmation if verdict == "FIXED" else None,
+            "braintrust": {
+                "detect": ledger_run.permalink("detect"),
+                **{r["id"]: ledger_run.permalink(r["id"]) for r in results.values()},
+            },
         }
         self._emit("tournament_done", {
             "verdict": verdict,
