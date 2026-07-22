@@ -4,18 +4,26 @@
 - WS   /ws          replays the EventBus ring buffer to a freshly-connected
                      board, then streams live events. Each frame is the event
                      flattened to the UI contract: {type, ...payload, seq, ts}.
-- POST /tournament   {seed_path, hypotheses?} runs a tournament in a background
-                     thread against a fresh warm pool, emitting to the shared
-                     bus. hypotheses is optional (caller/DiagnosisEngine supplies
-                     cached hypotheses; absent => detect-only, quarantine path).
+- POST /tournament   {seed_path, hypotheses?, isolation?} runs a tournament in a
+                     background thread against the shared pre-warmed pool,
+                     emitting to the shared bus. hypotheses is optional
+                     (caller/DiagnosisEngine supplies cached hypotheses; absent
+                     => detect-only, quarantine path).
+
+The pool is shared and pre-warmed at boot (env PREWARM, default 16) so a freshly
+started server is demo-ready: hitting GO reuses already-warmed sandboxes and the
+first trials land near-instantly. After each run the pool is resized back to
+PREWARM in the background, keeping it bounded and ready for the next run.
 
 Run: uvicorn retrial.server:app --port 8000   (the UI expects ws://localhost:8000/ws)
 """
 import asyncio
 import os
 import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import braintrust
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -24,16 +32,57 @@ from .events import EventBus
 from .pool import SandboxPool
 from .coordinator import TournamentCoordinator
 
+# Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
+# Degrades to a no-op when no key is configured — logging must never break the server.
+if os.environ.get("BRAINTRUST_API_KEY"):
+    try:
+        braintrust.init_logger(project="retrial")
+        braintrust.auto_instrument()
+    except Exception:
+        pass
+
 # Engine tuning (env-overridable so the live demo can dial trials down/up).
 MAX_TRIALS = int(os.environ.get("MAX_TRIALS", "50"))
 CONC = int(os.environ.get("CONC", "16"))
 THRESHOLD = float(os.environ.get("THRESHOLD", "0.05"))
 ISOLATION = os.environ.get("ISOLATION", "process")
+PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
 
 # One process-wide bus: the tournament emits here, every /ws subscriber streams it.
 BUS = EventBus()
 
-app = FastAPI(title="Retrial")
+# One shared, pre-warmed pool reused across runs (see module docstring).
+_POOL = None
+_POOL_LOCK = threading.Lock()
+_pool_status = {"prewarming": False}
+
+
+def _get_pool():
+    global _POOL
+    with _POOL_LOCK:
+        if _POOL is None:
+            _POOL = SandboxPool()
+        return _POOL
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # Pre-warm the shared pool at boot so the first run is instant.
+    if PREWARM > 0:
+        def prewarm():
+            _pool_status["prewarming"] = True
+            try:
+                _get_pool().resize_to(PREWARM)
+            finally:
+                _pool_status["prewarming"] = False
+        threading.Thread(target=prewarm, daemon=True).start()
+    yield
+    # Tear down every sandbox the shared pool owns on shutdown.
+    if _POOL is not None:
+        _POOL.destroy_all()
+
+
+app = FastAPI(title="Retrial", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,12 +109,15 @@ class TournamentRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    stats = _POOL.stats() if _POOL is not None else {"available": 0, "live": 0}
     return {
         "status": "ok",
         "running": _running["active"],
         "test_name": _running["test_name"],
-        "config": {"max_trials": MAX_TRIALS, "conc": CONC,
-                   "threshold": THRESHOLD, "isolation": ISOLATION},
+        "pool": {"available": stats["available"], "live": stats["live"],
+                 "prewarming": _pool_status["prewarming"]},
+        "config": {"max_trials": MAX_TRIALS, "conc": CONC, "threshold": THRESHOLD,
+                   "isolation": ISOLATION, "prewarm": PREWARM},
     }
 
 
@@ -118,9 +170,11 @@ def start_tournament(req: TournamentRequest):
         _running["test_name"] = path.name
 
     def run():
-        pool = SandboxPool()
+        pool = _get_pool()
         try:
-            pool.warm(min(CONC, MAX_TRIALS))
+            # Top up (never trims) so the run starts demo-ready even if boot
+            # pre-warm was disabled or hasn't finished yet.
+            pool.ensure_warm(min(CONC, MAX_TRIALS))
             coord = TournamentCoordinator(
                 pool, bus=BUS, max_trials=MAX_TRIALS, conc=CONC,
                 threshold=THRESHOLD, isolation=isolation)
@@ -129,10 +183,13 @@ def start_tournament(req: TournamentRequest):
         except Exception as e:
             BUS.emit("tournament_done", {"verdict": "ERROR", "error": str(e)[:200]})
         finally:
-            pool.destroy_all()
             with _run_lock:
                 _running["active"] = False
                 _running["test_name"] = None
+            # Reset the shared pool to a bounded, demo-ready size for the next run
+            # (in the background — this is after tournament_done, invisible to the UI).
+            threading.Thread(target=lambda: _get_pool().resize_to(PREWARM),
+                             daemon=True).start()
 
     threading.Thread(target=run, daemon=True).start()
     return {"status": "started", "test_name": path.name,
