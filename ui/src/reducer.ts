@@ -137,6 +137,8 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
         flakeRate: null,
         wilsonCi: null,
         status: 'racing',
+        model: event.model ?? null,
+        noValidPatch: event.status === 'no_valid_patch',
       };
       const exists = state.hypotheses.some((x) => x.id === h.id);
       return {
@@ -148,48 +150,58 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
     }
 
     case 'hypothesis_verified': {
-      const hypotheses = state.hypotheses.map((h) =>
-        h.id === event.id
-          ? {
-              ...h,
-              status: h.status === 'winner' ? h.status : ('verified' as const),
-              flakeRate: event.flake_rate,
-              wilsonCi: event.wilson_ci,
-            }
-          : h,
-      );
+      const hypotheses = state.hypotheses.map((h) => {
+        if (h.id !== event.id) return h;
+        // INCONCLUSIVE (CI straddles the threshold) is measured but never
+        // winner-eligible — show it as its own grey-amber lane, not "verified".
+        const inconclusive = event.verdict === 'INCONCLUSIVE';
+        const status =
+          h.status === 'winner'
+            ? h.status
+            : inconclusive
+              ? ('inconclusive' as const)
+              : ('verified' as const);
+        return {
+          ...h,
+          status,
+          verdict: event.verdict ?? h.verdict,
+          model: event.model ?? h.model,
+          flakeRate: event.flake_rate,
+          wilsonCi: event.wilson_ci,
+        };
+      });
       return { ...state, hypotheses };
     }
 
     case 'hypothesis_eliminated': {
-      const hypotheses = state.hypotheses.map((h) =>
-        h.id === event.id
-          ? { ...h, status: 'eliminated' as const, eliminatedReason: event.reason }
-          : h,
-      );
-      return { ...state, hypotheses };
-    }
-
-    case 'hypothesis_inconclusive': {
-      // The CI straddles the threshold: not verified, not eliminated, and not
-      // winner-eligible. A winner event later can still promote it if it wins.
-      const hypotheses = state.hypotheses.map((h) =>
-        h.id === event.id
-          ? {
-              ...h,
-              status: h.status === 'winner' ? h.status : ('inconclusive' as const),
-              flakeRate: event.flake_rate ?? h.flakeRate,
-              wilsonCi: event.wilson_ci ?? h.wilsonCi,
-              eliminatedReason: event.reason ?? h.eliminatedReason,
-            }
-          : h,
-      );
+      const noValidPatch = event.status === 'no_valid_patch';
+      const hypotheses = state.hypotheses.map((h) => {
+        if (h.id !== event.id) return h;
+        // An INCONCLUSIVE lane is technically eliminated (can't win) but should
+        // read as INCONCLUSIVE, not struck-out FLAKY. A no-valid-patch lane gets
+        // its own render. Everything else is a normal elimination.
+        const keepInconclusive = h.verdict === 'INCONCLUSIVE' && !noValidPatch;
+        return {
+          ...h,
+          status: keepInconclusive ? ('inconclusive' as const) : ('eliminated' as const),
+          eliminatedReason: event.reason ?? h.eliminatedReason,
+          model: event.model ?? h.model,
+          noValidPatch: noValidPatch || h.noValidPatch,
+        };
+      });
       return { ...state, hypotheses };
     }
 
     case 'winner_confirmed': {
       const hypotheses = state.hypotheses.map((h) =>
-        h.id === event.id ? { ...h, status: 'winner' as const, flakeRate: event.flake_rate } : h,
+        h.id === event.id
+          ? {
+              ...h,
+              status: 'winner' as const,
+              flakeRate: event.flake_rate,
+              model: event.model ?? h.model,
+            }
+          : h,
       );
       return {
         ...state,
@@ -204,20 +216,6 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
           origFlakeRate: event.orig_flake_rate ?? null,
           braintrustUrl: event.braintrust_url ?? null,
           model: event.model ?? null,
-        },
-      };
-    }
-
-    case 'always_failing': {
-      // Not flaky — a regression. Terminal red verdict, its own phase.
-      return {
-        ...state,
-        phase: 'always_failing',
-        alwaysFailing: {
-          flakeRate: event.flake_rate ?? state.detect.flakeRate,
-          wilsonCi: event.wilson_ci ?? state.detect.wilsonCi,
-          trials: event.trials ?? state.detect.totalTrials,
-          fails: event.fails ?? state.detect.fails,
         },
       };
     }

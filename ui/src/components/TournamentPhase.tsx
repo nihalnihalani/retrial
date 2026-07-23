@@ -1,6 +1,6 @@
 import { FlakeMeter } from './FlakeMeter';
 import { TrialGrid } from './TrialGrid';
-import { modelForHypothesis } from '../models';
+import { modelForHypothesis, displayModel } from '../models';
 import type { Hypothesis } from '../types';
 
 interface Props {
@@ -33,7 +33,12 @@ export function TournamentPhase({ hypotheses, modelNames, plannedTrials, thresho
 
       <div className="lanes">
         {hypotheses.map((h, i) => (
-          <Lane key={h.id} h={h} model={modelForHypothesis(modelNames, i)} threshold={threshold} />
+          <Lane
+            key={h.id}
+            h={h}
+            model={displayModel(h.model, modelForHypothesis(modelNames, i))}
+            threshold={threshold}
+          />
         ))}
       </div>
     </section>
@@ -64,6 +69,29 @@ function Lane({
   model: string | null;
   threshold?: number | null;
 }) {
+  // A model that returned no parseable patch never races — no trials, no meter,
+  // just an honest "no valid patch" note. Render it as its own thing.
+  if (h.noValidPatch) {
+    return (
+      <article className="lane no-valid-patch">
+        <div className="lane-left">
+          <div className="lane-head">
+            <span className={`cause-tag cause-${h.causeClass}`}>{causeLabel(h.causeClass)}</span>
+            {model && <span className="model-chip">· {model}</span>}
+            <span className="lane-status status-no-patch">NO VALID PATCH</span>
+          </div>
+          <p className="lane-explanation">
+            {model ? `${model} named a cause but ` : 'Named a cause but '}
+            didn&apos;t produce a patch we could test — excluded from the tournament rather than
+            raced against the original.
+          </p>
+        </div>
+        <div className="lane-mid np-note mono">no reruns</div>
+        <div className="lane-right" aria-hidden="true" />
+      </article>
+    );
+  }
+
   const eliminated = h.status === 'eliminated';
   const inconclusive = h.status === 'inconclusive';
   const winner = h.status === 'winner';

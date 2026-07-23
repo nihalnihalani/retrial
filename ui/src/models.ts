@@ -36,3 +36,9 @@ export function modelForHypothesis(models: string[] | null, index: number): stri
   if (!models || index < 0 || index >= models.length) return null;
   return prettyModel(models[index]);
 }
+
+// Prefer a real per-event slug (the engine now credits each hypothesis/winner
+// with its own `model`) over positional index-mapping; prettify it when present.
+export function displayModel(rawSlug: string | null, indexFallback: string | null): string | null {
+  return rawSlug ? prettyModel(rawSlug) : indexFallback;
+}
