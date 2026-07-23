@@ -58,6 +58,11 @@ Rules: `trial_index` is per-context 0-based (detect series = `hypothesis_id: nul
 - Fallback payload: scripts/fallback_hypotheses.json (POST verbatim to /tournament on bad wifi). CERTIFIED: the winner-candidate (h1, real ordering fix) PASSES the neutering guard; the decoy (h2) 'failing' certification is EXPECTED — decoys are still-flaky by design, lose the race on flake rate, and never reach the guard (the single-trial canary is only meaningful on deterministic patches — exactly when the tournament applies it).
 - **Cached/fallback hypotheses must be REAL fixes** (deterministic-ordering etc.) — the neutering guard disqualifies trivial-pass patches (sys.exit(0), assert True, deleted assertions), so a stub in the bad-wifi fallback payload = on-stage QUARANTINE. Certify fallback payloads through guards.neutering_check before trusting them.
 
+## Detect-gate (audit fix, live-verified)
+- The tournament runs ONLY when detect verdict == FLAKY. Otherwise terminal tournament_done: ALWAYS_FAILING → "REGRESSION" ("fix the code, not the test"), STABLE → "ALREADY_STABLE", INCONCLUSIVE → "INCONCLUSIVE_BASELINE", ERROR → "ERROR" — no hypotheses, no PR. UI mirrors this (ALWAYS_FAILING terminal in reducer).
+- EventBus.reset() fires at GO-acceptance inside the run lock — the ring buffer only ever holds the current run (fixes cross-run bleed where eviction left orphan tournament_done frames).
+- KNOWN RESIDUAL (deferred, cosmetic): server pre-diagnoses before detect, so a non-flaky GO briefly shows the diagnosing state and burns one Fireworks call before the gate discards it. Outcome fully honest. Fixing needs the detect-before-diagnose reorder — deferred per the 2026-07-23 no-refactor decision.
+
 ## Statistics — non-negotiable
 - Wilson 95% CI everywhere a rate is shown ("0/50" is reported as "≤7% at 95% confidence", never "0%").
 - Winner = lowest flake rate whose CI upper bound < original's rate, then a **fresh confirmation round** (guards selection bias). No winner → QUARANTINE verdict with evidence dossier — the run never dead-ends.
