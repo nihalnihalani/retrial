@@ -55,6 +55,7 @@ Rules: `trial_index` is per-context 0-based (detect series = `hypothesis_id: nul
 
 ## DEMO-CONFIG LAW (violating these silently QUARANTINEs a genuine fix on stage)
 - **MAX_TRIALS >= 40 for any run that must reach FIXED** (50 recommended). Strict CI-upper rule: 0/40 → upper 8.76% < 10% ✓ FIXED; 0/16 → upper ~19% ✗ INCONCLUSIVE → QUARANTINE even for a perfect fix. Never demo/record/smoke at 16-24 trials expecting FIXED.
+- Fallback payload: scripts/fallback_hypotheses.json (POST verbatim to /tournament on bad wifi). CERTIFIED: the winner-candidate (h1, real ordering fix) PASSES the neutering guard; the decoy (h2) 'failing' certification is EXPECTED — decoys are still-flaky by design, lose the race on flake rate, and never reach the guard (the single-trial canary is only meaningful on deterministic patches — exactly when the tournament applies it).
 - **Cached/fallback hypotheses must be REAL fixes** (deterministic-ordering etc.) — the neutering guard disqualifies trivial-pass patches (sys.exit(0), assert True, deleted assertions), so a stub in the bad-wifi fallback payload = on-stage QUARANTINE. Certify fallback payloads through guards.neutering_check before trusting them.
 
 ## Statistics — non-negotiable
