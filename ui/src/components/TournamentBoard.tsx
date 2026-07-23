@@ -8,7 +8,7 @@ import { DetectPhase } from './DetectPhase';
 import { TournamentPhase } from './TournamentPhase';
 import { WinnerCard } from './WinnerCard';
 import { QuarantineCard } from './QuarantineCard';
-import { AlwaysFailingCard } from './AlwaysFailingCard';
+import { TerminalVerdictCard } from './TerminalVerdictCard';
 import { GenomeCard } from './GenomeCard';
 
 const DETECT_EXPECTED = 40;
@@ -29,14 +29,15 @@ const SEEDS: { label: string; paths: string[] }[] = [
 ];
 
 // Which stepper index each phase lights up. Diagnosing is a pre-phase (nothing
-// lit yet); winner + quarantine + always_failing share the terminal "Verdict" step.
+// lit yet); every terminal verdict shares the final "Verdict" step. A
+// baseline_verdict short-circuits from detect, so it lights the Verdict step too.
 const PHASE_STEP: Record<Phase, number> = {
   diagnosing: -1,
   detect: 0,
   tournament: 1,
   winner: 2,
   quarantine: 2,
-  always_failing: 2,
+  baseline_verdict: 2,
 };
 const STEPS = ['Detect', 'Tournament', 'Verdict'];
 
@@ -55,7 +56,7 @@ export function TournamentBoard({ onRestart }: Props) {
     hypotheses,
     winner,
     quarantine,
-    alwaysFailing,
+    baselineVerdict,
     testName,
     plannedTrials,
     threshold,
@@ -87,7 +88,7 @@ export function TournamentBoard({ onRestart }: Props) {
   // A run is "active" from the moment it names a test until it reaches a
   // terminal verdict; the GO button disables itself for that whole window.
   const terminal =
-    phase === 'winner' || phase === 'quarantine' || phase === 'always_failing' || tournamentDone;
+    phase === 'winner' || phase === 'quarantine' || phase === 'baseline_verdict' || tournamentDone;
   const runActive = testName !== null && !terminal;
 
   useEffect(() => {
@@ -194,8 +195,8 @@ export function TournamentBoard({ onRestart }: Props) {
             model={bestModel}
           />
         )}
-        {phase === 'always_failing' && alwaysFailing && (
-          <AlwaysFailingCard state={alwaysFailing} />
+        {phase === 'baseline_verdict' && baselineVerdict && (
+          <TerminalVerdictCard state={baselineVerdict} />
         )}
       </main>
 
