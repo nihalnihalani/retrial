@@ -17,6 +17,8 @@ import base64
 import re
 import time
 
+from .registry import REGISTRY
+
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 
 
@@ -28,8 +30,10 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
     for infrastructure failures (the trial did not yield a real pass/fail).
     """
     sb = pool.lease()
+    sid = getattr(sb, "id", None)
     t0 = time.monotonic()
     infra_error = False
+    cmd = None
     try:
         # Write the test file AND run it in a single exec round-trip (the exec
         # round-trip, not create, is the per-trial cost — one call, not two).
@@ -40,6 +44,11 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         b64 = base64.b64encode(test_code.encode("utf-8")).decode("ascii")
         cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py && "
                f"python3 /tmp/seed.py; echo EXIT:$?")
+        # Observatory hook: this pooled sandbox is now running a command. The
+        # registry's @_safe guarantees this never affects the trial (a
+        # test-constructed pool with a private registry merely double-books into
+        # the inert process default — harmless).
+        REGISTRY.exec_started(sid, cmd, isolation=isolation)
         r = sb.process.exec(cmd, timeout=timeout)
         out = r.result or ""
         duration = time.monotonic() - t0
@@ -47,26 +56,32 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         if m is None:
             # Ran but produced no parseable exit marker -> treat as infra error.
             infra_error = True
+            log_tail = out.strip()[-500:]
+            REGISTRY.exec_finished(sid, cmd, None, log_tail, round(duration, 3))
             return {
                 "passed": False,
                 "duration_s": round(duration, 3),
-                "log_tail": out.strip()[-500:],
+                "log_tail": log_tail,
                 "exit_code": None,
                 "error": "no EXIT marker in output",
             }
         code = int(m.group(1))
+        log_tail = out.strip()[-500:]
+        REGISTRY.exec_finished(sid, cmd, code, log_tail, round(duration, 3))
         return {
             "passed": code == 0,
             "duration_s": round(duration, 3),
-            "log_tail": out.strip()[-500:],
+            "log_tail": log_tail,
             "exit_code": code,
             "error": None,
         }
     except Exception as e:
         infra_error = True
+        duration = round(time.monotonic() - t0, 3)
+        REGISTRY.exec_finished(sid, cmd, None, str(e)[-500:], duration)
         return {
             "passed": False,
-            "duration_s": round(time.monotonic() - t0, 3),
+            "duration_s": duration,
             "log_tail": str(e)[-500:],
             "exit_code": None,
             "error": str(e)[:200],
