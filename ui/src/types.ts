@@ -215,6 +215,87 @@ export interface PromotionClosed {
   test_name?: string;
 }
 
+// ---- Sandbox Observatory (Phase 2) ----
+// Wire types mirror the engine's registry.py record + the B6 event-payload
+// table EXACTLY (snake_case over the wire). Fields the engine ALWAYS sends are
+// required, not optional, so tsc catches any future payload drift (the same
+// tsc-drift rule HermeticDiagnosis follows). See OBSERVATORY-PLAN.md B6.
+
+export type SandboxRole =
+  | 'root'
+  | 'checkpoint'
+  | 'trial-clone'
+  | 'snapshot-pool'
+  | 'bisect-probe';
+
+export type SandboxLifeState =
+  | 'creating'
+  | 'warm'
+  | 'paused'
+  | 'running-cmd'
+  | 'destroyed'
+  | 'degraded';
+
+export interface SandboxExecEntry {
+  cmd: string;
+  exit_code: number | null; // null => infra error (no exit code parsed)
+  output_tail: string;
+  duration_s: number;
+  ts: number;
+}
+
+// One sandbox record as it rides the wire (registry_snapshot entry +
+// sandbox_registered payload). `recent_execs` never rides here — it lives only
+// on GET /sandboxes/{id}; the client grows its own copy from sandbox_exec.
+export interface SandboxRecordWire {
+  id: string;
+  role: SandboxRole;
+  backend: 'fork' | 'snapshot';
+  state: SandboxLifeState;
+  parent_id: string | null;
+  created_ts: number;
+  labels?: Record<string, string>;
+  isolation?: string | null;
+  exec_count: number;
+  preview_url?: string | null;
+}
+
+export interface SandboxRegistered extends SandboxRecordWire {
+  type: 'sandbox_registered';
+}
+
+// Named SandboxStateEvent (not SandboxState) to avoid colliding with the
+// SandboxLifeState string-literal type.
+export interface SandboxStateEvent {
+  type: 'sandbox_state';
+  id: string;
+  state: SandboxLifeState;
+  current_cmd: string | null; // null unless the sandbox is running-cmd
+}
+
+export interface SandboxExec {
+  type: 'sandbox_exec';
+  id: string;
+  cmd: string; // <=160
+  exit_code: number | null;
+  duration_s: number;
+  output_tail: string; // <=200
+  exec_count: number;
+}
+
+export interface SandboxDestroyed {
+  type: 'sandbox_destroyed';
+  id: string;
+  role: SandboxRole;
+}
+
+export interface RegistrySnapshot {
+  type: 'registry_snapshot';
+  sandboxes: SandboxRecordWire[];
+  counts: { live: number; total_ever: number; destroyed: number };
+  lineage: Record<string, string[]>;
+}
+
 export type RetrialEvent =
   | Diagnosing
   | RunStarted
@@ -236,7 +317,12 @@ export type RetrialEvent =
   | BisectNarrowed
   | BisectDone
   | PromotionPending
-  | PromotionClosed;
+  | PromotionClosed
+  | SandboxRegistered
+  | SandboxStateEvent
+  | SandboxExec
+  | SandboxDestroyed
+  | RegistrySnapshot;
 
 // ---- Derived view state (built by the reducer) ----
 
@@ -366,6 +452,24 @@ export interface HermeticState {
   hermeticCi: WilsonCI;
 }
 
+// ---- Derived Observatory view state (built by the reducer) ----
+
+// One sandbox as the Observatory renders it: the wire record plus the
+// client-grown exec feed and a pulse counter. `recentExecs`/`lastExecSeq` are
+// grown from sandbox_exec events (the wire snapshot omits recent_execs), so a
+// registry_snapshot re-seed must preserve them by id (see reducer.ts).
+export interface ObservatorySandbox extends SandboxRecordWire {
+  currentCmd: string | null;
+  recentExecs: SandboxExecEntry[]; // grown client-side, capped 20
+  lastExecSeq: number; // bumps per exec — retriggers the card pulse
+}
+
+export interface ObservatoryState {
+  sandboxes: Record<string, ObservatorySandbox>;
+  counts: { live: number; totalEver: number; destroyed: number };
+  seen: boolean; // any real registry event arrived (live or ?mock=observatory)
+}
+
 export interface BoardState {
   phase: Phase;
   testName: string | null;
@@ -385,6 +489,9 @@ export interface BoardState {
   promotion: PromotionState | null;
   poolDegraded: { reason: string } | null; // honest badge, not an error
   hermetic: HermeticState | null;
+  // The sandbox observatory feed. Like genome/poolDegraded, it OUTLIVES a
+  // single run (the pool is shared across runs), so resetPerRun leaves it be.
+  observatory: ObservatoryState;
 }
 
 export type ConnectionMode = 'live' | 'replay' | 'connecting' | 'disconnected';

@@ -12,6 +12,7 @@ import { TerminalVerdictCard } from './TerminalVerdictCard';
 import { GenomeCard } from './GenomeCard';
 import { TreeTimeline } from './TreeTimeline';
 import { PromoteGate } from './PromoteGate';
+import { SandboxObservatory } from './SandboxObservatory';
 
 const DETECT_EXPECTED = 40;
 const TOURNAMENT_URL = 'http://localhost:8000/tournament';
@@ -78,6 +79,7 @@ export function TournamentBoard({ onRestart }: Props) {
     bisect,
     promotion,
     poolDegraded,
+    observatory,
   } = state;
   const winnerIdx = winner ? hypotheses.findIndex((h) => h.id === winner.id) : -1;
   const bestIdx = quarantine ? hypotheses.findIndex((h) => h.id === quarantine.bestId) : -1;
@@ -98,6 +100,9 @@ export function TournamentBoard({ onRestart }: Props) {
   const [posting, setPosting] = useState(false);
   const [seedLabel, setSeedLabel] = useState(SEEDS[0].label);
   const [view, setView] = useState<BoardView>('grid');
+  // The Observatory is a backstage panel: opt-in, collapsed by default, never
+  // replacing the phase router (the tournament stays the star).
+  const [obsOpen, setObsOpen] = useState(false);
 
   // A run is "active" from the moment it names a test until it reaches a
   // terminal verdict; the GO button disables itself for that whole window.
@@ -171,6 +176,9 @@ export function TournamentBoard({ onRestart }: Props) {
         view={view}
         onViewChange={setView}
         viewLocked={phase === 'bisect'}
+        obsOpen={obsOpen}
+        onObsToggle={() => setObsOpen((o) => !o)}
+        obsLiveCount={observatory.seen ? observatory.counts.live : null}
       />
 
       {toast && (
@@ -230,6 +238,10 @@ export function TournamentBoard({ onRestart }: Props) {
         )}
       </main>
 
+      {obsOpen && (
+        <SandboxObservatory state={state} mode={mode} runActive={runActive} />
+      )}
+
       <PromoteGate promotion={promotion} mode={mode} />
 
       {(hypotheses.length > 0 || genome) && (
@@ -260,6 +272,9 @@ function TopBar({
   view,
   onViewChange,
   viewLocked,
+  obsOpen,
+  onObsToggle,
+  obsLiveCount,
 }: {
   mode: ConnectionMode;
   phase: Phase;
@@ -276,6 +291,9 @@ function TopBar({
   view: BoardView;
   onViewChange: (view: BoardView) => void;
   viewLocked: boolean;
+  obsOpen: boolean;
+  onObsToggle: () => void;
+  obsLiveCount: number | null;
 }) {
   const activeIndex = PHASE_STEP[phase];
   return (
@@ -307,6 +325,14 @@ function TopBar({
       </nav>
 
       <div className="topbar-right">
+        <button
+          className={`obs-toggle ${obsOpen ? 'active' : ''}`}
+          onClick={onObsToggle}
+          title="Sandbox Observatory — every sandbox the engine tracks"
+        >
+          <span className="hex">⬢</span> Observatory
+          {obsLiveCount !== null && <span className="obs-toggle-badge mono">{obsLiveCount}</span>}
+        </button>
         <ViewToggle view={view} onViewChange={onViewChange} locked={viewLocked} />
         {canGo && (
           <GoControl
