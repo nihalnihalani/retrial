@@ -107,9 +107,15 @@ export function buildMockScript(outcome: MockOutcome = 'winner'): ScriptedEvent[
   const script: ScriptedEvent[] = [];
   const plans = outcome === 'quarantine' ? QUARANTINE_PLANS : WINNER_PLANS;
 
-  // ---- HANDSHAKE: engine announces the test + planned rerun budget ----
+  // ---- DIAGNOSING: models draft competing theories (compressed ~3s) ----
   script.push({
     after: 300,
+    event: { type: 'diagnosing', test_name: TEST_NAME, n: 4 },
+  });
+
+  // ---- HANDSHAKE: engine announces the test + planned rerun budget ----
+  script.push({
+    after: 3000,
     event: { type: 'run_started', test_name: TEST_NAME, planned_trials: DETECT_TRIALS },
   });
 
