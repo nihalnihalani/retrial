@@ -1,7 +1,8 @@
-import type { Hypothesis } from '../types';
+import type { GenomeState, Hypothesis } from '../types';
 
 interface Props {
   hypotheses: Hypothesis[];
+  genome: GenomeState | null;
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -15,11 +16,15 @@ const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? '' : 's'}`;
 const label = (c: string) => CAUSE_LABEL[c] ?? c.replace(/_/g, ' ');
 
 // The flywheel close: the repo's flake genome — which cause-classes this repo
-// keeps producing. Compounds across runs into a repo-specific leaderboard.
-export function GenomeCard({ hypotheses }: Props) {
+// keeps producing. Prefers the engine's cumulative genome_updated data (real,
+// compounding across runs); falls back to this run's hypotheses when absent.
+export function GenomeCard({ hypotheses, genome }: Props) {
+  const cumulative = Boolean(genome);
   const counts = new Map<string, number>();
-  for (const h of hypotheses) {
-    counts.set(h.causeClass, (counts.get(h.causeClass) ?? 0) + 1);
+  if (genome) {
+    for (const [cause, n] of Object.entries(genome.byCauseClass)) counts.set(cause, n);
+  } else {
+    for (const h of hypotheses) counts.set(h.causeClass, (counts.get(h.causeClass) ?? 0) + 1);
   }
   const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
 
@@ -29,7 +34,9 @@ export function GenomeCard({ hypotheses }: Props) {
         <span className="genome-dot" />
         <h3>Flake Genome</h3>
       </div>
-      <p className="genome-sub">this repo, this run</p>
+      <p className="genome-sub">
+        {cumulative ? `this repo · ${plural(genome!.runs, 'run')} logged` : 'this repo, this run'}
+      </p>
       <ul className="genome-list">
         {rows.map(([cause, n]) => (
           <li key={cause}>
@@ -40,7 +47,9 @@ export function GenomeCard({ hypotheses }: Props) {
       </ul>
       <p className="genome-foot">
         {rows.length > 0
-          ? `${rows.map(([c, n]) => plural(n, label(c))).join(', ')} diagnosed.`
+          ? `${rows.map(([c, n]) => plural(n, label(c))).join(', ')} ${
+              cumulative ? 'on record' : 'diagnosed'
+            }.`
           : 'diagnosing…'}{' '}
         Compounds into a repo leaderboard over time.
       </p>

@@ -38,13 +38,18 @@ def _models_from_env():
     return list(DEFAULT_MODELS)
 
 
-def _build_messages(test_code, test_name, log_tail, cause_hint):
-    """Prompt one model for a single competing root-cause hypothesis + fix."""
+def _build_messages(test_code, test_name, log_tail, cause_hint, context=None):
+    """Prompt one model for a single competing root-cause hypothesis + fix.
+
+    `context` (optional) is an infrastructure finding — e.g. a hermetic detect
+    result — that narrows the search (e.g. env_independent rules out external_dep).
+    """
     system = (
         "You are a flaky-test root-cause analyst. A flaky test passes sometimes "
         "and fails sometimes on identical code. Diagnose ONE root cause and return "
         "a corrected version of the file. Respond with a strict JSON object only."
     )
+    context_block = f"\nInfrastructure finding: {context}\n" if context else ""
     user = f"""Flaky test file `{test_name}`:
 ```python
 {test_code}
@@ -54,7 +59,7 @@ Sample run log (may be empty):
 ```
 {log_tail or "(no log provided)"}
 ```
-
+{context_block}
 Propose ONE competing root-cause hypothesis. Consider especially the
 `{cause_hint}` angle, but choose whichever cause the evidence best supports.
 
@@ -101,11 +106,12 @@ def _parse_hypothesis(content, hid, fallback_cause, fallback_code):
 
 
 def diagnose(test_code, test_name, log_tail="", n=4, models=None,
-             api_key=None, base_url=BASE_URL, client=None):
+             api_key=None, base_url=BASE_URL, client=None, context=None):
     """Return N competing hypotheses [{id, cause_class, explanation, patched_code}].
 
     Models are round-robined across the N hypotheses for diversity. Requires a
     Fireworks key (or an injected OpenAI-compatible `client`, used by tests).
+    `context` (optional) is an infrastructure finding fed into every prompt.
     """
     models = models or _models_from_env()
     api_key = api_key or os.environ.get("FIREWORKS_API_KEY")
@@ -124,7 +130,7 @@ def diagnose(test_code, test_name, log_tail="", n=4, models=None,
         model = models[i % len(models)]
         try:
             content = _complete(client, model, _build_messages(test_code, test_name,
-                                                                log_tail, cause_hint))
+                                                                log_tail, cause_hint, context))
         except Exception as e:
             content = None
             # Leave a diagnostic breadcrumb in the explanation via fallback below.

@@ -16,6 +16,8 @@ export const initialState: BoardState = {
   hypotheses: [],
   winner: null,
   quarantine: null,
+  genome: null,
+  prUrl: null,
   tournamentDone: false,
 };
 
@@ -145,6 +147,9 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
           id: event.id,
           flakeRate: event.flake_rate,
           confirmFlakeRate: event.confirm_flake_rate,
+          wilsonCi: event.wilson_ci ?? null,
+          origFlakeRate: event.orig_flake_rate ?? null,
+          braintrustUrl: event.braintrust_url ?? null,
         },
       };
     }
@@ -165,8 +170,20 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
           wilsonCi: event.dossier.wilson_ci,
           trials: event.dossier.trials,
           reason: event.dossier.reason,
+          braintrustUrl: event.braintrust_url ?? null,
         },
       };
+    }
+
+    case 'genome_updated': {
+      return {
+        ...state,
+        genome: { runs: event.runs, byCauseClass: event.by_cause_class },
+      };
+    }
+
+    case 'pr_opened': {
+      return { ...state, prUrl: event.url };
     }
 
     case 'tournament_done': {

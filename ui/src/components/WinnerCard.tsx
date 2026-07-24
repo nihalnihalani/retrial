@@ -1,10 +1,12 @@
 import { ciUpper, pct } from '../format';
+import { ReceiptTiles } from './ReceiptTiles';
 import type { DetectState, Hypothesis, WinnerState } from '../types';
 
 interface Props {
   winner: WinnerState;
   hypothesis: Hypothesis | undefined;
   detect: DetectState;
+  prUrl: string | null;
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -18,10 +20,11 @@ const causeLabel = (c: string) =>
 
 // The verdict. Clean, no confetti: the before→after number, the CI, and the
 // two governance receipts (Braintrust permalink + the opened PR).
-export function WinnerCard({ winner, hypothesis, detect }: Props) {
-  const before = detect.flakeRate ?? 0.48;
+export function WinnerCard({ winner, hypothesis, detect, prUrl }: Props) {
+  // prefer the confirmed winner's own numbers; fall back to detect/hypothesis
+  const before = winner.origFlakeRate ?? detect.flakeRate ?? 0.48;
   const trials = hypothesis?.trials.length ?? 50;
-  const ci = hypothesis?.wilsonCi ?? null;
+  const ci = winner.wilsonCi ?? hypothesis?.wilsonCi ?? null;
 
   return (
     <section className="phase winner-phase">
@@ -55,26 +58,12 @@ export function WinnerCard({ winner, hypothesis, detect }: Props) {
 
         {hypothesis && <p className="winner-explanation">{hypothesis.explanation}</p>}
 
-        <div className="winner-receipts">
-          <a className="receipt braintrust" href="#" onClick={(e) => e.preventDefault()}>
-            <span className="receipt-icon">◈</span>
-            <span className="receipt-body">
-              <span className="receipt-title">Braintrust experiment</span>
-              <span className="receipt-sub mono">
-                braintrust.dev/app/retrial/… <em>(permalink)</em>
-              </span>
-            </span>
-          </a>
-          <a className="receipt pr" href="#" onClick={(e) => e.preventDefault()}>
-            <span className="receipt-icon">⑃</span>
-            <span className="receipt-body">
-              <span className="receipt-title">Fix PR opened</span>
-              <span className="receipt-sub mono">
-                github.com/…/pull/### <em>(with evidence dossier)</em>
-              </span>
-            </span>
-          </a>
-        </div>
+        <ReceiptTiles
+          braintrustUrl={winner.braintrustUrl}
+          braintrustLabel="Braintrust experiment"
+          prUrl={prUrl}
+          prLabel="Fix PR opened"
+        />
 
         <p className="winner-foot">
           We didn't just fix it — we proved it's fixed, reproducibly.
