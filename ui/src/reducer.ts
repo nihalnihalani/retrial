@@ -137,6 +137,26 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       };
     }
 
+    case 'quarantine_confirmed': {
+      // Mark the best-effort hypothesis so the card can label it; leave every
+      // lane's own eliminated/verified status intact.
+      const hypotheses = state.hypotheses.map((h) =>
+        h.id === event.best_id ? { ...h, status: 'verified' as const } : h,
+      );
+      return {
+        ...state,
+        phase: 'quarantine',
+        hypotheses,
+        quarantine: {
+          bestId: event.best_id,
+          flakeRate: event.dossier.flake_rate,
+          wilsonCi: event.dossier.wilson_ci,
+          trials: event.dossier.trials,
+          reason: event.dossier.reason,
+        },
+      };
+    }
+
     case 'tournament_done': {
       return { ...state, tournamentDone: true };
     }
