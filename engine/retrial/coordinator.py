@@ -15,7 +15,7 @@ class TournamentCoordinator:
     """Runs the detect -> diagnose-verify -> confirm tournament over hypotheses."""
 
     def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.05,
-                 min_trials=8, timeout=60):
+                 min_trials=8, timeout=60, isolation="process"):
         self.pool = pool
         self.bus = bus
         self.max_trials = max_trials
@@ -23,19 +23,29 @@ class TournamentCoordinator:
         self.threshold = threshold
         self.min_trials = min_trials
         self.timeout = timeout
+        self.isolation = isolation
 
     def _emit(self, event_type, payload):
         if self.bus is not None:
             self.bus.emit(event_type, payload)
 
-    def _verify(self, test_code, label):
+    def _verify(self, test_code, label, isolation):
         return verify(self.pool, test_code, self.max_trials, self.conc,
-                      self.threshold, self.min_trials, self.bus, label, self.timeout)
+                      self.threshold, self.min_trials, self.bus, label,
+                      self.timeout, isolation)
 
-    def run_tournament(self, test_code, hypotheses):
-        """Execute the full tournament and return the complete result dict."""
+    def run_tournament(self, test_code, hypotheses, isolation=None):
+        """Execute the full tournament and return the complete result dict.
+
+        `isolation` (per-seed, defaults to the coordinator's setting) selects
+        process- vs sandbox-level isolation for every trial in this run.
+        `hypotheses` is caller-supplied — pass cached hypotheses to run the
+        tournament without a live diagnosis (demo fallback when Fireworks is
+        slow or weak).
+        """
+        isolation = isolation or self.isolation
         # --- DETECT: is the original test actually flaky? ---
-        detect = self._verify(test_code, label="detect")
+        detect = self._verify(test_code, label="detect", isolation=isolation)
         orig_rate = detect["flake_rate"]
         self._emit("detect_done", {
             "flake_rate": orig_rate,
@@ -54,7 +64,7 @@ class TournamentCoordinator:
                 "cause_class": h.get("cause_class"),
                 "explanation": h.get("explanation"),
             })
-            v = self._verify(h["patched_code"], label=h["id"])
+            v = self._verify(h["patched_code"], label=h["id"], isolation=isolation)
             record = {
                 "id": h["id"],
                 "cause_class": h.get("cause_class"),
@@ -102,7 +112,8 @@ class TournamentCoordinator:
             confirmation = confirm(self.pool, winner["patched_code"],
                                    self.max_trials, self.conc, self.threshold,
                                    self.min_trials, self.bus,
-                                   label=f"confirm:{winner['id']}", timeout=self.timeout)
+                                   label=f"confirm:{winner['id']}",
+                                   timeout=self.timeout, isolation=isolation)
             self._emit("winner_confirmed", {
                 "id": winner["id"],
                 "cause_class": winner["cause_class"],
