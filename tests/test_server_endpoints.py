@@ -65,6 +65,10 @@ def server(monkeypatch):
     with server_mod._run_lock:
         server_mod._running.update(active=False, test_name=None)
         server_mod._pending["promotion"] = None
+        # Reset the sticky pool-level facts so a prior test's preflight/degrade
+        # can't leak an extra re-seed into this test's BUS history.
+        server_mod._preflight["last"] = None
+        server_mod._STICKY["pool_degraded"] = None
     # No `with`: the lifespan (which pre-warms a real pool) must not run.
     return server_mod, TestClient(server_mod.app)
 
@@ -111,6 +115,56 @@ def test_health_shape_includes_pool_backend(server):
     assert "pool_backend" in body["config"]
     assert body["config"]["pool_backend"] in ("snapshot", "fork")
     assert "promote_gate" in body["config"]
+
+
+def test_health_reports_preflight_ok_key(server):
+    server_mod, client = server
+    body = client.get("/health").json()
+    assert "preflight_ok" in body["config"]
+
+
+def test_preflight_pending_without_lifespan(server):
+    server_mod, client = server
+    # Bare client never ran the lifespan, so no preflight result yet.
+    server_mod._preflight["last"] = None
+    body = client.get("/preflight").json()
+    assert body == {"status": "pending"}
+
+
+def test_preflight_full_shape_with_lifespan(lifespan_client):
+    body = lifespan_client.get("/preflight").json()
+    assert set(body) >= {"ok", "live_checked", "checks", "timings",
+                         "pool_degraded_seen"}
+    assert isinstance(body["checks"], list) and body["checks"]
+    assert body["checks"][0]["name"] == "settings_parse"
+    assert body["live_checked"] is False
+
+
+def test_sticky_degrade_reseed_survives_reset(server):
+    """The loud-degrade contract: a mid-run-1 pool_degraded and the boot
+    preflight both re-seed the fresh buffer at the next run acceptance, so a WS
+    connecting during run 2 can never lose the banner to BUS.reset()."""
+    server_mod, client = server
+    server_mod._preflight["last"] = {
+        "ok": False, "live_checked": False,
+        "checks": [{"name": "daytona_api_key", "status": "fail", "detail": "x"}],
+        "timings": None}
+    # Emit a degrade on the test bus (simulating a mid-run-1 fork fallback);
+    # _track_sticky records it into _STICKY.
+    server_mod.BUS.emit("pool_degraded", {"backend": "fork",
+                                          "fallback": "snapshot",
+                                          "reason": "boom-run-1"})
+    assert server_mod._STICKY["pool_degraded"]["reason"] == "boom-run-1"
+
+    # Drive a run acceptance (BUS.reset then re-seed), the only place this lives.
+    with server_mod._run_lock:
+        server_mod._accept_run("suite-run-2")
+
+    history = server_mod.BUS.history()
+    types = [e["type"] for e in history]
+    assert "preflight_done" in types
+    degrades = [e["payload"] for e in history if e["type"] == "pool_degraded"]
+    assert degrades and degrades[-1]["reason"] == "boom-run-1"
 
 
 def test_tournament_seed_scope_guard(server):
@@ -261,6 +315,120 @@ def test_accept_run_wipes_pending_promotion_for_every_run_type(server, monkeypat
     assert _RecordingPRSmith.calls == []
 
 
+# ============================ Run history (/runs) ============================
+class _StubHistory:
+    """Records the limit each /runs request forwards; returns a canned row."""
+
+    def __init__(self):
+        self.recent_calls = []
+        self.rows = [{"id": "1", "kind": "tournament", "test_name": "t.py",
+                      "verdict": "FIXED", "orig_flake_rate": 0.4,
+                      "final_flake_rate": 0.0, "winner_model": "qwen",
+                      "braintrust_url": None, "started_at": 1.0,
+                      "finished_at": 2.0}]
+
+    def recent(self, limit=20):
+        self.recent_calls.append(limit)
+        return self.rows
+
+
+class _RaisingHistory:
+    """record() RAISES (deliberately bypassing @_safe) to prove the server's
+    call-site local guard — the SECOND layer — protects the verdict alone."""
+
+    def record(self, *a, **k):
+        raise RuntimeError("history exploded (bypasses _safe on purpose)")
+
+    def recent(self, limit=20):
+        return []
+
+
+class _EmittingCoordinator:
+    """Stub that EMITS the terminal tournament_done (the real coordinator does)
+    then returns the scripted result — so the masking test can assert the
+    terminal event survives a raising HISTORY."""
+
+    result = FIXED_RESULT
+
+    def __init__(self, pool, bus=None, **k):
+        self.bus = bus
+
+    def run_tournament(self, *a, **k):
+        self.bus.emit("tournament_done", {"verdict": "FIXED"})
+        return dict(_EmittingCoordinator.result)
+
+
+class _EmittingBisector:
+    def __init__(self, *a, **k):
+        self.bus = k.get("bus")
+
+    def run(self, suite, suspect_index=None, suite_name=""):
+        payload = {"polluter_test": "test_x.py", "polluter_index": 0,
+                   "base_flake_rate": 0.1, "full_flake_rate": 0.5}
+        self.bus.emit("bisect_done", payload)
+        return payload
+
+
+def test_runs_endpoint_shape_and_limit_clamp(server, monkeypatch):
+    server_mod, client = server
+    stub = _StubHistory()
+    monkeypatch.setattr(server_mod, "HISTORY", stub)
+    body = client.get("/runs").json()
+    assert "runs" in body and body["runs"][0]["verdict"] == "FIXED"
+    assert stub.recent_calls[0] == 20                 # default
+    client.get("/runs?limit=9999")
+    client.get("/runs?limit=0")
+    assert stub.recent_calls[-2] == 100               # clamped high
+    assert stub.recent_calls[-1] == 1                 # clamped low
+
+
+def test_tournament_records_a_run_row(server, monkeypatch):
+    """End-to-end: a completed /tournament writes exactly one row that /runs
+    then serves — proving the record call sits on the real run path (the
+    autouse fixture already isolates RETRIAL_DB to a tmp db)."""
+    server_mod, client = server
+    _run_fixed_tournament(server_mod, client, monkeypatch, open_pr=False)
+    rows = client.get("/runs").json()["runs"]
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "tournament"
+    assert rows[0]["verdict"] == "FIXED"
+    assert rows[0]["test_name"] == "test_dict_order.py"
+    assert rows[0]["orig_flake_rate"] == 0.44
+
+
+def test_history_failure_never_masks_tournament_verdict(server, monkeypatch):
+    """A raising HISTORY.record must cost only the row, never the verdict: the
+    terminal tournament_done stays FIXED, exactly one is emitted, thread exits."""
+    server_mod, client = server
+    monkeypatch.setattr(server_mod, "HISTORY", _RaisingHistory())
+    monkeypatch.setattr(server_mod, "TournamentCoordinator", _EmittingCoordinator)
+    _EmittingCoordinator.result = FIXED_RESULT
+    r = client.post("/tournament", json={"seed_path": "seeds/test_dict_order.py",
+                                         "open_pr": False})
+    assert r.status_code == 200
+    assert _wait_until(lambda: not server_mod._running["active"])
+    done = [e["payload"] for e in server_mod.BUS.history()
+            if e["type"] == "tournament_done"]
+    assert len(done) == 1
+    assert done[0]["verdict"] == "FIXED"
+    time.sleep(0.3)  # let the bg pool-reset thread settle before unwind
+
+
+def test_history_failure_never_masks_bisect_verdict(server, monkeypatch):
+    server_mod, client = server
+    monkeypatch.setattr(server_mod, "HISTORY", _RaisingHistory())
+    monkeypatch.setenv("RETRIAL_POOL_BACKEND", "fork")
+    monkeypatch.setattr(server_mod, "FlakeBisector", _EmittingBisector)
+    r = client.post("/bisect", json={"suite_dir": "seeds/suites/order_pollution"})
+    assert r.status_code == 200
+    assert _wait_until(lambda: not server_mod._running["active"])
+    done = [e["payload"] for e in server_mod.BUS.history()
+            if e["type"] == "bisect_done"]
+    assert len(done) == 1
+    assert done[0].get("polluter_test") == "test_x.py"
+    assert "error" not in done[0]
+
+
 # ============================ Sandbox Observatory ============================
 from conftest import FakeChild                              # noqa: E402
 from retrial.registry import SandboxRegistry                # noqa: E402
@@ -301,6 +469,30 @@ def test_get_sandboxes_shape(obs_server):
     for k in ("live", "total_ever", "destroyed"):
         assert isinstance(body["counts"][k], int)
     assert body["est_resources"]["live_sandboxes"] == body["counts"]["live"]
+
+
+def test_get_sandboxes_includes_spend(obs_server):
+    server_mod, client, reg = obs_server
+    reg.register(FakeChild("sb-1"), role="root", backend="fork", state="warm")
+    body = client.get("/sandboxes").json()
+    assert "spend" in body
+    for k in ("live_sandbox_seconds", "total_sandbox_seconds", "est_cost_usd",
+              "rate_per_sandbox_hour", "note"):
+        assert k in body["spend"]
+    # No rate configured (env unset in the test harness) => no invented price.
+    assert body["spend"]["est_cost_usd"] is None
+    assert body["spend"]["rate_per_sandbox_hour"] is None
+
+
+def test_get_sandboxes_spend_cost_when_rate_set(obs_server, monkeypatch):
+    # Fresh get_settings() at call time proves the env rate is honored without a
+    # restart (the spend read is call-time, not import-time).
+    server_mod, client, reg = obs_server
+    reg.register(FakeChild("sb-1"), role="root", backend="fork", state="warm")
+    monkeypatch.setenv("RETRIAL_EST_RATE_PER_SANDBOX_HOUR", "0.10")
+    body = client.get("/sandboxes").json()
+    assert isinstance(body["spend"]["est_cost_usd"], float)
+    assert body["spend"]["rate_per_sandbox_hour"] == 0.10
 
 
 def test_get_sandbox_detail_404_and_history_and_preview(obs_server):

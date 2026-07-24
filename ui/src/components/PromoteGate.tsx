@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FlakeMeter } from './FlakeMeter';
 import { pct } from '../format';
+import { authAware } from '../authError';
 import type { ConnectionMode, PromotionState } from '../types';
 
 const PROMOTE_URL = 'http://localhost:8000/promote';
@@ -34,7 +35,7 @@ export function PromoteGate({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approve }),
       });
-      if (!res.ok) setError(`engine returned ${res.status}`);
+      if (!res.ok) setError(authAware(res, `engine returned ${res.status}`));
       // On success the engine emits promotion_closed, which flips
       // promotion.open and unmounts this modal — no local state to sync.
     } catch {

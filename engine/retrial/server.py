@@ -23,8 +23,8 @@ in front. Set HOST=0.0.0.0 explicitly only behind a trusted network boundary.
 """
 import asyncio
 import atexit
-import os
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -32,7 +32,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]  # repo root, for relative seed
 _SEEDS_DIR = (_REPO_ROOT / "seeds").resolve()      # seed files MUST resolve inside here
 
 import braintrust
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -42,13 +42,21 @@ from .events import EventBus
 from .pool import make_pool
 from .coordinator import TournamentCoordinator
 from .diagnosis import DiagnosisEngine
+from .preflight import run_preflight
 from .prsmith import PRSmith
 from .genome import Genome
+from .history import HISTORY
 from .registry import REGISTRY
+from .settings import get_settings
+
+# One typed settings read at import (fresh-construction, crash-proof). The
+# module constants below KEEP THEIR NAMES so every existing test/monkeypatch of
+# server_mod.MAX_TRIALS etc. still works unchanged.
+_S = get_settings()
 
 # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
 # Degrades to a no-op when no key is configured — logging must never break the server.
-if os.environ.get("BRAINTRUST_API_KEY"):
+if _S.braintrust_api_key:
     try:
         braintrust.init_logger(project="retrial")
         braintrust.auto_instrument()
@@ -56,24 +64,24 @@ if os.environ.get("BRAINTRUST_API_KEY"):
         pass
 
 # Engine tuning (env-overridable so the live demo can dial trials down/up).
-MAX_TRIALS = int(os.environ.get("MAX_TRIALS", "50"))
-CONC = int(os.environ.get("CONC", "16"))
+MAX_TRIALS = _S.max_trials or 50
+CONC = _S.conc or 16
 # Per-lane concurrency during the parallel hypothesis phase (default 8) so peak
 # sandboxes = num_hypotheses * TOURNAMENT_CONC stays bounded (~32 for 4 lanes).
-TOURNAMENT_CONC = int(os.environ.get("TOURNAMENT_CONC", "8"))
-THRESHOLD = float(os.environ.get("THRESHOLD", str(DEFAULT_THRESHOLD)))  # matches the UI's 10% marker; 0/40 clears it
-ISOLATION = os.environ.get("ISOLATION", "process")
-PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
-PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
+TOURNAMENT_CONC = _S.tournament_conc
+THRESHOLD = _S.threshold if _S.threshold is not None else DEFAULT_THRESHOLD  # matches the UI's 10% marker; 0/40 clears it
+ISOLATION = _S.isolation
+PREWARM = _S.prewarm  # boot pre-warm size; 0 disables
+PRSMITH = _S.prsmith_on  # default OFF so runs don't spam PRs
 # Human-approval promote gate (default ON): a FIXED/QUARANTINE verdict parks the
 # result as a pending promotion and emits promotion_pending; a human approves via
 # POST /promote before PRSmith opens the PR. PROMOTE_GATE=0 restores the old
 # auto-PR behavior for headless demos.
-PROMOTE_GATE = os.environ.get("PROMOTE_GATE", "1") != "0"
+PROMOTE_GATE = _S.promote_gate_on
 # Hermetic mode (default OFF): a second network-blocked detect pass to diagnose
 # external-dependency flakes by infrastructure. Uses its own small sub-pool.
-HERMETIC = os.environ.get("HERMETIC", "0") != "0"
-HERMETIC_PREWARM = int(os.environ.get("HERMETIC_PREWARM", "8"))
+HERMETIC = _S.hermetic_on
+HERMETIC_PREWARM = _S.hermetic_prewarm
 
 # One process-wide bus: the tournament emits here, every /ws subscriber streams it.
 # Buffer bumped to 2000: sandbox_exec adds ~1 event per trial (~200/run) plus
@@ -86,6 +94,22 @@ BUS = EventBus(buffer_size=2000)
 # (live sandboxes + total_ever/destroyed span runs — the pool is shared); see
 # _accept_run for the re-seed contract.
 REGISTRY.attach_bus(BUS)
+
+# Boot preflight result + sticky pool-level facts that must survive BUS.reset().
+_preflight = {"last": None}
+_STICKY = {"pool_degraded": None}
+
+
+def _track_sticky(ev):
+    # The degrade banner must survive BUS.reset(): remember the last
+    # pool_degraded payload so _accept_run can re-seed it into every fresh
+    # buffer (same stale-bleed cure as registry_snapshot — a WS connecting
+    # during run 2 must still learn that the pool degraded during run 1).
+    if ev["type"] == "pool_degraded":
+        _STICKY["pool_degraded"] = ev["payload"]
+
+
+BUS.subscribe(_track_sticky)
 
 # One shared, pre-warmed pool reused across runs (see module docstring).
 _POOL = None
@@ -185,8 +209,53 @@ def _shutdown_reap():
 atexit.register(_shutdown_reap)
 
 
+def _run_boot_preflight():
+    """Config-level preflight at boot: pure + fast (no network). NEVER fatal —
+    a failed preflight is a LOUD banner + a typed event, not a dead server (the
+    charter: replay demos must work with zero config). On an internal error,
+    store an honest fail result and proceed."""
+    try:
+        res = run_preflight(live=False)
+    except Exception as e:  # defence in depth; run_preflight already swallows
+        res = {"ok": False, "live_checked": False,
+               "checks": [{"name": "preflight", "status": "fail",
+                           "detail": str(e)[:200]}], "timings": None}
+    _preflight["last"] = res
+    try:
+        BUS.emit("preflight_done", res)
+    except Exception:
+        pass
+    return res
+
+
+def _run_live_preflight():
+    """The optional deep check (RETRIAL_PREFLIGHT_LIVE=1): a real budget-capped
+    fork cycle, run in a daemon thread so boot is never blocked. Overwrites the
+    stored result and emits a second preflight_done (reducer upserts — last
+    write wins). Never raises."""
+    try:
+        res = run_preflight(live=True)
+        _preflight["last"] = res
+        BUS.emit("preflight_done", res)
+    except Exception as e:
+        try:
+            BUS.emit("preflight_done", {
+                "ok": False, "live_checked": True,
+                "checks": [{"name": "preflight", "status": "fail",
+                            "detail": str(e)[:200]}], "timings": None})
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(app):
+    # Config-level preflight FIRST (synchronous, pure): the loud-degrade surface
+    # is live from the moment the server accepts connections.
+    res = _run_boot_preflight()
+    if get_settings().preflight_live_on and res.get("ok"):
+        # Deep check off the boot path: a wedged experimental SDK call must never
+        # block the server from serving replay demos.
+        threading.Thread(target=_run_live_preflight, daemon=True).start()
     # Pre-warm the shared pool(s) at boot so the first run is instant.
     if PREWARM > 0:
         def prewarm():
@@ -211,6 +280,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _auth_guard(authorization: str | None = Header(default=None)):
+    """Optional bearer gate on destructive/mutating endpoints. When
+    RETRIAL_AUTH_TOKEN is unset (default) this is a no-op — behavior identical
+    to today. Read-only endpoints and /ws are NEVER gated. Settings are read
+    PER REQUEST (fresh get_settings) so the gate can be toggled without a
+    restart and tests can monkeypatch the env. Exact-string comparison, no
+    constant-time ambition (this is a loopback demo tool — said honestly)."""
+    token = get_settings().retrial_auth_token
+    if not token:
+        return
+    if authorization != f"Bearer {token}":
+        raise HTTPException(status_code=401,
+                            detail="missing or invalid bearer token")
 
 # Serialize runs: interleaving two runs on one bus would scramble the board.
 _run_lock = threading.Lock()
@@ -263,6 +347,13 @@ def _accept_run(test_name):
     # tail from the prior run). See OBSERVATORY-PLAN.md, "stale-bleed lesson" —
     # and never emit this from a background thread.
     REGISTRY.emit_snapshot()
+    # Re-seed sticky pool-level facts into the fresh buffer (stale-bleed rule):
+    # a preflight result and any pool_degraded must survive BUS.reset() so a WS
+    # connecting mid-run-2 still learns the pool degraded during run 1.
+    if _preflight["last"] is not None:
+        BUS.emit("preflight_done", _preflight["last"])
+    if _STICKY["pool_degraded"] is not None:
+        BUS.emit("pool_degraded", _STICKY["pool_degraded"])
 
 
 def _frame(ev):
@@ -291,8 +382,21 @@ def health():
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
                    "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH,
                    "promote_gate": PROMOTE_GATE, "hermetic": HERMETIC,
-                   "pool_backend": os.environ.get("RETRIAL_POOL_BACKEND", "snapshot")},
+                   "pool_backend": get_settings().retrial_pool_backend,
+                   # One honest boolean for the live poller; the loud banner
+                   # itself is event-driven (preflight_done).
+                   "preflight_ok": (_preflight["last"] or {}).get("ok")},
     }
+
+
+@app.get("/preflight")
+def preflight():
+    """Boot-time config preflight (+ optional live deep check). Read-only,
+    never fatal — a failed preflight is a LOUD banner, not a dead server."""
+    last = _preflight["last"]
+    if last is None:
+        return {"status": "pending"}
+    return {**last, "pool_degraded_seen": _STICKY["pool_degraded"]}
 
 
 @app.get("/genome")
@@ -334,7 +438,7 @@ async def ws(websocket: WebSocket):
         unsubscribe()
 
 
-@app.post("/tournament")
+@app.post("/tournament", dependencies=[Depends(_auth_guard)])
 def start_tournament(req: TournamentRequest):
     # Resolve relative seed paths (e.g. "seeds/test_dict_order.py") against the
     # repo root so the UI can send repo-relative paths regardless of server CWD.
@@ -372,6 +476,8 @@ def start_tournament(req: TournamentRequest):
 
     def run():
         pool = _get_pool()
+        started_at = time.time()
+        row = None   # the history row, built once the verdict is known
         try:
             hypotheses = supplied
             # Live diagnosis runs INSIDE the background thread so POST returns
@@ -424,12 +530,33 @@ def start_tournament(req: TournamentRequest):
                     })
                 else:
                     PRSmith(bus=BUS).open_pr(result, path.name)
+            # Build the history row AFTER all verdict/terminal/promote/PR logic.
+            # Never before: a surprise raise here must not mask an already-
+            # correct verdict (see the finally guard below).
+            w = result.get("winner") or {}
+            row = dict(kind="tournament", test_name=path.name,
+                       verdict=result.get("verdict"),
+                       orig_flake_rate=result.get("orig_flake_rate"),
+                       final_flake_rate=(result.get("confirmation") or {}).get("flake_rate"),
+                       winner_model=w.get("model"),
+                       braintrust_url=(result.get("braintrust") or {}).get("detect"))
         except Exception as e:
             BUS.emit("tournament_done", {"verdict": "ERROR", "error": str(e)[:200]})
+            row = dict(kind="tournament", test_name=path.name, verdict="ERROR")
         finally:
             with _run_lock:
                 _running["active"] = False
                 _running["test_name"] = None
+            # Run history: record from the finally, after the verdict is final,
+            # behind a call-site local guard (defense-in-depth on top of the
+            # @_safe decorator — two independent layers). A history failure may
+            # cost only the row, NEVER the verdict.
+            try:
+                if row is not None:
+                    HISTORY.record(**row, started_at=started_at,
+                                   finished_at=time.time())
+            except Exception:
+                pass
             # Reset the shared pool(s) to a bounded, demo-ready size for the next
             # run (in the background — after tournament_done, invisible to the UI).
             def _reset_pools():
@@ -448,7 +575,7 @@ class PromoteRequest(BaseModel):
     approve: bool = True
 
 
-@app.post("/promote")
+@app.post("/promote", dependencies=[Depends(_auth_guard)])
 def promote(req: PromoteRequest):
     """Close the pending human-approval promotion.
 
@@ -485,11 +612,11 @@ class BisectRequest(BaseModel):
     max_trials: int | None = None
 
 
-@app.post("/bisect")
+@app.post("/bisect", dependencies=[Depends(_auth_guard)])
 def start_bisect(req: BisectRequest):
     # Honest gate: bisection's capability IS the fork — there is no snapshot
     # fallback to fake it with, so refuse up front rather than fail mid-run.
-    if os.environ.get("RETRIAL_POOL_BACKEND", "snapshot") != "fork":
+    if get_settings().retrial_pool_backend.lower() != "fork":
         raise HTTPException(
             status_code=400,
             detail="bisection requires the fork backend (set RETRIAL_POOL_BACKEND=fork)")
@@ -531,6 +658,8 @@ def start_bisect(req: BisectRequest):
             raise HTTPException(status_code=409, detail=str(e))
 
     def run():
+        started_at = time.time()
+        row = None
         try:
             bisector = FlakeBisector(bus=BUS,
                                      max_trials=req.max_trials or MAX_TRIALS,
@@ -541,20 +670,43 @@ def start_bisect(req: BisectRequest):
                 _active["bisector"] = bisector
             # run() is degrade-gracefully: errors come back as a terminal
             # bisect_done {"error": ...}, never a traceback to the client.
-            bisector.run(suite, suspect_index=suspect_index,
-                         suite_name=resolved.name)
+            res = bisector.run(suite, suspect_index=suspect_index,
+                               suite_name=resolved.name)
+            # History row built AFTER the terminal event, same placement rule as
+            # /tournament: a record failure must never mask the bisect verdict.
+            res = res or {}
+            verdict = (("POLLUTER:" + res["polluter_test"]) if res.get("polluter_test")
+                       else ("ERROR" if res.get("error") else "INCONCLUSIVE"))
+            row = dict(kind="bisect", test_name=resolved.name, verdict=verdict,
+                       orig_flake_rate=res.get("base_flake_rate"),
+                       final_flake_rate=res.get("full_flake_rate"))
         except Exception as e:
             BUS.emit("bisect_done", {"error": str(e)[:200]})
+            row = dict(kind="bisect", test_name=resolved.name, verdict="ERROR")
         finally:
             with _run_lock:
                 _running["active"] = False
                 _running["test_name"] = None
                 _active["bisector"] = None
+            try:            # local guard: history can never touch the verdict
+                if row is not None:
+                    HISTORY.record(**row, started_at=started_at,
+                                   finished_at=time.time())
+            except Exception:
+                pass
 
     threading.Thread(target=run, daemon=True).start()
     return {"status": "started", "suite": resolved.name,
             "n_tests": resolved_suspect,  # prefix length = checkpointed tests
             "suspect": names[resolved_suspect]}
+
+
+@app.get("/runs")
+def runs(limit: int = 20):
+    """Recent completed runs from the SQLite history (RETRIAL_DB).
+    Read-only (NOT auth-gated); empty list when no history exists — never an
+    error (RunHistory.recent returns [] on any failure)."""
+    return {"runs": HISTORY.recent(min(max(limit, 1), 100))}
 
 
 # --------------------------- Sandbox Observatory ---------------------------
@@ -586,7 +738,7 @@ def sandbox_detail(sid: str):
     return rec
 
 
-@app.delete("/sandboxes/{sid}")
+@app.delete("/sandboxes/{sid}", dependencies=[Depends(_auth_guard)])
 def destroy_sandbox(sid: str):
     """Destroy ONE sandbox (allowed even mid-run). Killing a trial sandbox
     surfaces as an infra error, which the trial layer already excludes and never
@@ -615,7 +767,7 @@ def destroy_sandbox(sid: str):
     return {"status": "destroying", "id": sid}
 
 
-@app.post("/sandboxes/destroy_all")
+@app.post("/sandboxes/destroy_all", dependencies=[Depends(_auth_guard)])
 def destroy_all_sandboxes(force: bool = False):
     """Leaf-first teardown of every live sandbox across all pools/bisectors.
 
@@ -652,4 +804,5 @@ if __name__ == "__main__":
     import uvicorn
     # Loopback by default (see module docstring): no auth + open CORS means this
     # must not listen on all interfaces unless deliberately placed behind a proxy.
-    uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))
+    _sc = get_settings()
+    uvicorn.run(app, host=_sc.host, port=_sc.port)
