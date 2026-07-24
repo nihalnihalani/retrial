@@ -9,9 +9,8 @@ Point it at a flaky test. It:
 1. **Fireworks** models generate N *competing hypotheses* for the root cause (race condition, test-order dependency, timing, shared state…) + a candidate fix each.
 2. **Daytona** spins up a swarm of 20–50 disposable parallel sandboxes and reruns each candidate K times to compute an **empirical flake rate** (e.g. 24/50 fails → 0/50 fails). VERIFIED: 16 concurrent containers create+run in 2.0s.
 3. **Braintrust** scores each candidate as an eval — scorer = pass-rate over K reruns (real, reproducible eval, NOT an LLM vibe-check) — with an **agent-as-a-judge** layer inspecting the reasoning trace, not just pass/fail.
-4. **CodeRabbit** reviews the winning diff for quality/safety before merge.
-5. **CopilotKit** (AG-UI generative UI) renders a live **tournament board** — the grid of sandboxes flickering green/red as reruns land.
-6. **ElevenLabs v3** narrates with *emotional inflection* — hesitant on uncertain hypotheses, triumphant on the fix that survives 50/50 reruns.
+4. A **human promote gate** approves the winning diff before the PR opens (shipped as the React modal + `POST /promote` feeding PRSmith).
+5. A live **tournament board** (React over WebSocket) — the grid of sandboxes flickering green/red as reruns land.
 
 ## Why this WINS where "bug race" lost (survives the devils-advocate attacks)
 - **"4× cost is insane"** → flake detection *inherently needs* many reruns for statistical confidence. Parallel disposable sandboxes are the RIGHT tool. The cost IS the product.
@@ -21,8 +20,8 @@ Point it at a flaky test. It:
 - **"Daytona is decorative"** → now LOAD-BEARING; the whole demo is Daytona's speed/parallelism/disposability.
 - **Academic backing**: arXiv 2604.16529 "Recursive Tournament Voting for agentic coding" (Apr 2026) + Agent-as-a-Judge papers — cite when asked "why parallel not one good agent."
 
-## Sponsor coverage (all 6 judge-present + ElevenLabs, all load-bearing, none bolted on)
-Daytona (the swarm — flagship), Fireworks (N hypothesis models; Fast tier; $1.5B raise Jul 17 to namedrop), Braintrust (empirical-flake-rate scorer + agent-judge — their eval-first pitch, exactly), CodeRabbit (safety gate on winner), CopilotKit (AG-UI tournament board — real generative UI), ElevenLabs (v3 emotional narration — most teams only do flat TTS).
+## Sponsor coverage (load-bearing only — claim nothing without a code path)
+Daytona (the swarm — flagship), Fireworks (N hypothesis models; Fast tier; $1.5B raise Jul 17 to namedrop), Braintrust (empirical-flake-rate scorer — their eval-first pitch, exactly). Other sponsor tools were considered as polish but never built; only integrations with real code paths are claimed (see [SPONSORS.md](SPONSORS.md)).
 
 ## Delivery vehicle
 Keep the Electron + menu-bar shell (user wants native Mac app; fits "watches your CI, tells you when flakes are fixed" like CodexBar watches usage). Build web-first (works standalone, all sponsors), wrap in Electron near the end. Menu-bar: "🟢 test suite stable · 1 flake fixed today."
@@ -30,9 +29,9 @@ Keep the Electron + menu-bar shell (user wants native Mac app; fits "watches you
 ## Demo (3 min)
 1. Positioning: "Flaky tests are the #1 reason teams stop trusting their CI. Existing fixers guess a cause with one agent. We run a *tournament*." 
 2. Point at a real flaky test (pre-seeded, genuinely nondeterministic). Show it failing ~half the time.
-3. Hit go → tournament board lights up: N hypotheses × sandboxes flickering green/red live, ElevenLabs narrating.
+3. Hit go → tournament board lights up: N hypotheses × sandboxes flickering green/red live.
 4. Board converges: the winning fix survives 50/50 reruns; empirical flake rate 48% → 0%. Braintrust trace = the receipt.
-5. CodeRabbit clears it; menu-bar flips green; voice: "Race condition in the shared fixture — fixed and verified across fifty runs."
+5. The human promote gate approves it; menu-bar flips green: "fixed and verified across fifty runs."
 6. Close: roadmap = repo-specific flake leaderboard (the compounding moat). Fireworks $1.5B, Braintrust eval-first — "we're the empirical-eval layer for agentic code."
 
 ## Blocking unknowns resolved / open
@@ -66,7 +65,7 @@ The last two attackers hit the OLD "bug race" framing, but their findings transf
 - **Opening dedupe line (say verbatim):** "Bitbucket, Datadog and Kong all shipped flaky-test fixers this year — they run ONE agent that guesses a cause. Tools like bernstein auto-verify fixes with a single test run — but a single run is exactly what a flaky test beats. We run a hypothesis tournament and PROVE the winner with fifty reruns you can audit in Braintrust."
 - **Sell the AUDIT TRAIL, not just 'objective'** (da-originality's best save): the Braintrust permalink showing 48%→0% flake rate across 50 runs is a *governance receipt* — "we didn't just fix it, we proved it's fixed, reproducibly." That's the narrow, CTO-legible, unclaimed angle. Frame Braintrust as the tool we USE for the receipt (using the sponsor well), never as a "referee we invented."
 
-**da-demo's guaranteed-failure bug — DODGED by this wedge, but noted.** Daytona preview URLs need an `x-daytona-preview-token` HEADER, which a plain `<iframe src>` CANNOT attach (only fixable in Electron via `webRequest.onBeforeSendHeaders`). The old plan's live-app-iframe centerpiece was a guaranteed on-stage blank in front of CopilotKit judges. **Flaky Test Detective's UI is a status tournament BOARD (green/red rerun counts), NOT embedded live-app iframes — so this trap largely doesn't apply.** If any preview iframe IS used, build+test it inside Electron on Day 1, never defer to last. Also: don't hunt for a "CopilotKit v2" npm tag — verify actual package versions Day 1.
+**da-demo's guaranteed-failure bug — DODGED by this wedge, but noted.** Daytona preview URLs need an `x-daytona-preview-token` HEADER, which a plain `<iframe src>` CANNOT attach (only fixable in Electron via `webRequest.onBeforeSendHeaders`). The old plan's live-app-iframe centerpiece was a guaranteed on-stage blank in front of the sponsor judges. **Flaky Test Detective's UI is a status tournament BOARD (green/red rerun counts), NOT embedded live-app iframes — so this trap largely doesn't apply.** If any preview iframe IS used, build+test it inside Electron on Day 1, never defer to last. Also: verify actual package versions Day 1 rather than hunting for rumored npm tags.
 
 **Calibrated seed (both attackers):** the flaky test must fail ~40-55% reliably (a real race condition on a shared resource/timing), pre-tested, with a scripted branch for "converges cleanly" AND a backup seed. This is now the #1 build-prep task.
 
@@ -85,7 +84,7 @@ Build window: the event schedule is a 1-day sprint (~5.5h), but user said "2 day
 - **TIMING TRUTH (da-build):** full trial round-trip (create+write+exec+delete) = ~1.5-2 trials/s at 16-conc, NOT the 2s-for-16 create-only number. FIX ADOPTED: per-seed ISOLATION LEVEL — `process` isolation reuses warm sandboxes (fresh python3 process = fresh PYTHONHASHSEED + scheduling; correct for order/scheduling flakes; ~10x throughput, reclaims the fully-live demo) vs `sandbox` isolation (fresh sandbox per trial, only for state-polluting flakes). This is ALSO a stronger technical story: "isolation level matched to flake class."
 - **TRAP OPENING REDESIGNED (branch-proof, works at any flake rate):** run the test ONCE live. Green → "raise your hand if you'd merge." Red → "CI's red... do what we all do: hit rerun" → reruns until green (expected ≤2) → "NOW would you merge?" Either branch dramatizes the lie; the red branch is actually stronger (it acts out the rerun-until-green anti-pattern every engineer does).
 - **VIDEO MUST BE RECORDED TODAY** (one-day event; no calm window tomorrow). First 15s = cold-open on the split-screen + stat ("passed 3 times today — it's 51% broken"), not scene-setting.
-- **USER ACTION (only blocker no agent can clear): redeem FIREWORKS (DEVREL-WEBINAR1), BRAINTRUST (BT-DISCOUNT-HACKATHON), ELEVENLABS (Discord) keys into retrial/.env.** DiagnosisEngine = the creative core; unbuildable without the Fireworks key. Cached-hypothesis fallback will exist but live generation is the honest path.
+- **USER ACTION (only blocker no agent can clear): redeem FIREWORKS (DEVREL-WEBINAR1) and BRAINTRUST (BT-DISCOUNT-HACKATHON) keys into retrial/.env.** DiagnosisEngine = the creative core; unbuildable without the Fireworks key. Cached-hypothesis fallback will exist but live generation is the honest path.
 
 ## MEASURED DEMO-TIMING TRUTH (engine, 2026-07-23 night — cite these, not estimates)
 - Process isolation (warm-pool reuse, fresh python3 per trial): **6.1 trials/s** → ~200 trials ≈ 33s. Sandbox isolation (fresh sandbox per trial): 2.7 trials/s.
