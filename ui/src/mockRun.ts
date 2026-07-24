@@ -12,6 +12,11 @@ export interface ScriptedEvent {
   event: RetrialEvent;
 }
 
+// 'winner' = the winning-fix path; 'quarantine' = no fix stabilizes (no dead end).
+export type MockOutcome = 'winner' | 'quarantine';
+
+const TEST_NAME = 'tests/test_event_intake.py::test_first_event_processed';
+
 // deterministic PRNG so the replay looks the same every rehearsal
 function mulberry32(seed: number) {
   let a = seed;
@@ -57,17 +62,31 @@ const HYPOTHESES: { id: string; cause_class: string; explanation: string }[] = [
   },
 ];
 
-// Per-hypothesis tournament behaviour. h1 is the real fix (converges to 0).
-// The others keep flaking at various rates and get eliminated.
-const PLANS: Record<
-  string,
-  { trials: number; failRate: number; outcome: 'winner' | 'eliminated'; reason?: string }
-> = {
-  h1: { trials: 50, failRate: 0.0, outcome: 'winner' },
-  h2: { trials: 22, failRate: 0.32, outcome: 'eliminated', reason: 'still 30%+ flaky — CI excludes 0' },
-  h3: { trials: 18, failRate: 0.55, outcome: 'eliminated', reason: 'no improvement over baseline' },
-  h4: { trials: 24, failRate: 0.21, outcome: 'eliminated', reason: 'CI still spans the threshold' },
+interface Plan {
+  trials: number;
+  failRate: number;
+  stabilizes: boolean; // true => drives flake to ~0 and wins
+  reason?: string; // shown on the lane when it's knocked out
+}
+
+// Winner path: h1 (the real fix) converges to 0; the rest keep flaking.
+const WINNER_PLANS: Record<string, Plan> = {
+  h1: { trials: 50, failRate: 0.0, stabilizes: true },
+  h2: { trials: 22, failRate: 0.32, stabilizes: false, reason: 'still 30%+ flaky — CI excludes 0' },
+  h3: { trials: 18, failRate: 0.55, stabilizes: false, reason: 'no improvement over baseline' },
+  h4: { trials: 24, failRate: 0.21, stabilizes: false, reason: 'CI still spans the threshold' },
 };
+
+// Quarantine path: nothing stabilizes. h1 is the least-bad (best effort) and
+// becomes the dossier's best_id, but it still flakes — so we quarantine.
+const QUARANTINE_PLANS: Record<string, Plan> = {
+  h1: { trials: 30, failRate: 0.13, stabilizes: false, reason: 'lock narrowed the race but did not close it' },
+  h2: { trials: 22, failRate: 0.34, stabilizes: false, reason: 'still 30%+ flaky — CI excludes 0' },
+  h3: { trials: 18, failRate: 0.52, stabilizes: false, reason: 'no improvement over baseline' },
+  h4: { trials: 24, failRate: 0.25, stabilizes: false, reason: 'CI still spans the threshold' },
+};
+
+const BEST_EFFORT_ID = 'h1'; // least-bad when quarantining
 
 const TRIAL_STEP_MS = 150; // cadence of interleaved tournament reruns
 
@@ -84,8 +103,15 @@ function wilson(p: number, n: number): [number, number] {
 
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
-export function buildMockScript(): ScriptedEvent[] {
+export function buildMockScript(outcome: MockOutcome = 'winner'): ScriptedEvent[] {
   const script: ScriptedEvent[] = [];
+  const plans = outcome === 'quarantine' ? QUARANTINE_PLANS : WINNER_PLANS;
+
+  // ---- HANDSHAKE: engine announces the test + planned rerun budget ----
+  script.push({
+    after: 300,
+    event: { type: 'run_started', test_name: TEST_NAME, planned_trials: DETECT_TRIALS },
+  });
 
   // ---- DETECT: rerun the unmodified test, ~48% fail ----
   let detectFails = 0;
@@ -125,21 +151,16 @@ export function buildMockScript(): ScriptedEvent[] {
 
   // ---- TOURNAMENT: interleave reruns across all racing hypotheses ----
   const cursors: Record<string, { i: number; fails: number }> = {};
-  const active = HYPOTHESES.map((h) => h.id);
+  const finalRate: Record<string, number> = {};
   HYPOTHESES.forEach((h) => (cursors[h.id] = { i: 0, fails: 0 }));
 
-  const remaining = new Set(active);
-  const verifiedEmitted = new Set<string>();
+  const remaining = new Set(HYPOTHESES.map((h) => h.id));
   let first = true;
 
   while (remaining.size > 0) {
     for (const id of Array.from(remaining)) {
-      const plan = PLANS[id];
+      const plan = plans[id];
       const cur = cursors[id];
-      if (cur.i >= plan.trials) {
-        remaining.delete(id);
-        continue;
-      }
       const passed = rand() >= plan.failRate;
       if (!passed) cur.fails++;
       script.push({
@@ -155,9 +176,11 @@ export function buildMockScript(): ScriptedEvent[] {
       first = false;
       cur.i++;
 
-      // When a hypothesis reaches its trial budget, emit verify/eliminate.
+      // When a hypothesis reaches its trial budget, verify it, then knock it
+      // out unless it stabilized (or it's the best-effort lane we quarantine on).
       if (cur.i >= plan.trials) {
         const rate = cur.fails / plan.trials;
+        finalRate[id] = rate;
         script.push({
           after: 120,
           event: {
@@ -168,8 +191,8 @@ export function buildMockScript(): ScriptedEvent[] {
             trials: plan.trials,
           },
         });
-        verifiedEmitted.add(id);
-        if (plan.outcome === 'eliminated') {
+        const keepAlive = plan.stabilizes || (outcome === 'quarantine' && id === BEST_EFFORT_ID);
+        if (!keepAlive) {
           script.push({
             after: 250,
             event: { type: 'hypothesis_eliminated', id, reason: plan.reason },
@@ -180,16 +203,37 @@ export function buildMockScript(): ScriptedEvent[] {
     }
   }
 
-  // ---- CONFIRM: winner survives a dedicated confirmation round ----
-  script.push({
-    after: 900,
-    event: {
-      type: 'winner_confirmed',
-      id: 'h1',
-      flake_rate: 0.0,
-      confirm_flake_rate: 0.0,
-    },
-  });
+  if (outcome === 'quarantine') {
+    // ---- QUARANTINE: nothing hit zero — quarantine WITH the evidence ----
+    const best = BEST_EFFORT_ID;
+    const rate = finalRate[best] ?? plans[best].failRate;
+    script.push({
+      after: 900,
+      event: {
+        type: 'quarantine_confirmed',
+        best_id: best,
+        dossier: {
+          flake_rate: round3(rate),
+          wilson_ci: wilson(rate, plans[best].trials),
+          trials: plans[best].trials,
+          reason:
+            'No candidate drove the flake rate to zero across the tournament. Quarantined with the full autopsy so CI stays green while a human takes it.',
+        },
+      },
+    });
+  } else {
+    // ---- CONFIRM: winner survives a dedicated confirmation round ----
+    const winnerId = HYPOTHESES.find((h) => plans[h.id].stabilizes)?.id ?? 'h1';
+    script.push({
+      after: 900,
+      event: {
+        type: 'winner_confirmed',
+        id: winnerId,
+        flake_rate: 0.0,
+        confirm_flake_rate: 0.0,
+      },
+    });
+  }
   script.push({ after: 400, event: { type: 'tournament_done' } });
 
   return script;

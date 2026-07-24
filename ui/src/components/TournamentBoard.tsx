@@ -3,15 +3,20 @@ import type { ConnectionMode, Phase } from '../types';
 import { DetectPhase } from './DetectPhase';
 import { TournamentPhase } from './TournamentPhase';
 import { WinnerCard } from './WinnerCard';
+import { QuarantineCard } from './QuarantineCard';
 import { GenomeCard } from './GenomeCard';
 
 const DETECT_EXPECTED = 40;
 
-const STEPS: { key: Phase; label: string }[] = [
-  { key: 'detect', label: 'Detect' },
-  { key: 'tournament', label: 'Tournament' },
-  { key: 'winner', label: 'Verdict' },
-];
+// Which stepper index each phase lights up. winner + quarantine share the
+// terminal "Verdict" step.
+const PHASE_STEP: Record<Phase, number> = {
+  detect: 0,
+  tournament: 1,
+  winner: 2,
+  quarantine: 2,
+};
+const STEPS = ['Detect', 'Tournament', 'Verdict'];
 
 interface Props {
   onRestart: () => void;
@@ -21,20 +26,24 @@ interface Props {
 // layout + the phase router.
 export function TournamentBoard({ onRestart }: Props) {
   const { state, mode } = useEventStream();
-  const { phase, detect, hypotheses, winner } = state;
+  const { phase, detect, hypotheses, winner, quarantine, testName, plannedTrials } = state;
   const winnerHyp = winner ? hypotheses.find((h) => h.id === winner.id) : undefined;
+  const bestHyp = quarantine ? hypotheses.find((h) => h.id === quarantine.bestId) : undefined;
 
   return (
     <div className="board">
-      <TopBar mode={mode} phase={phase} onRestart={onRestart} />
+      <TopBar mode={mode} phase={phase} testName={testName} onRestart={onRestart} />
 
       <main className="board-main">
         {phase === 'detect' && (
-          <DetectPhase detect={detect} expectedTrials={DETECT_EXPECTED} />
+          <DetectPhase detect={detect} expectedTrials={plannedTrials ?? DETECT_EXPECTED} />
         )}
         {phase === 'tournament' && <TournamentPhase hypotheses={hypotheses} />}
         {phase === 'winner' && winner && (
           <WinnerCard winner={winner} hypothesis={winnerHyp} detect={detect} />
+        )}
+        {phase === 'quarantine' && quarantine && (
+          <QuarantineCard quarantine={quarantine} bestHypothesis={bestHyp} detect={detect} />
         )}
       </main>
 
@@ -53,31 +62,39 @@ export function TournamentBoard({ onRestart }: Props) {
 function TopBar({
   mode,
   phase,
+  testName,
   onRestart,
 }: {
   mode: ConnectionMode;
   phase: Phase;
+  testName: string | null;
   onRestart: () => void;
 }) {
-  const activeIndex = STEPS.findIndex((s) => s.key === phase);
+  const activeIndex = PHASE_STEP[phase];
   return (
     <header className="topbar">
       <div className="brand">
         <span className="brand-mark">⚖</span>
         <span className="brand-name">RETRIAL</span>
-        <span className="brand-tag">empirical flake court</span>
+        {testName ? (
+          <span className="brand-test mono" title={testName}>
+            {shortTestName(testName)}
+          </span>
+        ) : (
+          <span className="brand-tag">empirical flake court</span>
+        )}
       </div>
 
       <nav className="stepper">
-        {STEPS.map((s, i) => (
+        {STEPS.map((label, i) => (
           <div
-            key={s.key}
+            key={label}
             className={`step ${i === activeIndex ? 'active' : ''} ${
               i < activeIndex ? 'done' : ''
             }`}
           >
             <span className="step-dot" />
-            {s.label}
+            {label}
           </div>
         ))}
       </nav>
@@ -90,6 +107,13 @@ function TopBar({
       </div>
     </header>
   );
+}
+
+// Keep the file::test tail; drop deep directories so the header stays tidy.
+function shortTestName(name: string): string {
+  const [path, ...rest] = name.split('::');
+  const file = path.split('/').pop() ?? path;
+  return [file, ...rest].join('::');
 }
 
 function ModeBadge({ mode }: { mode: ConnectionMode }) {
