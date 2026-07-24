@@ -227,6 +227,46 @@ body {
   font-size: 16px;
 }
 
+/* ---------- Daytona sandbox ticker ---------- */
+.sandbox-ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink-dim);
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  white-space: nowrap;
+}
+.sandbox-ticker .hex {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.sandbox-ticker.live {
+  color: var(--ink);
+  border-color: rgba(110, 168, 255, 0.35);
+  background: rgba(110, 168, 255, 0.07);
+}
+.sandbox-ticker.live .live-hex {
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(110, 168, 255, 0.6);
+  animation: pulse 1.6s infinite;
+}
+.sandbox-ticker.live strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 800;
+}
+.sandbox-text {
+  letter-spacing: 0.01em;
+}
+.sandbox-dim {
+  color: var(--ink-faint);
+}
+
 /* ---------- Detect ---------- */
 .detect-body {
   display: grid;
