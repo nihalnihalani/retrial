@@ -17,6 +17,8 @@ from .events import EventBus, EVENT_TYPES
 from .coordinator import TournamentCoordinator
 from .ledger import EvidenceLedger, LedgerRun
 from .diagnosis import DiagnosisEngine, diagnose
+from .genome import Genome
+from .prsmith import PRSmith
 
 __all__ = [
     "SandboxPool",
@@ -33,4 +35,6 @@ __all__ = [
     "LedgerRun",
     "DiagnosisEngine",
     "diagnose",
+    "Genome",
+    "PRSmith",
 ]
