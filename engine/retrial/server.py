@@ -45,6 +45,9 @@ if os.environ.get("BRAINTRUST_API_KEY"):
 # Engine tuning (env-overridable so the live demo can dial trials down/up).
 MAX_TRIALS = int(os.environ.get("MAX_TRIALS", "50"))
 CONC = int(os.environ.get("CONC", "16"))
+# Per-lane concurrency during the parallel hypothesis phase (default 8) so peak
+# sandboxes = num_hypotheses * TOURNAMENT_CONC stays bounded (~32 for 4 lanes).
+TOURNAMENT_CONC = int(os.environ.get("TOURNAMENT_CONC", "8"))
 THRESHOLD = float(os.environ.get("THRESHOLD", "0.05"))
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
@@ -117,7 +120,8 @@ def health():
         "test_name": _running["test_name"],
         "pool": {"available": stats["available"], "live": stats["live"],
                  "prewarming": _pool_status["prewarming"]},
-        "config": {"max_trials": MAX_TRIALS, "conc": CONC, "threshold": THRESHOLD,
+        "config": {"max_trials": MAX_TRIALS, "conc": CONC,
+                   "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
                    "isolation": ISOLATION, "prewarm": PREWARM},
     }
 
@@ -189,6 +193,7 @@ def start_tournament(req: TournamentRequest):
             pool.ensure_warm(min(CONC, MAX_TRIALS))
             coord = TournamentCoordinator(
                 pool, bus=BUS, max_trials=MAX_TRIALS, conc=CONC,
+                tournament_conc=TOURNAMENT_CONC,
                 threshold=THRESHOLD, isolation=isolation)
             coord.run_tournament(test_code, hypotheses, test_name=path.name,
                                  isolation=isolation)
