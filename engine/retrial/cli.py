@@ -14,6 +14,8 @@ import sys
 import time
 from pathlib import Path
 
+import braintrust
+
 from .pool import SandboxPool
 from .verifier import verify
 
@@ -75,6 +77,9 @@ def build_parser():
 
 
 def main(argv=None):
+    # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
+    braintrust.init_logger(project="My Project")
+    braintrust.auto_instrument()
     args = build_parser().parse_args(argv)
     return args.func(args)
 
