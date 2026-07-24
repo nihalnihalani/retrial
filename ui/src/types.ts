@@ -119,6 +119,102 @@ export interface TournamentDone {
   type: 'tournament_done';
 }
 
+// The hermetic (network-blocked) second detect pass. Field names mirror the
+// coordinator's _hermetic_detect emit EXACTLY and are REQUIRED, not optional,
+// so tsc catches any future payload drift instead of silently accepting it.
+// (This interface fixes an old drift: the engine emitted hermetic_diagnosis
+// but the union never listed it.)
+export interface HermeticDiagnosis {
+  type: 'hermetic_diagnosis';
+  verdict: string; // 'external_dep' | 'env_independent'
+  networked_rate: number;
+  hermetic_rate: number;
+  networked_ci: WilsonCI;
+  hermetic_ci: WilsonCI;
+}
+
+// The fork pool backend fell back to the snapshot pool (sticky, per-process).
+export interface PoolDegraded {
+  type: 'pool_degraded';
+  backend: string;
+  fallback: string;
+  reason: string;
+}
+
+// ---- Time-travel bisection (fork backend only) ----
+
+export interface BisectStarted {
+  type: 'bisect_started';
+  suite: string;
+  n_tests: number; // prefix length = number of checkpointed tests
+  suspect: string;
+  max_trials?: number;
+}
+
+export interface CheckpointCreated {
+  type: 'checkpoint_created';
+  k: number; // checkpoint k = suite state after the first k tests (0 = pristine)
+  label: string;
+  test_passed?: boolean; // informational: the prefix test's own outcome
+}
+
+export interface CheckpointProbed {
+  type: 'checkpoint_probed';
+  k: number;
+  flake_rate: number;
+  wilson_ci: WilsonCI;
+  trials: number;
+  verdict?: string;
+}
+
+export interface BisectNarrowed {
+  type: 'bisect_narrowed';
+  lo: number;
+  hi: number;
+  k: number;
+  flipped: boolean;
+}
+
+export interface BisectProbeSummary {
+  k: number;
+  flake_rate: number;
+  wilson_ci: WilsonCI;
+  trials: number;
+  verdict?: string;
+}
+
+export interface BisectDone {
+  type: 'bisect_done';
+  polluter_test?: string | null;
+  polluter_index?: number;
+  suspect?: string;
+  checkpoints?: number;
+  reason?: string; // honest-inconclusive explanation when no polluter found
+  error?: string; // terminal failure (fork path unavailable, etc.)
+  probes?: (BisectProbeSummary | null)[];
+  base_flake_rate?: number;
+  full_flake_rate?: number;
+  confirmed?: boolean;
+}
+
+// ---- Promote gate (human approval before PRSmith ships) ----
+
+export interface PromotionPending {
+  type: 'promotion_pending';
+  test_name: string;
+  verdict: string; // 'FIXED' | 'QUARANTINE'
+  winner_id?: string | null;
+  flake_rate?: number | null; // original (pre-fix) flake rate
+  confirm_flake_rate?: number | null; // winner's confirmation-round rate
+  braintrust_url?: string | null;
+}
+
+export interface PromotionClosed {
+  type: 'promotion_closed';
+  approved: boolean;
+  test_name?: string;
+}
+
 export type RetrialEvent =
   | Diagnosing
   | RunStarted
@@ -131,7 +227,16 @@ export type RetrialEvent =
   | QuarantineConfirmed
   | GenomeUpdated
   | PrOpened
-  | TournamentDone;
+  | TournamentDone
+  | HermeticDiagnosis
+  | PoolDegraded
+  | BisectStarted
+  | CheckpointCreated
+  | CheckpointProbed
+  | BisectNarrowed
+  | BisectDone
+  | PromotionPending
+  | PromotionClosed;
 
 // ---- Derived view state (built by the reducer) ----
 
@@ -141,7 +246,8 @@ export type Phase =
   | 'tournament'
   | 'winner'
   | 'quarantine'
-  | 'baseline_verdict';
+  | 'baseline_verdict'
+  | 'bisect';
 
 export interface TrialCell {
   index: number;
@@ -215,6 +321,51 @@ export interface GenomeState {
   byCauseClass: Record<string, number>;
 }
 
+// One rail row in the time-travel view: checkpoint k, its probe result (once
+// measured), and whether it sits inside the current binary-search window.
+export interface BisectCheckpoint {
+  k: number;
+  label: string;
+  testPassed: boolean | null;
+  probe: { flakeRate: number; wilsonCi: WilsonCI; trials: number; verdict: string | null } | null;
+  inWindow: boolean;
+}
+
+export interface BisectState {
+  suite: string;
+  suspect: string;
+  nTests: number;
+  checkpoints: BisectCheckpoint[];
+  window: [number, number] | null;
+  polluter: string | null;
+  polluterIndex: number | null;
+  reason: string | null;
+  done: boolean;
+  error: string | null;
+}
+
+// The parked human-approval promotion. `open` drives the modal; the record is
+// kept after closing so the board can show "awaiting PR…" until pr_opened
+// fills prUrl (the honest-state rule: approval is not shipping).
+export interface PromotionState {
+  testName: string;
+  verdict: string;
+  winnerId: string | null;
+  flakeRate: number | null;
+  confirmFlakeRate: number | null;
+  braintrustUrl: string | null;
+  open: boolean;
+  approved: boolean | null; // null until promotion_closed lands
+}
+
+export interface HermeticState {
+  verdict: string;
+  networkedRate: number;
+  hermeticRate: number;
+  networkedCi: WilsonCI;
+  hermeticCi: WilsonCI;
+}
+
 export interface BoardState {
   phase: Phase;
   testName: string | null;
@@ -230,6 +381,10 @@ export interface BoardState {
   genome: GenomeState | null;
   prUrl: string | null;
   tournamentDone: boolean;
+  bisect: BisectState | null;
+  promotion: PromotionState | null;
+  poolDegraded: { reason: string } | null; // honest badge, not an error
+  hermetic: HermeticState | null;
 }
 
 export type ConnectionMode = 'live' | 'replay' | 'connecting' | 'disconnected';

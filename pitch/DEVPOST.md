@@ -1,3 +1,9 @@
+> **ARCHIVED — historical deck, not current product truth.** This draft
+> predates the Rewind merge and claims CodeRabbit review and an ElevenLabs
+> voice autopsy that were never built (no code path exists). The truthful
+> integration list lives in `docs/SPONSORS.md`; the current product story is
+> in `README.md`. Kept only as a record of the original pitch.
+
 # Retrial — Devpost Submission (Round 1)
 
 > Paste-ready. Each `##` block maps to a Devpost field. Measured numbers only —

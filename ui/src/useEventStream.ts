@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from 'react';
-import { buildMockScript, type MockOutcome } from './mockRun';
+import { buildMockScript, MOCK_OUTCOMES, type MockOutcome } from './mockRun';
 import { initialState, reduce } from './reducer';
 import type { BoardState, ConnectionMode, RetrialEvent } from './types';
 
@@ -16,7 +16,11 @@ interface Stream {
 // spotless console — no failed WebSocket attempts on projector. With `?live=1`
 // we try the engine, show LIVE only once connected, and fall back to the
 // bundled scripted replay if it never opens.
-// `?mock=quarantine` replays the no-winner path instead of the winning one.
+// `?mock=quarantine` replays the no-winner path instead of the winning one;
+// `?mock=promote` adds the human promote gate after the winner beat;
+// `?mock=bisect` replays a scripted time-travel bisection on the checkpoint
+// rail. With NO params the behavior is byte-identical to the classic
+// realRun.json replay — the demo-day default is untouched.
 // A full reset is done by remounting the consumer (App keys it by run id).
 export function useEventStream(): Stream {
   const [state, dispatch] = useReducer(reduce, initialState);
@@ -126,10 +130,11 @@ export function useEventStream(): Stream {
 function readParams(): { live: boolean; mock: MockOutcome } {
   if (typeof window === 'undefined') return { live: false, mock: 'winner' };
   const q = new URLSearchParams(window.location.search);
-  return {
-    live: q.get('live') === '1',
-    mock: q.get('mock') === 'quarantine' ? 'quarantine' : 'winner',
-  };
+  // Look the ?mock value up against the known outcomes; anything unknown (or
+  // absent — the sacred default judge path) falls back to 'winner'.
+  const raw = q.get('mock');
+  const mock = MOCK_OUTCOMES.includes(raw as MockOutcome) ? (raw as MockOutcome) : 'winner';
+  return { live: q.get('live') === '1', mock };
 }
 
 // Walks the scripted replay, emitting each event after its delay. Returns a
