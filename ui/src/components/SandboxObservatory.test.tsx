@@ -96,11 +96,33 @@ describe('SandboxObservatory — preview link', () => {
     expect(screen.queryByText(/Open Daytona preview/i)).toBeNull();
   });
 
-  it('shows the preview button when preview_url is present', () => {
+  it('labels the port preview honestly when preview_url is present', () => {
     const state = board(obs({ sandboxes: { 'sb-b': sb('sb-b', { preview_url: 'http://x/preview' }) } }));
     render(<SandboxObservatory state={state} mode="replay" runActive={false} />);
     fireEvent.click(screen.getByTitle('open detail'));
-    expect(screen.getByText(/Open Daytona preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open Daytona port preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/do not start a web server/i)).toBeInTheDocument();
+  });
+
+  it('explains that an unused warm pool sandbox is ready rather than empty', () => {
+    const state = board(
+      obs({
+        sandboxes: {
+          'sb-warm': sb('sb-warm', {
+            role: 'snapshot-pool',
+            backend: 'snapshot',
+            state: 'warm',
+            exec_count: 0,
+            recentExecs: [],
+          }),
+        },
+      }),
+    );
+    render(<SandboxObservatory state={state} mode="replay" runActive={false} />);
+    fireEvent.click(screen.getByTitle('open detail'));
+    expect(screen.getByRole('status')).toHaveTextContent('Ready in pool');
+    expect(screen.getByRole('status')).toHaveTextContent('waiting for a trial');
+    expect(screen.queryByText(/no exec detail/i)).toBeNull();
   });
 });
 

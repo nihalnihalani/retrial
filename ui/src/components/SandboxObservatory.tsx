@@ -555,6 +555,8 @@ function ObsDrawer({
   const execs = detail?.recentExecs ?? card.recentExecs;
   const previewUrl = detail?.previewUrl ?? card.preview_url ?? null;
   const dead = card.state === 'destroyed';
+  const waitingForFirstTrial =
+    card.state === 'warm' && card.exec_count === 0 && execs.length === 0;
 
   return (
     <aside className={`obs-drawer ${open ? 'open' : ''}`} aria-label="Sandbox detail">
@@ -592,13 +594,18 @@ function ObsDrawer({
 
         <div className="obs-preview-row">
           {previewUrl ? (
-            <button
-              className="obs-preview-btn"
-              onClick={() => window.open(previewUrl, '_blank', 'noopener')}
-              title="open the Daytona preview in a new tab"
-            >
-              ↗ Open Daytona preview
-            </button>
+            <>
+              <button
+                className="obs-preview-btn"
+                onClick={() => window.open(previewUrl, '_blank', 'noopener')}
+                title="open Daytona's port preview in a new tab"
+              >
+                ↗ Open Daytona port preview
+              </button>
+              <span className="obs-preview-note">
+                Test sandboxes do not start a web server by default, so this port preview may be blank.
+              </span>
+            </>
           ) : (
             <span className="obs-preview-none" title="Daytona did not expose a preview link">
               no preview link (Daytona did not expose one)
@@ -612,9 +619,19 @@ function ObsDrawer({
         </div>
         <div className="obs-exec-feed">
           {execs.length === 0 ? (
-            <p className="obs-exec-empty">
-              no exec detail{live ? '' : ' in this replay reconstruction'}
-            </p>
+            waitingForFirstTrial ? (
+              <div className="obs-idle-state" role="status">
+                <strong>Ready in pool</strong>
+                <span>
+                  Prewarmed and waiting for a trial. Commands and output appear here after this
+                  sandbox is leased.
+                </span>
+              </div>
+            ) : (
+              <p className="obs-exec-empty">
+                No executions recorded{live ? '.' : ' in this replay reconstruction.'}
+              </p>
+            )
           ) : (
             [...execs]
               .slice()
