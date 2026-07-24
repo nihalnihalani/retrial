@@ -35,6 +35,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .config import DEFAULT_THRESHOLD
 from .events import EventBus
 from .pool import SandboxPool
 from .coordinator import TournamentCoordinator
@@ -57,7 +58,7 @@ CONC = int(os.environ.get("CONC", "16"))
 # Per-lane concurrency during the parallel hypothesis phase (default 8) so peak
 # sandboxes = num_hypotheses * TOURNAMENT_CONC stays bounded (~32 for 4 lanes).
 TOURNAMENT_CONC = int(os.environ.get("TOURNAMENT_CONC", "8"))
-THRESHOLD = float(os.environ.get("THRESHOLD", "0.10"))  # matches the UI's 10% marker; 0/40 clears it
+THRESHOLD = float(os.environ.get("THRESHOLD", str(DEFAULT_THRESHOLD)))  # matches the UI's 10% marker; 0/40 clears it
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
 PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
