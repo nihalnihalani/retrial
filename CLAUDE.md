@@ -74,6 +74,7 @@ Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Expe
 - DON'T create sandboxes in a loop without concurrency (use threads, 16 at a time) or without cleanup.
 - DON'T add retry-forever loops around Daytona calls; fail the trial as an infra error and move on.
 - DON'T import heavyweight frameworks into the engine (no celery/redis/langchain) — threads + stdlib + the 4 SDK deps only.
+- DON'T trust a request field is wired just because the POST succeeded — Pydantic v2 silently DROPS unknown body keys. When adding an API field, verify it in the response echo or behavior, not absence of errors.
 - DON'T commit `.env`, `calibration-results.json`, or `ui/node_modules` (gitignored — keep it that way).
 - DON'T touch `docs/VERDICT.md` / `docs/ADE-DESIGN.md` framing — superseded history; `docs/WINNING-IDEA.md` is the only product source of truth.
 
