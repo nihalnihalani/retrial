@@ -350,3 +350,73 @@ def test_spend_cost_estimate_and_snapshot_serializable():
               "rate_per_sandbox_hour", "note"):
         assert k in snap["spend"]
     json.dumps(snap)                                       # must not raise
+
+
+# --------------- test 7: preview auth token + listener bootstrap -------------
+# Both regressions were found against the LIVE Daytona proxy, not in review:
+# the bare preview URL answers 401 (the token was being dropped) and, once
+# authorized, 502 (nothing in a Retrial sandbox listens on the port).
+class _TokenHandle(FakeChild):
+    """A preview link that carries a token, like the real SDK's."""
+
+    def get_preview_link(self, port):
+        link = FakePreviewLink(f"https://preview.fake/{self.id}:{port}")
+        link.token = "tok-abc"
+        return link
+
+
+def test_preview_url_carries_the_auth_token_as_a_query_param():
+    reg = SandboxRegistry()
+    reg.register(_TokenHandle("sb-1"), role="trial", backend="snapshot", state="warm")
+    # Query param, not a header: a browser <a href> cannot send a header, and
+    # ?token= is not a synonym (the live proxy 401s on it).
+    assert reg.preview("sb-1") == (
+        "https://preview.fake/sb-1:8080?DAYTONA_SANDBOX_AUTH_KEY=tok-abc")
+
+
+def test_preview_still_works_when_the_link_has_no_token():
+    """Older/other SDK shapes expose only `.url` — degrade to the bare URL
+    rather than emitting a broken `?DAYTONA_SANDBOX_AUTH_KEY=None`."""
+    reg = SandboxRegistry()
+    reg.register(FakeChild("sb-2"), role="trial", backend="snapshot", state="warm")
+    assert reg.preview("sb-2") == "https://preview.fake/sb-2:8080"
+
+
+def test_preview_starts_a_listener_so_the_proxy_has_an_upstream():
+    reg = SandboxRegistry()
+    h = _TokenHandle("sb-3")
+    reg.register(h, role="trial", backend="snapshot", state="warm")
+    reg.preview("sb-3")
+    cmds = [c for c, _ in h.process.execs]
+    assert any("http.server 8080" in c for c in cmds), cmds
+    # Idempotent: re-running must not stack a second server on the port.
+    assert any("pgrep" in c for c in cmds), cmds
+    # Serves the trial's own working directory, not a placeholder.
+    assert any("--directory /tmp" in c for c in cmds), cmds
+
+
+def test_preview_listener_failure_never_breaks_preview():
+    """A pool is never worth a nicety: if the exec fails, still return the link
+    (worst case is the 502 that existed before this feature)."""
+    class _Boom(_TokenHandle):
+        def __init__(self, cid):
+            super().__init__(cid)
+
+            class _P:
+                def exec(self, cmd, timeout=None):
+                    raise RuntimeError("daemon unreachable")
+            self.process = _P()
+
+    reg = SandboxRegistry()
+    reg.register(_Boom("sb-4"), role="trial", backend="snapshot", state="warm")
+    assert reg.preview("sb-4").startswith("https://preview.fake/sb-4:8080?")
+
+
+def test_preview_does_not_touch_a_sandbox_on_the_trial_path():
+    """The listener is started lazily on drawer-open only. Registering and
+    running trials must never pay for it."""
+    reg = SandboxRegistry()
+    h = _TokenHandle("sb-5")
+    reg.register(h, role="trial", backend="snapshot", state="warm")
+    reg.exec_finished("sb-5", "python3 seed.py", 0, "EXIT:0", 0.4)
+    assert h.process.execs == []          # nothing until preview() is called

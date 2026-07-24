@@ -376,6 +376,37 @@ class SandboxRegistry:
         self._emit("sandbox_state", payload)
         return None
 
+    def _ensure_preview_server(self, handle, port):
+        """Idempotently start a read-only static file server inside a sandbox.
+
+        WHY THIS EXISTS: the Daytona preview proxy needs a listener on the port
+        or it answers 502. A Retrial sandbox only ever runs `python3 <seed>` and
+        exits — nothing serves anything — so the preview link was structurally
+        dead even once its auth token was fixed.
+
+        WHY IT IS LAZY: this runs on the first drawer-open for a sandbox, never
+        at warm time and never on the trial path. That matters for measurement
+        integrity as much as cost — a background process in every pooled sandbox
+        would add scheduling noise to the very trials whose variance we are
+        trying to attribute to the flake alone. A sandbox nobody inspects never
+        pays for this.
+
+        It serves /tmp, which is exactly where the trial writes its seed copy and
+        output — so the preview shows that trial's real working directory rather
+        than a placeholder page. Read-only by construction (http.server has no
+        upload path). Failures are swallowed: a preview is a nicety and must
+        never disturb a pool, so the worst case is the 502 we had before.
+        """
+        try:
+            handle.process.exec(
+                f"pgrep -f 'http.server {port}' >/dev/null 2>&1 || "
+                f"(nohup python3 -m http.server {port} --directory /tmp "
+                f">/tmp/.retrial-preview.log 2>&1 &); sleep 0.3; echo ok",
+                timeout=20,
+            )
+        except Exception:
+            pass
+
     @_safe
     def preview(self, sid, port=None):
         """Lazily resolve the Daytona preview URL for a sandbox.
@@ -398,6 +429,10 @@ class SandboxRegistry:
             return None                            # destroyed / no handle
         if port is None:
             port = get_settings().retrial_preview_port
+        # Give the proxy something to proxy TO before asking for the link (see
+        # _ensure_preview_server). Without this the link resolves fine and then
+        # answers 502, which reads to a user as "preview is broken".
+        self._ensure_preview_server(handle, port)
         try:
             link = handle.get_preview_link(port)
         except Exception:
@@ -407,6 +442,16 @@ class SandboxRegistry:
             url = link
         if url is None:
             return None
+        # Daytona preview links are PRIVATE: the bare URL answers 401 "Invalid or
+        # expired token". The SDK hands us the token alongside the URL and this
+        # method used to drop it, so every link the Observatory rendered was
+        # guaranteed to fail on click. The query-param form is the one that
+        # survives an <a href> (a browser cannot send the x-daytona-preview-token
+        # header) — both were checked against the live proxy; ?token= is NOT a
+        # synonym and returns 401.
+        token = getattr(link, "token", None)
+        if token:
+            url = f"{url}?DAYTONA_SANDBOX_AUTH_KEY={token}"
         with self._lock:
             rec = self._records.get(sid)
             if rec is not None:
