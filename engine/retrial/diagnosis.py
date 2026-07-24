@@ -73,10 +73,16 @@ Return a JSON object with EXACTLY these keys:
             {"role": "user", "content": user}]
 
 
-def _parse_hypothesis(content, hid, fallback_cause, fallback_code):
+def _parse_hypothesis(content, hid, fallback_cause):
     """Parse a model's JSON response into a hypothesis dict. Pure + defensive:
-    tolerates fenced/leading junk, coerces cause_class to the enum, and falls back
-    to the original code if no patch was returned. Never raises."""
+    tolerates fenced/leading junk and coerces cause_class to the enum. Never
+    raises.
+
+    Crucially it does NOT substitute the original code when the model returned no
+    usable patch — that would race a non-answer at baseline flake and let the UI
+    claim a model "produced a theory" when it did not. Instead the result carries
+    a `status`: "ok" (a real patch) or "no_valid_patch" (unparseable / empty), and
+    the raw response is preserved for honesty."""
     data = None
     if content:
         try:
@@ -94,14 +100,17 @@ def _parse_hypothesis(content, hid, fallback_cause, fallback_code):
     cause = data.get("cause_class")
     if cause not in CAUSE_CLASSES:
         cause = fallback_cause
-    explanation = data.get("explanation") or ""
-    patched = data.get("patched_code") or data.get("patchedCode") or fallback_code
+    explanation = str(data.get("explanation") or "").strip()
+    patched = data.get("patched_code") or data.get("patchedCode")
+    valid = isinstance(patched, str) and patched.strip() != ""
 
     return {
         "id": hid,
         "cause_class": cause,
-        "explanation": str(explanation).strip(),
-        "patched_code": patched,
+        "explanation": explanation,
+        "patched_code": patched if valid else None,
+        "status": "ok" if valid else "no_valid_patch",
+        "raw_response": content,
     }
 
 
@@ -128,16 +137,22 @@ def diagnose(test_code, test_name, log_tail="", n=4, models=None,
         hid = f"h{i + 1}"
         cause_hint = CAUSE_CLASSES[i % len(CAUSE_CLASSES)]
         model = models[i % len(models)]
-        try:
-            content = _complete(client, model, _build_messages(test_code, test_name,
-                                                                log_tail, cause_hint, context))
-        except Exception as e:
-            content = None
-            # Leave a diagnostic breadcrumb in the explanation via fallback below.
-            _ = e
-        h = _parse_hypothesis(content, hid, fallback_cause=cause_hint,
-                              fallback_code=test_code)
-        h["model"] = model  # which model generated this hypothesis (for the genome)
+        messages = _build_messages(test_code, test_name, log_tail, cause_hint, context)
+        raws = []
+        h = None
+        # One initial attempt + ONE retry if the model returned no parseable patch
+        # (free-form prose despite json_object, or a truncated response).
+        for _attempt in range(2):
+            try:
+                content = _complete(client, model, messages)
+            except Exception:
+                content = None
+            raws.append(content)
+            h = _parse_hypothesis(content, hid, fallback_cause=cause_hint)
+            if h["status"] == "ok":
+                break
+        h["model"] = model            # which model generated this hypothesis (for the genome)
+        h["raw_responses"] = raws     # keep every raw response — artifact honesty
         results[i] = h
 
     threads = [threading.Thread(target=ask, args=(i,)) for i in range(n)]
@@ -154,7 +169,7 @@ def _complete(client, model, messages):
         resp = client.chat.completions.create(
             model=model, messages=messages,
             response_format={"type": "json_object"},
-            temperature=0.7, max_tokens=2048)
+            temperature=0.7, max_tokens=4096)
     except Exception:
         resp = client.chat.completions.create(
             model=model, messages=messages, temperature=0.7, max_tokens=2048)
