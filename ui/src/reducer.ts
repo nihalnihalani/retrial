@@ -2,6 +2,8 @@ import type { BoardState, Hypothesis, RetrialEvent, TrialCell } from './types';
 
 export const initialState: BoardState = {
   phase: 'detect',
+  testName: null,
+  plannedTrials: null,
   detect: {
     trials: [],
     flakeRate: null,
@@ -12,6 +14,7 @@ export const initialState: BoardState = {
   },
   hypotheses: [],
   winner: null,
+  quarantine: null,
   tournamentDone: false,
 };
 
@@ -23,6 +26,14 @@ function liveFlakeRate(trials: TrialCell[]): number | null {
 
 export function reduce(state: BoardState, event: RetrialEvent): BoardState {
   switch (event.type) {
+    case 'run_started': {
+      return {
+        ...state,
+        testName: event.test_name,
+        plannedTrials: event.planned_trials,
+      };
+    }
+
     case 'trial_done': {
       const cell: TrialCell = { index: event.trial_index, passed: event.passed };
       if (event.hypothesis_id === null) {
