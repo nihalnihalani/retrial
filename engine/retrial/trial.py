@@ -27,10 +27,19 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
              "exit_code": int|None, "error": str|None}. `error` is non-None only
     for infrastructure failures (the trial did not yield a real pass/fail).
     """
-    sb = pool.lease()
     t0 = time.monotonic()
     infra_error = False
+    sb = None
     try:
+        # lease() is INSIDE the try: under disk/quota pressure pool.lease() falls
+        # through to create-on-demand, which can raise (e.g. Daytona "Total disk
+        # limit exceeded"). If that escaped run_trial it would kill the verify()
+        # worker thread and leave results[i]=None — silently dropped, counted as
+        # neither a valid trial nor an infra error, so the batch reports FEWER
+        # valid trials than planned and a genuine fix can miss the trial count it
+        # needs to clear the threshold (INCONCLUSIVE -> wrongful QUARANTINE). A
+        # failed lease is an infrastructure error like any other; surface it.
+        sb = pool.lease()
         # Write the test file AND run it in a single exec round-trip (the exec
         # round-trip, not create, is the per-trial cost — one call, not two).
         # The seed is shipped base64-encoded, not via a heredoc: candidate/patched
@@ -43,8 +52,11 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         r = sb.process.exec(cmd, timeout=timeout)
         out = r.result or ""
         duration = time.monotonic() - t0
-        m = _EXIT_RE.search(out)
-        if m is None:
+        # The authoritative marker is the TRAILING `echo EXIT:$?`, so take the LAST
+        # match: untrusted test/patch stdout could otherwise print its own
+        # "EXIT:<n>" line earlier and shadow the real exit code.
+        matches = _EXIT_RE.findall(out)
+        if not matches:
             # Ran but produced no parseable exit marker -> treat as infra error.
             infra_error = True
             return {
@@ -54,7 +66,7 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
                 "exit_code": None,
                 "error": "no EXIT marker in output",
             }
-        code = int(m.group(1))
+        code = int(matches[-1])
         return {
             "passed": code == 0,
             "duration_s": round(duration, 3),
@@ -72,9 +84,12 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
             "error": str(e)[:200],
         }
     finally:
-        # Reuse only a healthy sandbox under process isolation; otherwise destroy.
-        reusable = (isolation == "process") and not infra_error
-        pool.release(sb, reusable=reusable)
+        # Only release a sandbox we actually leased (sb is None on a lease
+        # failure). Reuse only a healthy sandbox under process isolation;
+        # otherwise destroy it so a broken sandbox never serves another trial.
+        if sb is not None:
+            reusable = (isolation == "process") and not infra_error
+            pool.release(sb, reusable=reusable)
 
 
 class TrialRunner:
