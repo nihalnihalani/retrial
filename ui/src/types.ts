@@ -136,6 +136,16 @@ export interface TournamentDone {
   type: 'tournament_done';
 }
 
+// Emitted (after the verdict, when VOICE=1) once the ElevenLabs "flake autopsy"
+// mp3 has been synthesized and is being served at `url` (relative to the engine
+// origin). Output only, disclosed — a spoken summary of the real verdict.
+export interface VoiceReady {
+  type: 'voice_ready';
+  url: string; // e.g. "/voice/autopsy-abc123.mp3", relative to the engine host
+  text?: string; // the narration script (for a caption / accessibility)
+  verdict?: string;
+}
+
 export type RetrialEvent =
   | Diagnosing
   | RunStarted
@@ -149,6 +159,7 @@ export type RetrialEvent =
   | QuarantineConfirmed
   | GenomeUpdated
   | PrOpened
+  | VoiceReady
   | TournamentDone;
 
 // ---- Derived view state (built by the reducer) ----
@@ -259,6 +270,7 @@ export interface BoardState {
   baselineVerdict: BaselineVerdictState | null;
   genome: GenomeState | null;
   prUrl: string | null;
+  voice: { url: string; text?: string } | null; // ElevenLabs autopsy clip, when VOICE=1
   tournamentDone: boolean;
 }
 

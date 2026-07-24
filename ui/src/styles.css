@@ -1723,3 +1723,45 @@ body {
     max-width: none;
   }
 }
+
+/* --- ElevenLabs flake-autopsy play control (voice_ready) --- */
+.voice-autopsy {
+  margin: 1.25rem auto 0;
+  max-width: 640px;
+  text-align: center;
+}
+.voice-autopsy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1.1rem;
+  font: inherit;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: #e7e2d6;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(212, 175, 90, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.voice-autopsy-btn:hover { background: rgba(212, 175, 90, 0.12); border-color: rgba(212, 175, 90, 0.8); }
+.voice-autopsy-btn:active { transform: translateY(1px); }
+.voice-autopsy-btn:focus-visible { outline: 2px solid rgba(212, 175, 90, 0.9); outline-offset: 2px; }
+.voice-autopsy-icon { color: #d4af5a; font-size: 0.8rem; }
+.voice-autopsy-tag {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8a8577;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding-left: 0.55rem;
+}
+.voice-autopsy-caption {
+  margin: 0.6rem auto 0;
+  max-width: 560px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #8f8a7e;
+  font-style: italic;
+}

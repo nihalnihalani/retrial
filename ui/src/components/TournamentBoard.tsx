@@ -9,6 +9,7 @@ import { TournamentPhase } from './TournamentPhase';
 import { WinnerCard } from './WinnerCard';
 import { QuarantineCard } from './QuarantineCard';
 import { TerminalVerdictCard } from './TerminalVerdictCard';
+import { VoiceAutopsy } from './VoiceAutopsy';
 import { GenomeCard } from './GenomeCard';
 
 const DETECT_EXPECTED = 40;
@@ -67,6 +68,7 @@ export function TournamentBoard({ onRestart }: Props) {
     diagnoseModelNames,
     genome,
     prUrl,
+    voice,
     tournamentDone,
   } = state;
   const winnerIdx = winner ? hypotheses.findIndex((h) => h.id === winner.id) : -1;
@@ -202,6 +204,9 @@ export function TournamentBoard({ onRestart }: Props) {
         )}
         {phase === 'baseline_verdict' && baselineVerdict && (
           <TerminalVerdictCard state={baselineVerdict} />
+        )}
+        {voice && (phase === 'winner' || phase === 'quarantine' || phase === 'baseline_verdict') && (
+          <VoiceAutopsy url={voice.url} text={voice.text} />
         )}
       </main>
 

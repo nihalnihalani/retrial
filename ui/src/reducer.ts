@@ -22,6 +22,7 @@ export const initialState: BoardState = {
   baselineVerdict: null,
   genome: null,
   prUrl: null,
+  voice: null,
   tournamentDone: false,
 };
 
@@ -39,6 +40,7 @@ function resetPerRun(state: BoardState): BoardState {
     quarantine: null,
     baselineVerdict: null,
     prUrl: null,
+    voice: null,
     tournamentDone: false,
   };
 }
@@ -60,6 +62,7 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       event.type === 'diagnosing' ||
       event.type === 'run_started' ||
       event.type === 'genome_updated' ||
+      event.type === 'voice_ready' ||
       event.type === 'pr_opened';
     if (!passthrough) return state;
   }
@@ -290,6 +293,10 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
 
     case 'pr_opened': {
       return { ...state, prUrl: event.url };
+    }
+
+    case 'voice_ready': {
+      return { ...state, voice: { url: event.url, text: event.text } };
     }
 
     case 'tournament_done': {
