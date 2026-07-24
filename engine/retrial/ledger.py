@@ -14,13 +14,21 @@ Design rules:
   experiments are created with set_current=False so there is no shared global
   experiment state, and our own buffers/permalinks are lock-guarded.
 """
+import itertools
 import os
 import threading
+import uuid
 
 try:
     import braintrust
 except Exception:  # pragma: no cover - braintrust always installed, defensive
     braintrust = None
+
+# Process-wide run counter. Every LedgerRun gets a unique token so a series'
+# experiment name never collides across runs — receipts are immutable per run,
+# not silently overwritten. The uuid suffix keeps tokens unique even across
+# process restarts (where the counter resets).
+_RUN_COUNTER = itertools.count(1)
 
 
 class EvidenceLedger:
@@ -53,6 +61,9 @@ class LedgerRun:
         self._lock = threading.Lock()
         self._rows = {}         # series -> [(trial_index, passed), ...]
         self._permalinks = {}   # series -> url
+        # Unique per-run token so this run's experiments never overwrite a prior
+        # run's (monotonic counter for readability + uuid for cross-process safety).
+        self._run_token = f"run{next(_RUN_COUNTER)}-{uuid.uuid4().hex[:6]}"
 
     def trial(self, series, trial_index, passed):
         """Buffer one trial for `series` ("detect" or a hypothesis id)."""
@@ -72,17 +83,20 @@ class LedgerRun:
         try:
             exp = braintrust.init(
                 project=self._ledger.project,
-                experiment=f"{self._test_name}/{series}",
+                # Unique per run: <test_name>/<series>/<run_token>. Each run mints a
+                # fresh, immutable experiment instead of overwriting the last one.
+                experiment=f"{self._test_name}/{series}/{self._run_token}",
                 api_key=self._ledger.api_key,
                 metadata={k: v for k, v in {
                     "series": series,
+                    "run_token": self._run_token,
                     "cause_class": cause_class,
                     "flake_rate": flake_rate,
                     "wilson_ci": wilson_ci,
                     "verdict": verdict,
                 }.items() if v is not None},
                 set_current=False,   # thread-safe: no shared global experiment
-                update=True,         # reuse if a same-named experiment exists
+                update=False,        # immutable per run — never overwrite a receipt
             )
             for trial_index, passed in rows:
                 exp.log(input={"trial_index": trial_index},
