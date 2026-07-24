@@ -1,0 +1,31 @@
+name: retrial
+# Runs the Retrial lie-detector against a suspect test.
+# Trigger manually (workflow_dispatch) or wire `on: workflow_run` after your test
+# workflow to auto-investigate red CI: every failing run gets a retrial.
+on:
+  workflow_dispatch:
+    inputs:
+      test_path:
+        description: "Path to the suspect test"
+        default: "seeds/test_dict_order.py"
+      max_trials:
+        description: "Max trials"
+        default: "40"
+jobs:
+  retrial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - name: Run the lie detector
+        env:
+          DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+          DAYTONA_TARGET: us
+        working-directory: engine
+        run: |
+          python -m retrial.cli check "../${{ github.event.inputs.test_path }}" \
+            --json --max-trials "${{ github.event.inputs.max_trials }}" | tee ../retrial-report.json
+      - uses: actions/upload-artifact@v4
+        with: { name: retrial-report, path: retrial-report.json }
