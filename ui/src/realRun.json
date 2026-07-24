@@ -2,210 +2,216 @@
  {
   "test_name": "test_dict_order.py",
   "n": 4,
+  "models": [
+   "accounts/fireworks/models/glm-5p2",
+   "accounts/fireworks/models/glm-5p1",
+   "accounts/fireworks/models/kimi-k2p6",
+   "accounts/fireworks/models/deepseek-v4-pro"
+  ],
   "type": "diagnosing",
   "seq": 1,
-  "ts": 4.2774,
-  "_t": 1.97
+  "ts": 47.1827,
+  "_t": 0.0
  },
  {
   "test_name": "test_dict_order.py",
   "planned_trials": 40,
   "type": "run_started",
   "seq": 2,
-  "ts": 28.5014,
-  "_t": 26.19
+  "ts": 80.178,
+  "_t": 33.0
  },
  {
   "hypothesis_id": null,
   "trial_index": 0,
   "passed": true,
-  "duration_s": 0.306,
+  "duration_s": 0.386,
   "type": "trial_done",
   "seq": 3,
-  "ts": 29.0879,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 1,
   "passed": true,
-  "duration_s": 0.301,
+  "duration_s": 0.377,
   "type": "trial_done",
   "seq": 4,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 2,
-  "passed": false,
-  "duration_s": 0.583,
+  "passed": true,
+  "duration_s": 0.388,
   "type": "trial_done",
   "seq": 5,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 3,
-  "passed": true,
-  "duration_s": 0.302,
+  "passed": false,
+  "duration_s": 0.611,
   "type": "trial_done",
   "seq": 6,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 4,
-  "passed": true,
-  "duration_s": 0.29,
+  "passed": false,
+  "duration_s": 0.37,
   "type": "trial_done",
   "seq": 7,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 5,
-  "passed": false,
-  "duration_s": 0.299,
+  "passed": true,
+  "duration_s": 0.388,
   "type": "trial_done",
   "seq": 8,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 6,
   "passed": true,
-  "duration_s": 0.291,
+  "duration_s": 0.374,
   "type": "trial_done",
   "seq": 9,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 7,
-  "passed": false,
-  "duration_s": 0.293,
+  "passed": true,
+  "duration_s": 0.61,
   "type": "trial_done",
   "seq": 10,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 8,
-  "passed": false,
-  "duration_s": 0.306,
+  "passed": true,
+  "duration_s": 0.4,
   "type": "trial_done",
   "seq": 11,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 9,
-  "passed": false,
-  "duration_s": 0.287,
+  "passed": true,
+  "duration_s": 0.413,
   "type": "trial_done",
   "seq": 12,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 10,
-  "passed": false,
-  "duration_s": 0.293,
+  "passed": true,
+  "duration_s": 0.608,
   "type": "trial_done",
   "seq": 13,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 11,
-  "passed": true,
-  "duration_s": 0.472,
+  "passed": false,
+  "duration_s": 0.372,
   "type": "trial_done",
   "seq": 14,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 12,
-  "passed": true,
-  "duration_s": 0.304,
+  "passed": false,
+  "duration_s": 0.398,
   "type": "trial_done",
   "seq": 15,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 13,
-  "passed": true,
-  "duration_s": 0.31,
+  "passed": false,
+  "duration_s": 0.397,
   "type": "trial_done",
   "seq": 16,
-  "ts": 29.088,
-  "_t": 26.78
+  "ts": 80.7943,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 14,
-  "passed": false,
-  "duration_s": 0.303,
+  "passed": true,
+  "duration_s": 0.607,
   "type": "trial_done",
   "seq": 17,
-  "ts": 29.0881,
-  "_t": 26.78
+  "ts": 80.7944,
+  "_t": 33.61
  },
  {
   "hypothesis_id": null,
   "trial_index": 15,
   "passed": false,
-  "duration_s": 0.269,
+  "duration_s": 0.37,
   "type": "trial_done",
   "seq": 18,
-  "ts": 29.0881,
-  "_t": 26.78
+  "ts": 80.7944,
+  "_t": 33.61
  },
  {
-  "flake_rate": 0.5,
+  "flake_rate": 0.375,
   "wilson_ci": [
-   0.28,
-   0.72
+   0.1848,
+   0.6136
   ],
   "trials": 16,
-  "fails": 8,
+  "fails": 6,
   "verdict": "FLAKY",
   "type": "detect_done",
   "seq": 19,
-  "ts": 30.618,
-  "_t": 28.31
+  "ts": 83.0775,
+  "_t": 35.89
  },
  {
   "id": "h1",
   "cause_class": "order_dependency",
-  "explanation": "The test iterates over a set whose order is randomized by PYTHONHASHSEED, so the first element is nondeterministic and 'evt-1' only appears sometimes. Using an ordered container (e.g., sorted list) makes the assertion deterministic.",
+  "explanation": "The test iterates a set and asserts the first element equals 'evt-1', but set iteration order depends on PYTHONHASHSEED hash randomization, so the first element varies between interpreter runs.",
   "type": "hypothesis_created",
   "seq": 20,
-  "ts": 30.6183,
-  "_t": 28.31
+  "ts": 83.0778,
+  "_t": 35.9
  },
  {
   "id": "h2",
   "cause_class": "order_dependency",
-  "explanation": "The test iterates over a set and asserts the first item is 'evt-1', but set iteration order is non-deterministic due to PYTHONHASHSEED randomization, causing the test to pass or fail depending on the interpreter's hash seed.",
+  "explanation": "The test iterates over a set and asserts that the first item is 'evt-1', but set iteration order is non-deterministic due to Python's hash randomization (PYTHONHASHSEED), causing the test to pass or fail depending on the interpreter's hash seed.",
   "type": "hypothesis_created",
   "seq": 21,
-  "ts": 30.6193,
-  "_t": 28.31
+  "ts": 83.0797,
+  "_t": 35.9
  },
  {
   "id": "h3",
@@ -213,607 +219,1342 @@
   "explanation": "",
   "type": "hypothesis_created",
   "seq": 22,
-  "ts": 30.6197,
-  "_t": 28.31
+  "ts": 83.0808,
+  "_t": 35.9
  },
  {
   "id": "h4",
   "cause_class": "order_dependency",
-  "explanation": "The test iterates over a set, whose order is non-deterministic due to Python's hash randomization (PYTHONHASHSEED). This causes the first element to vary between runs, leading to intermittent failures.",
+  "explanation": "The test iterates over a set, whose iteration order is non-deterministic due to Python's hash randomization. The assertion depends on the first element being 'evt-1', which is not guaranteed across runs, causing flakiness.",
   "type": "hypothesis_created",
   "seq": 23,
-  "ts": 30.6227,
-  "_t": 28.31
+  "ts": 83.0824,
+  "_t": 35.9
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 0,
-  "passed": false,
-  "duration_s": 0.315,
+  "passed": true,
+  "duration_s": 0.473,
   "type": "trial_done",
   "seq": 24,
-  "ts": 31.2853,
-  "_t": 28.97
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 1,
   "passed": false,
-  "duration_s": 0.303,
+  "duration_s": 0.351,
   "type": "trial_done",
   "seq": 25,
-  "ts": 31.2853,
-  "_t": 28.97
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 2,
-  "passed": false,
-  "duration_s": 0.291,
+  "passed": true,
+  "duration_s": 0.35,
   "type": "trial_done",
   "seq": 26,
-  "ts": 31.2853,
-  "_t": 28.97
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 3,
-  "passed": false,
-  "duration_s": 0.325,
+  "passed": true,
+  "duration_s": 0.349,
   "type": "trial_done",
   "seq": 27,
-  "ts": 31.2853,
-  "_t": 28.97
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 4,
-  "passed": false,
-  "duration_s": 0.3,
+  "passed": true,
+  "duration_s": 0.34,
   "type": "trial_done",
   "seq": 28,
-  "ts": 31.2853,
-  "_t": 28.97
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 5,
   "passed": false,
   "duration_s": 0.327,
   "type": "trial_done",
   "seq": 29,
-  "ts": 31.2854,
-  "_t": 28.97
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
-  "hypothesis_id": "h2",
+  "hypothesis_id": "h3",
   "trial_index": 6,
-  "passed": false,
-  "duration_s": 0.304,
-  "type": "trial_done",
-  "seq": 30,
-  "ts": 31.2854,
-  "_t": 28.97
- },
- {
-  "hypothesis_id": "h2",
-  "trial_index": 7,
-  "passed": false,
-  "duration_s": 0.325,
-  "type": "trial_done",
-  "seq": 31,
-  "ts": 31.2854,
-  "_t": 28.97
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 0,
-  "passed": false,
-  "duration_s": 0.299,
-  "type": "trial_done",
-  "seq": 32,
-  "ts": 31.4575,
-  "_t": 29.15
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 1,
-  "passed": false,
-  "duration_s": 0.313,
-  "type": "trial_done",
-  "seq": 33,
-  "ts": 31.4576,
-  "_t": 29.15
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 2,
-  "passed": true,
-  "duration_s": 0.292,
-  "type": "trial_done",
-  "seq": 34,
-  "ts": 31.4576,
-  "_t": 29.15
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 3,
   "passed": true,
   "duration_s": 0.288,
   "type": "trial_done",
-  "seq": 35,
-  "ts": 31.4576,
-  "_t": 29.15
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 4,
-  "passed": true,
-  "duration_s": 0.305,
-  "type": "trial_done",
-  "seq": 36,
-  "ts": 31.4576,
-  "_t": 29.15
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 5,
-  "passed": false,
-  "duration_s": 0.473,
-  "type": "trial_done",
-  "seq": 37,
-  "ts": 31.4576,
-  "_t": 29.15
- },
- {
-  "hypothesis_id": "h3",
-  "trial_index": 6,
-  "passed": true,
-  "duration_s": 0.38,
-  "type": "trial_done",
-  "seq": 38,
-  "ts": 31.4576,
-  "_t": 29.15
+  "seq": 30,
+  "ts": 83.7703,
+  "_t": 36.59
  },
  {
   "hypothesis_id": "h3",
   "trial_index": 7,
   "passed": true,
-  "duration_s": 0.342,
+  "duration_s": 0.287,
   "type": "trial_done",
-  "seq": 39,
-  "ts": 31.4576,
-  "_t": 29.15
+  "seq": 31,
+  "ts": 83.7704,
+  "_t": 36.59
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 0,
   "passed": true,
-  "duration_s": 0.339,
+  "duration_s": 0.446,
   "type": "trial_done",
-  "seq": 40,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 32,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 1,
   "passed": true,
-  "duration_s": 0.336,
+  "duration_s": 0.472,
   "type": "trial_done",
-  "seq": 41,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 33,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 2,
   "passed": true,
-  "duration_s": 0.291,
+  "duration_s": 0.354,
   "type": "trial_done",
-  "seq": 42,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 34,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 3,
   "passed": true,
-  "duration_s": 0.296,
+  "duration_s": 0.346,
   "type": "trial_done",
-  "seq": 43,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 35,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 4,
   "passed": true,
-  "duration_s": 0.262,
+  "duration_s": 0.49,
   "type": "trial_done",
-  "seq": 44,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 36,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 5,
   "passed": true,
-  "duration_s": 0.293,
+  "duration_s": 0.308,
   "type": "trial_done",
-  "seq": 45,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 37,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 6,
   "passed": true,
-  "duration_s": 0.479,
+  "duration_s": 0.314,
   "type": "trial_done",
-  "seq": 46,
-  "ts": 31.5128,
-  "_t": 29.2
+  "seq": 38,
+  "ts": 83.9377,
+  "_t": 36.76
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 7,
   "passed": true,
-  "duration_s": 0.324,
+  "duration_s": 0.303,
+  "type": "trial_done",
+  "seq": 39,
+  "ts": 83.9377,
+  "_t": 36.76
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 0,
+  "passed": true,
+  "duration_s": 0.354,
+  "type": "trial_done",
+  "seq": 40,
+  "ts": 84.2964,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 1,
+  "passed": true,
+  "duration_s": 0.348,
+  "type": "trial_done",
+  "seq": 41,
+  "ts": 84.2964,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.315,
+  "type": "trial_done",
+  "seq": 42,
+  "ts": 84.2965,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.389,
+  "type": "trial_done",
+  "seq": 43,
+  "ts": 84.2965,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.313,
+  "type": "trial_done",
+  "seq": 44,
+  "ts": 84.2965,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 5,
+  "passed": true,
+  "duration_s": 0.297,
+  "type": "trial_done",
+  "seq": 45,
+  "ts": 84.2965,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.841,
+  "type": "trial_done",
+  "seq": 46,
+  "ts": 84.2965,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 7,
+  "passed": true,
+  "duration_s": 0.865,
   "type": "trial_done",
   "seq": 47,
-  "ts": 31.5128,
-  "_t": 29.2
+  "ts": 84.2965,
+  "_t": 37.11
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 0,
+  "passed": true,
+  "duration_s": 0.462,
+  "type": "trial_done",
+  "seq": 48,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 1,
+  "passed": true,
+  "duration_s": 0.342,
+  "type": "trial_done",
+  "seq": 49,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.347,
+  "type": "trial_done",
+  "seq": 50,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.348,
+  "type": "trial_done",
+  "seq": 51,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.347,
+  "type": "trial_done",
+  "seq": 52,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 5,
+  "passed": true,
+  "duration_s": 0.329,
+  "type": "trial_done",
+  "seq": 53,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.813,
+  "type": "trial_done",
+  "seq": 54,
+  "ts": 84.3172,
+  "_t": 37.13
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 7,
+  "passed": true,
+  "duration_s": 0.495,
+  "type": "trial_done",
+  "seq": 55,
+  "ts": 84.3172,
+  "_t": 37.13
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 8,
   "passed": true,
-  "duration_s": 0.307,
+  "duration_s": 0.525,
   "type": "trial_done",
-  "seq": 48,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 56,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 9,
   "passed": true,
-  "duration_s": 0.465,
+  "duration_s": 0.524,
   "type": "trial_done",
-  "seq": 49,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 57,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 10,
   "passed": true,
-  "duration_s": 0.473,
+  "duration_s": 0.285,
   "type": "trial_done",
-  "seq": 50,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 58,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 11,
   "passed": true,
-  "duration_s": 0.292,
+  "duration_s": 0.285,
   "type": "trial_done",
-  "seq": 51,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 59,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 12,
   "passed": true,
-  "duration_s": 0.556,
+  "duration_s": 0.304,
   "type": "trial_done",
-  "seq": 52,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 60,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 13,
   "passed": true,
-  "duration_s": 0.285,
+  "duration_s": 0.286,
   "type": "trial_done",
-  "seq": 53,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 61,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 14,
   "passed": true,
-  "duration_s": 0.296,
+  "duration_s": 0.303,
   "type": "trial_done",
-  "seq": 54,
-  "ts": 32.0704,
-  "_t": 29.76
+  "seq": 62,
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
   "hypothesis_id": "h1",
   "trial_index": 15,
   "passed": true,
-  "duration_s": 0.28,
-  "type": "trial_done",
-  "seq": 55,
-  "ts": 32.0704,
-  "_t": 29.76
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 16,
-  "passed": true,
-  "duration_s": 0.378,
-  "type": "trial_done",
-  "seq": 56,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 17,
-  "passed": true,
-  "duration_s": 0.481,
-  "type": "trial_done",
-  "seq": 57,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 18,
-  "passed": true,
-  "duration_s": 0.463,
-  "type": "trial_done",
-  "seq": 58,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 19,
-  "passed": true,
-  "duration_s": 0.377,
-  "type": "trial_done",
-  "seq": 59,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 20,
-  "passed": true,
-  "duration_s": 0.712,
-  "type": "trial_done",
-  "seq": 60,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 21,
-  "passed": true,
-  "duration_s": 0.377,
-  "type": "trial_done",
-  "seq": 61,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 22,
-  "passed": true,
-  "duration_s": 0.376,
-  "type": "trial_done",
-  "seq": 62,
-  "ts": 32.7833,
-  "_t": 30.47
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 23,
-  "passed": true,
-  "duration_s": 0.376,
+  "duration_s": 0.284,
   "type": "trial_done",
   "seq": 63,
-  "ts": 32.7833,
-  "_t": 30.47
+  "ts": 84.4629,
+  "_t": 37.28
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 24,
+  "hypothesis_id": "h4",
+  "trial_index": 8,
   "passed": true,
-  "duration_s": 0.337,
+  "duration_s": 0.298,
   "type": "trial_done",
   "seq": 64,
-  "ts": 33.2553,
-  "_t": 30.95
+  "ts": 84.6336,
+  "_t": 37.45
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 25,
+  "hypothesis_id": "h4",
+  "trial_index": 9,
   "passed": true,
-  "duration_s": 0.465,
+  "duration_s": 0.305,
   "type": "trial_done",
   "seq": 65,
-  "ts": 33.2553,
-  "_t": 30.95
+  "ts": 84.6336,
+  "_t": 37.45
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 26,
+  "hypothesis_id": "h4",
+  "trial_index": 10,
   "passed": true,
-  "duration_s": 0.471,
+  "duration_s": 0.334,
   "type": "trial_done",
   "seq": 66,
-  "ts": 33.2553,
-  "_t": 30.95
+  "ts": 84.6336,
+  "_t": 37.45
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 27,
+  "hypothesis_id": "h4",
+  "trial_index": 11,
   "passed": true,
-  "duration_s": 0.314,
+  "duration_s": 0.312,
   "type": "trial_done",
   "seq": 67,
-  "ts": 33.2553,
-  "_t": 30.95
+  "ts": 84.6336,
+  "_t": 37.45
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 28,
-  "passed": true,
-  "duration_s": 0.289,
-  "type": "trial_done",
-  "seq": 68,
-  "ts": 33.2553,
-  "_t": 30.95
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 29,
-  "passed": true,
-  "duration_s": 0.266,
-  "type": "trial_done",
-  "seq": 69,
-  "ts": 33.2553,
-  "_t": 30.95
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 30,
-  "passed": true,
-  "duration_s": 0.302,
-  "type": "trial_done",
-  "seq": 70,
-  "ts": 33.2553,
-  "_t": 30.95
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 31,
-  "passed": true,
-  "duration_s": 0.3,
-  "type": "trial_done",
-  "seq": 71,
-  "ts": 33.2553,
-  "_t": 30.95
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 32,
-  "passed": true,
-  "duration_s": 0.47,
-  "type": "trial_done",
-  "seq": 72,
-  "ts": 34.0089,
-  "_t": 31.7
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 33,
-  "passed": true,
-  "duration_s": 0.753,
-  "type": "trial_done",
-  "seq": 73,
-  "ts": 34.0089,
-  "_t": 31.7
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 34,
+  "hypothesis_id": "h4",
+  "trial_index": 12,
   "passed": true,
   "duration_s": 0.311,
   "type": "trial_done",
-  "seq": 74,
-  "ts": 34.0089,
-  "_t": 31.7
+  "seq": 68,
+  "ts": 84.6336,
+  "_t": 37.45
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 35,
+  "hypothesis_id": "h4",
+  "trial_index": 13,
   "passed": true,
-  "duration_s": 0.306,
+  "duration_s": 0.298,
+  "type": "trial_done",
+  "seq": 69,
+  "ts": 84.6336,
+  "_t": 37.45
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 14,
+  "passed": true,
+  "duration_s": 0.264,
+  "type": "trial_done",
+  "seq": 70,
+  "ts": 84.6336,
+  "_t": 37.45
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 15,
+  "passed": true,
+  "duration_s": 0.33,
+  "type": "trial_done",
+  "seq": 71,
+  "ts": 84.6336,
+  "_t": 37.45
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 8,
+  "passed": true,
+  "duration_s": 0.278,
+  "type": "trial_done",
+  "seq": 72,
+  "ts": 84.8076,
+  "_t": 37.62
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 9,
+  "passed": true,
+  "duration_s": 0.282,
+  "type": "trial_done",
+  "seq": 73,
+  "ts": 84.8076,
+  "_t": 37.62
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 10,
+  "passed": true,
+  "duration_s": 0.315,
+  "type": "trial_done",
+  "seq": 74,
+  "ts": 84.8076,
+  "_t": 37.62
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 11,
+  "passed": true,
+  "duration_s": 0.276,
   "type": "trial_done",
   "seq": 75,
-  "ts": 34.0089,
-  "_t": 31.7
+  "ts": 84.8076,
+  "_t": 37.62
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 36,
+  "hypothesis_id": "h2",
+  "trial_index": 12,
   "passed": true,
-  "duration_s": 0.3,
+  "duration_s": 0.28,
   "type": "trial_done",
   "seq": 76,
-  "ts": 34.0089,
-  "_t": 31.7
+  "ts": 84.8076,
+  "_t": 37.62
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 37,
-  "passed": true,
-  "duration_s": 0.291,
-  "type": "trial_done",
-  "seq": 77,
-  "ts": 34.0089,
-  "_t": 31.7
- },
- {
-  "hypothesis_id": "h1",
-  "trial_index": 38,
+  "hypothesis_id": "h2",
+  "trial_index": 13,
   "passed": true,
   "duration_s": 0.292,
   "type": "trial_done",
-  "seq": 78,
-  "ts": 34.0089,
-  "_t": 31.7
+  "seq": 77,
+  "ts": 84.8076,
+  "_t": 37.62
  },
  {
-  "hypothesis_id": "h1",
-  "trial_index": 39,
+  "hypothesis_id": "h2",
+  "trial_index": 14,
+  "passed": true,
+  "duration_s": 0.343,
+  "type": "trial_done",
+  "seq": 78,
+  "ts": 84.8076,
+  "_t": 37.62
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 15,
+  "passed": true,
+  "duration_s": 0.487,
+  "type": "trial_done",
+  "seq": 79,
+  "ts": 84.8076,
+  "_t": 37.62
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 16,
+  "passed": true,
+  "duration_s": 0.382,
+  "type": "trial_done",
+  "seq": 80,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 17,
+  "passed": true,
+  "duration_s": 0.382,
+  "type": "trial_done",
+  "seq": 81,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 18,
+  "passed": true,
+  "duration_s": 0.382,
+  "type": "trial_done",
+  "seq": 82,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 19,
+  "passed": true,
+  "duration_s": 0.38,
+  "type": "trial_done",
+  "seq": 83,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 20,
+  "passed": true,
+  "duration_s": 0.381,
+  "type": "trial_done",
+  "seq": 84,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 21,
+  "passed": true,
+  "duration_s": 0.38,
+  "type": "trial_done",
+  "seq": 85,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 22,
+  "passed": true,
+  "duration_s": 0.381,
+  "type": "trial_done",
+  "seq": 86,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 23,
+  "passed": true,
+  "duration_s": 0.378,
+  "type": "trial_done",
+  "seq": 87,
+  "ts": 85.0165,
+  "_t": 37.83
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 24,
+  "passed": true,
+  "duration_s": 0.294,
+  "type": "trial_done",
+  "seq": 88,
+  "ts": 85.5281,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 25,
+  "passed": true,
+  "duration_s": 0.31,
+  "type": "trial_done",
+  "seq": 89,
+  "ts": 85.5282,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 26,
+  "passed": true,
+  "duration_s": 0.309,
+  "type": "trial_done",
+  "seq": 90,
+  "ts": 85.5282,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 27,
+  "passed": true,
+  "duration_s": 0.307,
+  "type": "trial_done",
+  "seq": 91,
+  "ts": 85.5282,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 28,
+  "passed": true,
+  "duration_s": 0.285,
+  "type": "trial_done",
+  "seq": 92,
+  "ts": 85.5282,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 29,
+  "passed": true,
+  "duration_s": 0.509,
+  "type": "trial_done",
+  "seq": 93,
+  "ts": 85.5282,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 30,
+  "passed": true,
+  "duration_s": 0.31,
+  "type": "trial_done",
+  "seq": 94,
+  "ts": 85.5282,
+  "_t": 38.35
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 31,
   "passed": true,
   "duration_s": 0.291,
   "type": "trial_done",
-  "seq": 79,
-  "ts": 34.0089,
-  "_t": 31.7
+  "seq": 95,
+  "ts": 85.5282,
+  "_t": 38.35
  },
  {
-  "id": "h2",
-  "flake_rate": 1.0,
-  "wilson_ci": [
-   0.6756,
-   1.0
-  ],
-  "trials": 8,
-  "cause_class": "order_dependency",
-  "verdict": "FLAKY",
-  "type": "hypothesis_verified",
-  "seq": 80,
-  "ts": 35.288,
-  "_t": 32.98
+  "hypothesis_id": "h2",
+  "trial_index": 16,
+  "passed": true,
+  "duration_s": 1.077,
+  "type": "trial_done",
+  "seq": 96,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 17,
+  "passed": true,
+  "duration_s": 1.081,
+  "type": "trial_done",
+  "seq": 97,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 18,
+  "passed": true,
+  "duration_s": 0.843,
+  "type": "trial_done",
+  "seq": 98,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 19,
+  "passed": true,
+  "duration_s": 0.895,
+  "type": "trial_done",
+  "seq": 99,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 20,
+  "passed": true,
+  "duration_s": 0.859,
+  "type": "trial_done",
+  "seq": 100,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 21,
+  "passed": true,
+  "duration_s": 0.865,
+  "type": "trial_done",
+  "seq": 101,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 22,
+  "passed": true,
+  "duration_s": 0.893,
+  "type": "trial_done",
+  "seq": 102,
+  "ts": 85.8896,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 23,
+  "passed": true,
+  "duration_s": 1.01,
+  "type": "trial_done",
+  "seq": 103,
+  "ts": 85.8897,
+  "_t": 38.71
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 32,
+  "passed": true,
+  "duration_s": 0.506,
+  "type": "trial_done",
+  "seq": 104,
+  "ts": 86.0407,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 33,
+  "passed": true,
+  "duration_s": 0.323,
+  "type": "trial_done",
+  "seq": 105,
+  "ts": 86.0408,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 34,
+  "passed": true,
+  "duration_s": 0.32,
+  "type": "trial_done",
+  "seq": 106,
+  "ts": 86.0408,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 35,
+  "passed": true,
+  "duration_s": 0.307,
+  "type": "trial_done",
+  "seq": 107,
+  "ts": 86.0408,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 36,
+  "passed": true,
+  "duration_s": 0.307,
+  "type": "trial_done",
+  "seq": 108,
+  "ts": 86.0408,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 37,
+  "passed": true,
+  "duration_s": 0.283,
+  "type": "trial_done",
+  "seq": 109,
+  "ts": 86.0408,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 38,
+  "passed": true,
+  "duration_s": 0.307,
+  "type": "trial_done",
+  "seq": 110,
+  "ts": 86.0409,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 39,
+  "passed": true,
+  "duration_s": 0.317,
+  "type": "trial_done",
+  "seq": 111,
+  "ts": 86.0409,
+  "_t": 38.86
  },
  {
   "id": "h3",
-  "flake_rate": 0.375,
+  "flake_rate": 0.25,
   "wilson_ci": [
-   0.1368,
-   0.6943
+   0.0715,
+   0.5907
   ],
   "trials": 8,
   "cause_class": "timing",
   "verdict": "FLAKY",
   "type": "hypothesis_verified",
-  "seq": 81,
-  "ts": 35.2881,
-  "_t": 32.98
+  "seq": 112,
+  "ts": 86.0443,
+  "_t": 38.86
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 24,
+  "passed": true,
+  "duration_s": 0.491,
+  "type": "trial_done",
+  "seq": 113,
+  "ts": 86.3808,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 25,
+  "passed": true,
+  "duration_s": 0.461,
+  "type": "trial_done",
+  "seq": 114,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 26,
+  "passed": true,
+  "duration_s": 0.298,
+  "type": "trial_done",
+  "seq": 115,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 27,
+  "passed": true,
+  "duration_s": 0.304,
+  "type": "trial_done",
+  "seq": 116,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 28,
+  "passed": true,
+  "duration_s": 0.309,
+  "type": "trial_done",
+  "seq": 117,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 29,
+  "passed": true,
+  "duration_s": 0.29,
+  "type": "trial_done",
+  "seq": 118,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 30,
+  "passed": true,
+  "duration_s": 0.282,
+  "type": "trial_done",
+  "seq": 119,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 31,
+  "passed": true,
+  "duration_s": 0.265,
+  "type": "trial_done",
+  "seq": 120,
+  "ts": 86.3809,
+  "_t": 39.2
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 32,
+  "passed": true,
+  "duration_s": 0.473,
+  "type": "trial_done",
+  "seq": 121,
+  "ts": 86.8546,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 33,
+  "passed": true,
+  "duration_s": 0.472,
+  "type": "trial_done",
+  "seq": 122,
+  "ts": 86.8546,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 34,
+  "passed": true,
+  "duration_s": 0.33,
+  "type": "trial_done",
+  "seq": 123,
+  "ts": 86.8546,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 35,
+  "passed": true,
+  "duration_s": 0.299,
+  "type": "trial_done",
+  "seq": 124,
+  "ts": 86.8547,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 36,
+  "passed": true,
+  "duration_s": 0.295,
+  "type": "trial_done",
+  "seq": 125,
+  "ts": 86.8547,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 37,
+  "passed": true,
+  "duration_s": 0.278,
+  "type": "trial_done",
+  "seq": 126,
+  "ts": 86.8547,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 38,
+  "passed": true,
+  "duration_s": 0.292,
+  "type": "trial_done",
+  "seq": 127,
+  "ts": 86.8547,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 39,
+  "passed": true,
+  "duration_s": 0.288,
+  "type": "trial_done",
+  "seq": 128,
+  "ts": 86.8547,
+  "_t": 39.67
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 16,
+  "passed": true,
+  "duration_s": 0.552,
+  "type": "trial_done",
+  "seq": 129,
+  "ts": 87.0856,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 17,
+  "passed": true,
+  "duration_s": 0.551,
+  "type": "trial_done",
+  "seq": 130,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 18,
+  "passed": true,
+  "duration_s": 0.551,
+  "type": "trial_done",
+  "seq": 131,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 19,
+  "passed": true,
+  "duration_s": 1.3,
+  "type": "trial_done",
+  "seq": 132,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 20,
+  "passed": true,
+  "duration_s": 1.357,
+  "type": "trial_done",
+  "seq": 133,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 21,
+  "passed": true,
+  "duration_s": 2.621,
+  "type": "trial_done",
+  "seq": 134,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 22,
+  "passed": true,
+  "duration_s": 2.514,
+  "type": "trial_done",
+  "seq": 135,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 23,
+  "passed": true,
+  "duration_s": 1.371,
+  "type": "trial_done",
+  "seq": 136,
+  "ts": 87.0857,
+  "_t": 39.9
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 24,
+  "passed": true,
+  "duration_s": 0.307,
+  "type": "trial_done",
+  "seq": 137,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 25,
+  "passed": true,
+  "duration_s": 0.306,
+  "type": "trial_done",
+  "seq": 138,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 26,
+  "passed": true,
+  "duration_s": 0.331,
+  "type": "trial_done",
+  "seq": 139,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 27,
+  "passed": true,
+  "duration_s": 0.521,
+  "type": "trial_done",
+  "seq": 140,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 28,
+  "passed": true,
+  "duration_s": 0.319,
+  "type": "trial_done",
+  "seq": 141,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 29,
+  "passed": true,
+  "duration_s": 0.318,
+  "type": "trial_done",
+  "seq": 142,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 30,
+  "passed": true,
+  "duration_s": 0.278,
+  "type": "trial_done",
+  "seq": 143,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 31,
+  "passed": true,
+  "duration_s": 0.266,
+  "type": "trial_done",
+  "seq": 144,
+  "ts": 87.6115,
+  "_t": 40.43
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 32,
+  "passed": true,
+  "duration_s": 0.52,
+  "type": "trial_done",
+  "seq": 145,
+  "ts": 88.1754,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 33,
+  "passed": true,
+  "duration_s": 0.563,
+  "type": "trial_done",
+  "seq": 146,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 34,
+  "passed": true,
+  "duration_s": 0.342,
+  "type": "trial_done",
+  "seq": 147,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 35,
+  "passed": true,
+  "duration_s": 0.325,
+  "type": "trial_done",
+  "seq": 148,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 36,
+  "passed": true,
+  "duration_s": 0.313,
+  "type": "trial_done",
+  "seq": 149,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 37,
+  "passed": true,
+  "duration_s": 0.279,
+  "type": "trial_done",
+  "seq": 150,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 38,
+  "passed": true,
+  "duration_s": 0.318,
+  "type": "trial_done",
+  "seq": 151,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 39,
+  "passed": true,
+  "duration_s": 0.287,
+  "type": "trial_done",
+  "seq": 152,
+  "ts": 88.1755,
+  "_t": 40.99
+ },
+ {
+  "id": "h4",
+  "flake_rate": 0.0,
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "trials": 40,
+  "cause_class": "order_dependency",
+  "verdict": "STABLE",
+  "type": "hypothesis_verified",
+  "seq": 153,
+  "ts": 91.9339,
+  "_t": 44.75
+ },
+ {
+  "id": "h2",
+  "flake_rate": 0.0,
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "trials": 40,
+  "cause_class": "order_dependency",
+  "verdict": "STABLE",
+  "type": "hypothesis_verified",
+  "seq": 154,
+  "ts": 91.9341,
+  "_t": 44.75
  },
  {
   "id": "h1",
@@ -826,455 +1567,26 @@
   "cause_class": "order_dependency",
   "verdict": "STABLE",
   "type": "hypothesis_verified",
-  "seq": 82,
-  "ts": 35.2883,
-  "_t": 32.98
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 0,
-  "passed": true,
-  "duration_s": 0.299,
-  "type": "trial_done",
-  "seq": 83,
-  "ts": 37.72,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 1,
-  "passed": true,
-  "duration_s": 0.313,
-  "type": "trial_done",
-  "seq": 84,
-  "ts": 37.72,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 2,
-  "passed": true,
-  "duration_s": 0.366,
-  "type": "trial_done",
-  "seq": 85,
-  "ts": 37.7201,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 3,
-  "passed": true,
-  "duration_s": 0.311,
-  "type": "trial_done",
-  "seq": 86,
-  "ts": 37.7201,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 4,
-  "passed": true,
-  "duration_s": 0.485,
-  "type": "trial_done",
-  "seq": 87,
-  "ts": 37.7201,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 5,
-  "passed": true,
-  "duration_s": 6.761,
-  "type": "trial_done",
-  "seq": 88,
-  "ts": 37.7201,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 6,
-  "passed": true,
-  "duration_s": 0.314,
-  "type": "trial_done",
-  "seq": 89,
-  "ts": 37.7201,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 7,
-  "passed": true,
-  "duration_s": 0.373,
-  "type": "trial_done",
-  "seq": 90,
-  "ts": 37.7201,
-  "_t": 35.41
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 8,
-  "passed": true,
-  "duration_s": 0.305,
-  "type": "trial_done",
-  "seq": 91,
-  "ts": 38.7285,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 9,
-  "passed": true,
-  "duration_s": 0.512,
-  "type": "trial_done",
-  "seq": 92,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 10,
-  "passed": true,
-  "duration_s": 0.511,
-  "type": "trial_done",
-  "seq": 93,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 11,
-  "passed": true,
-  "duration_s": 0.313,
-  "type": "trial_done",
-  "seq": 94,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 12,
-  "passed": true,
-  "duration_s": 0.318,
-  "type": "trial_done",
-  "seq": 95,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 13,
-  "passed": true,
-  "duration_s": 0.298,
-  "type": "trial_done",
-  "seq": 96,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 14,
-  "passed": true,
-  "duration_s": 1.002,
-  "type": "trial_done",
-  "seq": 97,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 15,
-  "passed": true,
-  "duration_s": 0.268,
-  "type": "trial_done",
-  "seq": 98,
-  "ts": 38.7286,
-  "_t": 36.42
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 16,
-  "passed": true,
-  "duration_s": 0.3,
-  "type": "trial_done",
-  "seq": 99,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 17,
-  "passed": true,
-  "duration_s": 0.553,
-  "type": "trial_done",
-  "seq": 100,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 18,
-  "passed": true,
-  "duration_s": 0.521,
-  "type": "trial_done",
-  "seq": 101,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 19,
-  "passed": true,
-  "duration_s": 0.304,
-  "type": "trial_done",
-  "seq": 102,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 20,
-  "passed": true,
-  "duration_s": 0.311,
-  "type": "trial_done",
-  "seq": 103,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 21,
-  "passed": true,
-  "duration_s": 0.304,
-  "type": "trial_done",
-  "seq": 104,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 22,
-  "passed": true,
-  "duration_s": 0.3,
-  "type": "trial_done",
-  "seq": 105,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 23,
-  "passed": true,
-  "duration_s": 0.294,
-  "type": "trial_done",
-  "seq": 106,
-  "ts": 39.2829,
-  "_t": 36.97
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 24,
-  "passed": true,
-  "duration_s": 0.862,
-  "type": "trial_done",
-  "seq": 107,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 25,
-  "passed": true,
-  "duration_s": 0.861,
-  "type": "trial_done",
-  "seq": 108,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 26,
-  "passed": true,
-  "duration_s": 0.859,
-  "type": "trial_done",
-  "seq": 109,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 27,
-  "passed": true,
-  "duration_s": 0.859,
-  "type": "trial_done",
-  "seq": 110,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 28,
-  "passed": true,
-  "duration_s": 0.86,
-  "type": "trial_done",
-  "seq": 111,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 29,
-  "passed": true,
-  "duration_s": 0.859,
-  "type": "trial_done",
-  "seq": 112,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 30,
-  "passed": true,
-  "duration_s": 0.859,
-  "type": "trial_done",
-  "seq": 113,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 31,
-  "passed": true,
-  "duration_s": 0.859,
-  "type": "trial_done",
-  "seq": 114,
-  "ts": 40.1456,
-  "_t": 37.84
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 32,
-  "passed": true,
-  "duration_s": 0.329,
-  "type": "trial_done",
-  "seq": 115,
-  "ts": 40.6406,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 33,
-  "passed": true,
-  "duration_s": 0.313,
-  "type": "trial_done",
-  "seq": 116,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 34,
-  "passed": true,
-  "duration_s": 0.493,
-  "type": "trial_done",
-  "seq": 117,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 35,
-  "passed": true,
-  "duration_s": 0.296,
-  "type": "trial_done",
-  "seq": 118,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 36,
-  "passed": true,
-  "duration_s": 0.298,
-  "type": "trial_done",
-  "seq": 119,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 37,
-  "passed": true,
-  "duration_s": 0.3,
-  "type": "trial_done",
-  "seq": 120,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 38,
-  "passed": true,
-  "duration_s": 0.316,
-  "type": "trial_done",
-  "seq": 121,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "hypothesis_id": "h4",
-  "trial_index": 39,
-  "passed": true,
-  "duration_s": 0.311,
-  "type": "trial_done",
-  "seq": 122,
-  "ts": 40.6407,
-  "_t": 38.33
- },
- {
-  "id": "h4",
-  "flake_rate": 0.0,
-  "wilson_ci": [
-   0.0,
-   0.0876
-  ],
-  "trials": 40,
-  "cause_class": "order_dependency",
-  "verdict": "STABLE",
-  "type": "hypothesis_verified",
-  "seq": 123,
-  "ts": 43.4483,
-  "_t": 41.14
- },
- {
-  "id": "h2",
-  "reason": "confidence interval overlaps the original flake rate",
-  "cause_class": "order_dependency",
-  "flake_rate": 1.0,
-  "wilson_ci": [
-   0.6756,
-   1.0
-  ],
-  "type": "hypothesis_eliminated",
-  "seq": 124,
-  "ts": 43.4486,
-  "_t": 41.14
+  "seq": 155,
+  "ts": 91.9344,
+  "_t": 44.75
  },
  {
   "id": "h3",
   "reason": "confidence interval overlaps the original flake rate",
   "cause_class": "timing",
-  "flake_rate": 0.375,
+  "flake_rate": 0.25,
   "wilson_ci": [
-   0.1368,
-   0.6943
+   0.0715,
+   0.5907
   ],
   "type": "hypothesis_eliminated",
-  "seq": 125,
-  "ts": 43.4486,
-  "_t": 41.14
+  "seq": 156,
+  "ts": 91.9347,
+  "_t": 44.75
  },
  {
-  "id": "h4",
+  "id": "h2",
   "reason": "another hypothesis reached a lower flake rate",
   "cause_class": "order_dependency",
   "flake_rate": 0.0,
@@ -1283,12 +1595,26 @@
    0.0876
   ],
   "type": "hypothesis_eliminated",
-  "seq": 126,
-  "ts": 43.4486,
-  "_t": 41.14
+  "seq": 157,
+  "ts": 91.9347,
+  "_t": 44.75
  },
  {
   "id": "h1",
+  "reason": "another hypothesis reached a lower flake rate",
+  "cause_class": "order_dependency",
+  "flake_rate": 0.0,
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "type": "hypothesis_eliminated",
+  "seq": 158,
+  "ts": 91.9347,
+  "_t": 44.75
+ },
+ {
+  "id": "h4",
   "flake_rate": 0.0,
   "confirm_flake_rate": 0.0,
   "cause_class": "order_dependency",
@@ -1296,22 +1622,32 @@
    0.0,
    0.0876
   ],
-  "orig_flake_rate": 0.5,
-  "braintrust_url": "https://www.braintrust.dev/app/NIHAL/p/retrial/experiments/test_dict_order.py%2Fh1",
+  "orig_flake_rate": 0.375,
+  "braintrust_url": "https://www.braintrust.dev/app/NIHAL/p/retrial/experiments/test_dict_order.py%2Fh4",
   "type": "winner_confirmed",
-  "seq": 127,
-  "ts": 45.0241,
-  "_t": 42.71
+  "seq": 159,
+  "ts": 93.9019,
+  "_t": 46.72
  },
  {
   "verdict": "FIXED",
-  "orig_flake_rate": 0.5,
-  "winner_id": "h1",
+  "orig_flake_rate": 0.375,
+  "winner_id": "h4",
   "winner_flake_rate": 0.0,
   "num_hypotheses": 4,
   "type": "tournament_done",
-  "seq": 128,
-  "ts": 45.0242,
-  "_t": 42.71
+  "seq": 160,
+  "ts": 93.9019,
+  "_t": 46.72
+ },
+ {
+  "runs": 5,
+  "by_cause_class": {
+   "order_dependency": 5
+  },
+  "type": "genome_updated",
+  "seq": 161,
+  "ts": 93.904,
+  "_t": 46.72
  }
 ]
