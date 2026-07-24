@@ -9,6 +9,7 @@ verdict is QUARANTINE (no dead-end: the evidence dossier is still produced).
 import os
 import threading
 
+from .config import DEFAULT_THRESHOLD
 from .verifier import verify, confirm, verify_hermetic
 from .ledger import EvidenceLedger
 from .genome import Genome
@@ -18,7 +19,7 @@ from .guards import neutering_check
 class TournamentCoordinator:
     """Runs the detect -> diagnose-verify -> confirm tournament over hypotheses."""
 
-    def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.10,
+    def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
                  min_trials=8, timeout=60, isolation="process", ledger=None,
                  tournament_conc=None, genome=None, hermetic=None, hermetic_pool=None):
         self.pool = pool
@@ -104,7 +105,7 @@ class TournamentCoordinator:
         if r["wilson_ci"][1] >= orig_rate:
             return "confidence interval overlaps the original flake rate"
         if r["verdict"] != "STABLE":
-            return "still flaky — CI does not clear the threshold"
+            return f"confidence interval does not clear the {self.threshold:.0%} threshold"
         return "another hypothesis reached a lower flake rate"
 
     def run_tournament(self, test_code, hypotheses, isolation=None, test_name=None):
@@ -130,9 +131,9 @@ class TournamentCoordinator:
         detect = self._verify(test_code, label="detect", isolation=isolation,
                               hypothesis_id=None)
         orig_rate = detect["flake_rate"]
-        # A test whose CI lower bound is ~1.0 isn't flaky — it's a hard regression.
-        detect_verdict = ("ALWAYS_FAILING" if detect["wilson_ci"][0] > 0.95
-                          else detect["verdict"])
+        # verify()._verdict is the single source of truth for verdicts, including
+        # ALWAYS_FAILING (100% fail) — a hard regression, not flake. Pass it through.
+        detect_verdict = detect["verdict"]
         self._log_series(ledger_run, "detect", detect, cause_class="original")
         self._emit("detect_done", {
             "flake_rate": orig_rate,
@@ -147,9 +148,32 @@ class TournamentCoordinator:
 
         # --- VERIFY each hypothesis in parallel (one thread per lane) ---
         results = {}
+        no_patch = []          # models whose response wasn't a usable patch
         results_lock = threading.Lock()
 
         def race(h):
+            # A model that returned no parseable patch is NOT raced against the
+            # original code (that would fake a baseline race and let the UI claim
+            # a theory the model never produced). It is announced and eliminated
+            # honestly, and still counts as that model's attempt in the genome.
+            if h.get("status") == "no_valid_patch" or not h.get("patched_code"):
+                self._emit("hypothesis_created", {
+                    "id": h["id"],
+                    "cause_class": h.get("cause_class"),
+                    "explanation": h.get("explanation"),
+                    "model": h.get("model"),
+                    "status": "no_valid_patch",
+                })
+                self._emit("hypothesis_eliminated", {
+                    "id": h["id"],
+                    "reason": "model did not produce a parseable patch",
+                    "cause_class": h.get("cause_class"),
+                    "model": h.get("model"),
+                    "status": "no_valid_patch",
+                })
+                with results_lock:
+                    no_patch.append(h)
+                return
             self._emit("hypothesis_created", {
                 "id": h["id"],
                 "cause_class": h.get("cause_class"),
@@ -317,16 +341,18 @@ class TournamentCoordinator:
             "orig_flake_rate": orig_rate,
             "winner_id": winner["id"] if winner else None,
             "winner_flake_rate": winner["flake_rate"] if winner else None,
-            "num_hypotheses": len(results),
+            "num_hypotheses": len(results) + len(no_patch),
         })
 
         # --- GENOME: append this run to the flywheel, then publish the aggregate ---
         # Record EVERY hypothesis attempt (model + won) so /genome can report a
-        # true per-model win_rate = wins / attempts, not wins / FIXED-runs.
+        # true per-model win_rate = wins / attempts, not wins / FIXED-runs. A model
+        # that produced no parseable patch still made an attempt (and lost).
         attempts = [{
             "model": r.get("model"),
             "won": bool(winner is not None and r["id"] == winner["id"]),
         } for r in results.values()]
+        attempts += [{"model": h.get("model"), "won": False} for h in no_patch]
         try:
             self.genome.record(
                 test_name=test_name, verdict=verdict, cause_class=genome_cause,
