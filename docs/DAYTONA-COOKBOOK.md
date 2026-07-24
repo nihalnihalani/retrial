@@ -17,7 +17,7 @@ Daytona granted a dedicated region **`us-east-1`** with linux-vm support. Fork w
 7. Home dir on the VM = **/root** (not /home/daytona like containers) — `get_user_root_dir()` returns it; write files there.
 
 ### us-east-1 feature status (2026-07-23, RE-VERIFIED clean)
-- **Preview URLs: WORK ✓✓** — `get_preview_link(8080)` returns in ~1.8s, fetched served content successfully (url form: `https://8080-{id}.daytonaproxy01.net`, needs `x-daytona-preview-token` header). The CopilotKit iframe race-grid is UNBLOCKED.
+- **Preview URLs: WORK ✓✓** — `get_preview_link(8080)` returns in ~1.8s, fetched served content successfully (url form: `https://8080-{id}.daytonaproxy01.net`, needs `x-daytona-preview-token` header). The iframe race-grid idea is UNBLOCKED.
 - **Egress: WORKS** — earlier ~9-min apt hangs were TRANSIENT (bad runner instance); clean re-test: `apt-get update` 9s, `install python3` 4s. Not a platform limit (Dalin confirmed egress isn't restricted). If a runner ever hangs, delete+recreate the sandbox.
 - **Base `ubuntu:22.04` is bare** — no python3 AND no curl (curl → exit 127). Install everything you need (python3, curl, pip, git, node…) in the base before forking. Better: ask Daytona for a pre-baked tooling snapshot (allowed; just can't use declarative builder in-region).
 - **`network_block_all=True` killed the SDK control channel on a VM** — do NOT demo firewall block-all on a VM lane; use `domain_allow_list` at create time if network scoping is needed, and test first.
@@ -54,7 +54,7 @@ for i in range(4):
 **The actual HackSprint #1 winner (A/B GPT) did NOT use fork.** Per Daytona's own writeup, for each variant it **created a fresh sandbox from the original repo**, spawned a Claude Code agent inside, and exposed a preview URL — then compared versions. That is *exactly our "Plan B" snapshot/repo fan-out*. So Plan B is not a fallback — **it is the proven winning pattern on this exact stage.** Fork is a nice-to-have optimization (shared warm state), not a requirement. This de-risks the whole plan: build on create-from-repo/snapshot fan-out (verified working on the free tier), treat true VM fork as an upgrade if Daytona enables it.
 
 ## The winning project's loop (A/B GPT, built in 5h, won 1st + Best Use of Browser Use)
-1. Create a sandbox from the repo. 2. Spawn an agent (Claude Code) inside. 3. Agent applies changes; preview URL updates live. 4. Spin up N variants, each isolated. 5. Validate each (they used Browser Use; we use Braintrust test-pass + CodeRabbit gate). 6. Keep the best, loop.
+1. Create a sandbox from the repo. 2. Spawn an agent (Claude Code) inside. 3. Agent applies changes; preview URL updates live. 4. Spin up N variants, each isolated. 5. Validate each (they used Browser Use; we use Braintrust test-pass + a PR review gate). 6. Keep the best, loop.
 → Our Fork Wars = same loop, but 4 variants race in parallel with 4 different models, objective referee instead of ad-hoc, and a review gate. Coherent evolution of a proven winner.
 
 ## Verified core calls (Python SDK, `pip install daytona`)
@@ -127,7 +127,7 @@ patch = fw.chat.completions.create(
 lane.process.exec(f"cat > buggy.py <<'EOF'\n{patch}\nEOF")
 result = lane.process.exec("python3 -m pytest -q 2>&1; echo EXIT:$?")   # pass/fail + timing = the referee signal
 ```
-So the "4-model race" is 4 copies of this loop, one MODEL_ID each, run concurrently — Braintrust scores the `result`, winner's patch becomes a PR, CodeRabbit gates it.
+So the "4-model race" is 4 copies of this loop, one MODEL_ID each, run concurrently — Braintrust scores the `result`, winner's patch becomes a PR for human review.
 
 **DO NOT use VibeKit's bundled agents to drive Fireworks** — Claude Code / Codex / Gemini CLI are provider-locked to Anthropic/OpenAI/Google. Options, in order of demo-reliability:
 1. **Custom minimal loop (above)** — RECOMMENDED. One Fireworks chat completion per lane, no agent framework, lowest failure surface, most legible ("same prompt, same bug, 4 models"). Best for a controlled seeded bug in 5.5h.
