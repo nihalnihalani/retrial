@@ -111,7 +111,17 @@ is why the demo keeps the calibrated `test_dict_order.py`.)
 - Reproduced via the same process-isolation model the engine uses (`isolation="process"`),
   with a one-time `pip install` per warm sandbox.
 
-## ULTIMATE EXPERIMENT — full Retrial tournament converges on the maintainer's fix
+## ULTIMATE EXPERIMENT — full Retrial tournament (ORIGINAL run — see correction below)
+
+> **⚠️ Correction (2026-07-23).** An audit found this original run **invalid for its
+> headline "independently rediscovered" claim**: the repro file fed to the models
+> (`penman_test_rearrange_repro.py`) had header comments that *literally named the
+> root cause* — "module-level `random.seed(1)` was ineffective … run this exact branch
+> UNSEEDED". The models were told the answer, so "independently rediscovered the
+> maintainer's fix" was overclaimed. This section is **kept verbatim for transparency**.
+> The corrected experiment — a **sanitized rerun with no cause hints** — is in
+> [Sanitized rerun](#sanitized-rerun--no-cause-hints-corrects-the-above) below, and its
+> result is different. Trust the sanitized section for any claim.
 
 We ran a **complete Retrial tournament** on this real flake: the engine's
 Fireworks `diagnose()` (imported as-is from `retrial.diagnosis`, 4 models
@@ -135,7 +145,7 @@ and evidence eliminated the 4th.**
 - **Winner h1 (glm-5p2)** — explanation: *"…sorts roles using `random.random()`, but the
   RNG is never seeded deterministically…"* Its patch adds `random.seed(1)` immediately
   before the `rearrange` call — **the same fix goodmami/penman shipped in PR #102.**
-  Confirmation round (fresh independent sandboxes): **0/25 = 0%** (CI 0–13%).
+  Confirmation round: **25 fresh-process trials across 5 sandboxes, 0 fails = 0%** (CI 0–13%).
 - **h3 (kimi-k2p6)** is the instructive counter-example: it returned an empty explanation
   and a patch that still flaked at **94%** — so the empirical reruns **eliminated it on
   evidence**, exactly the mechanism Retrial exists for (objective flake-rate, not LLM vibes).
@@ -145,7 +155,71 @@ and evidence eliminated the 4th.**
 
 **The claim this unlocks:** *Retrial took a real, IDoFT-catalogued OSS flake, and its
 model tournament independently converged on the exact fix the human maintainer shipped —
-verified with 0% flake across a fresh confirmation round.*
+verified with 0% flake across a fresh confirmation round.* **← SUPERSEDED. This claim
+depended on the repro's cause-naming comments. It does NOT survive the sanitized rerun
+below; do not use it.**
+
+## Sanitized rerun — no cause hints (corrects the above)
+
+To test the honest question — *what do the models propose from the failing test **alone**?* —
+we re-ran the identical tournament against a **sanitized repro**
+(`seeds/real/penman_repro_sanitized.py`): the same failing test and its code, but with
+**every root-cause comment stripped** and a neutral docstring ("reproduction of a flaky
+penman test, extracted at v1.2.1"). The only inputs the models see are the failing test
+source (which genuinely calls `rearrange(t, model.random_order)` — that method name is the
+real library API, not an injected hint) and a real failure log showing GOT vs EXPECTED
+serialization (which names no cause). Script: `seeds/real/tournament_penman_sanitized.py`;
+full artifacts (prompt sent + raw model response + extracted patch + per-trial results per
+hypothesis, plus run metadata and UTC timestamps): `seeds/real/tournament_penman_sanitized_result.json`.
+Run: 2026-07-23T05:51:58Z, 85.5 s, 105 fresh-process Daytona trials, 0 infra errors.
+
+**Result: convergence on the maintainer's specific fix did NOT hold. 0 of 4 models seeded
+the RNG.** The one model that returned a verifiable patch fixed the flake a *different*
+valid way; the other three did not return a parseable patch (harness fell back to the
+unmodified repro, so they measured at baseline).
+
+| Hypothesis | Model | Cause hint given | Stated cause | What it actually did | Re-measured flake | Verdict |
+|---|---|---|---|---|---|---|
+| baseline (unpatched) | — | — | — | sanitized repro, unchanged | 16/16 = **100%** (CI 81–100%) | flaky |
+| **h1 (WINNER)** | glm-5p2 | order_dependency | randomness in `random_order` | swapped `random_order`→`original_order` **and** rewrote `expected` to the deterministic serialization (does **not** seed the RNG) | **0/16 = 0%** (CI 0–19%) | fixes it (verifiable) |
+| h2 | glm-5p1 | shared_state | randomness in `random_order` (in prose) | **no JSON returned** — 8.5 KB of prose reasoning; parser fell back to the original repro | 11/16 = **69%** (CI 44–86%) | parse-failure → baseline |
+| h3 | kimi-k2p6 | timing | randomness / PYTHONHASHSEED (in prose) | **no JSON returned** — 9.1 KB of prose; fallback to original repro | 14/16 = **88%** (CI 64–97%) | parse-failure → baseline |
+| h4 | deepseek-v4-pro | race_condition | randomness in `random_order` | **truncated JSON** (130 chars, cut off before `patched_code`); fallback to original repro | 15/16 = **94%** (CI 72–99%) | parse-failure → baseline |
+
+- **Winner h1 (glm-5p2)** — the only model to emit a well-formed, parseable patch. It
+  correctly diagnosed the randomness root cause (*"`model.random_order` … uses Python's
+  `random` module to produce a non-deterministic ordering … the expected string captures
+  only one possible permutation"*) and de-flaked the test by **removing the random path**
+  (call `model.original_order`, update `expected` to match) rather than seeding it.
+  Confirmation round: **25 fresh-process trials across 5 sandboxes, 0 fails = 0%** (CI 0–13%).
+  This is a *legitimate deterministic fix* — but it is **not** the maintainer's PR #102 fix
+  (which kept `random_order` and made `random.seed(1)` effective), and it changes what the
+  test exercises (it no longer tests the `random_order` branch).
+- **h2/h3/h4** are not "wrong hypotheses" so much as **format failures**: their raw responses
+  (saved in the artifact JSON) show they *also* correctly identified randomness/`random_order`
+  as the cause in prose, but they did not return the strict JSON object with a `patched_code`
+  field the engine requires, so `_parse_hypothesis` fell back to the unmodified input. Two
+  returned free-form prose; one returned truncated JSON. They therefore measured at ~baseline.
+- **Diagnosis vs fix.** At the *diagnosis* level all four models pointed at `random_order`/
+  randomness even without hints — so the models *can* infer the cause from the failing test
+  alone. At the *specific-fix* level, convergence on the maintainer's seed fix did **not**
+  reproduce: 0/4 seeded the RNG, and only 1/4 produced any verifiable patch at all.
+
+**The honest claim this actually supports:** *Given a real IDoFT-catalogued OSS flake with
+no cause hints, Retrial's model tournament independently identified the randomness root
+cause, and the one model that produced a verifiable patch shipped a valid deterministic fix
+that Retrial confirmed at 0% flake (0/25 fresh trials) — while empirical reruns correctly
+declined to crown the three non-fixes.* Retrial's value proposition — **evidence, not LLM
+vibes, decides the winner** — is if anything *strengthened* here: three plausible-looking
+model outputs were rejected on measured flake rate, and the winner was chosen and
+independently re-confirmed by rerun statistics, not by trusting the model.
+
+> **Note for the engine team (not fixed here — out of the seeds/ lane):** 3 of 4 models
+> failed to emit parseable JSON under `response_format=json_object` at temperature 0.7
+> (two returned prose, one truncated at `max_tokens=2048`). The engine currently falls back
+> to the *original* code on a parse failure, which silently turns a non-answer into a
+> baseline-flake "hypothesis." Consider surfacing parse failures as an explicit hypothesis
+> status rather than a silent fallback.
 
 ## Reproduce it yourself
 
