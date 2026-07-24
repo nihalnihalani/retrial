@@ -70,5 +70,113 @@
         "won": true
       }
     ]
+  },
+  {
+    "seq": 7,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      }
+    ]
+  },
+  {
+    "seq": 8,
+    "test_name": "test_always_fails.py",
+    "verdict": "FIXED",
+    "cause_class": "shared_state",
+    "orig_flake_rate": 1.0,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 9,
+    "test_name": "test_always_fails.py",
+    "verdict": "QUARANTINE",
+    "cause_class": "race_condition",
+    "orig_flake_rate": 1.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 10,
+    "test_name": "test_always_fails.py",
+    "verdict": "FIXED",
+    "cause_class": "shared_state",
+    "orig_flake_rate": 1.0,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      }
+    ]
   }
 ]
