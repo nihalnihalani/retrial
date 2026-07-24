@@ -1,10 +1,12 @@
-import { ciText } from '../format';
 import { FlakeMeter } from './FlakeMeter';
 import { TrialGrid } from './TrialGrid';
+import { modelForHypothesis } from '../models';
 import type { Hypothesis } from '../types';
 
 interface Props {
   hypotheses: Hypothesis[];
+  // real model slugs (round-robined across hypotheses in order); null => omit
+  modelNames: string[] | null;
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -19,7 +21,7 @@ const causeLabel = (c: string) =>
 
 // Act 2 — the fix tournament. One lane per hypothesis; each races its patched
 // test through fresh reruns. Losers grey out with a strike.
-export function TournamentPhase({ hypotheses }: Props) {
+export function TournamentPhase({ hypotheses, modelNames }: Props) {
   return (
     <section className="phase tournament-phase">
       <header className="phase-head">
@@ -30,15 +32,15 @@ export function TournamentPhase({ hypotheses }: Props) {
       </header>
 
       <div className="lanes">
-        {hypotheses.map((h) => (
-          <Lane key={h.id} h={h} />
+        {hypotheses.map((h, i) => (
+          <Lane key={h.id} h={h} model={modelForHypothesis(modelNames, i)} />
         ))}
       </div>
     </section>
   );
 }
 
-function Lane({ h }: { h: Hypothesis }) {
+function Lane({ h, model }: { h: Hypothesis; model: string | null }) {
   const eliminated = h.status === 'eliminated';
   const winner = h.status === 'winner';
   const statusText =
@@ -49,11 +51,12 @@ function Lane({ h }: { h: Hypothesis }) {
       <div className="lane-left">
         <div className="lane-head">
           <span className={`cause-tag cause-${h.causeClass}`}>{causeLabel(h.causeClass)}</span>
+          {model && <span className="model-chip">· {model}</span>}
           <span className={`lane-status status-${h.status}`}>{statusText}</span>
         </div>
         <p className="lane-explanation">{h.explanation}</p>
         {eliminated && h.eliminatedReason && (
-          <p className="lane-reason">✕ {h.eliminatedReason}</p>
+          <p className="lane-reason">ELIMINATED — {h.eliminatedReason}</p>
         )}
       </div>
 
@@ -70,9 +73,6 @@ function Lane({ h }: { h: Hypothesis }) {
           ci={h.wilsonCi}
           label={winner ? 'flake rate' : 'live flake rate'}
         />
-        {(h.status === 'verified' || winner) && h.wilsonCi && (
-          <div className="lane-ci mono">{ciText(h.wilsonCi)}</div>
-        )}
       </div>
 
       {eliminated && <div className="lane-strike" aria-hidden="true" />}
