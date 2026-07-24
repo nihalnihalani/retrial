@@ -5,6 +5,14 @@
 
 export type WilsonCI = [number, number]; // [low, high], each 0..1
 
+// Fires the instant a run is requested, ~20-30s before run_started, while N
+// Fireworks models draft competing root-cause theories in parallel.
+export interface Diagnosing {
+  type: 'diagnosing';
+  test_name: string;
+  n: number; // number of models drafting hypotheses
+}
+
 export interface RunStarted {
   type: 'run_started';
   test_name: string;
@@ -75,6 +83,7 @@ export interface TournamentDone {
 }
 
 export type RetrialEvent =
+  | Diagnosing
   | RunStarted
   | TrialDone
   | DetectDone
@@ -87,7 +96,7 @@ export type RetrialEvent =
 
 // ---- Derived view state (built by the reducer) ----
 
-export type Phase = 'detect' | 'tournament' | 'winner' | 'quarantine';
+export type Phase = 'diagnosing' | 'detect' | 'tournament' | 'winner' | 'quarantine';
 
 export interface TrialCell {
   index: number;
@@ -133,6 +142,7 @@ export interface QuarantineState {
 export interface BoardState {
   phase: Phase;
   testName: string | null;
+  diagnoseModels: number | null; // N models drafting during the diagnosing pre-phase
   plannedTrials: number | null;
   detect: DetectState;
   hypotheses: Hypothesis[];
