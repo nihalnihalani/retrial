@@ -226,6 +226,15 @@ def start_tournament(req: TournamentRequest):
             raise HTTPException(status_code=409, detail="a tournament is already running")
         _running["active"] = True
         _running["test_name"] = path.name
+        # Clear the shared replay buffer the instant GO is accepted (inside the
+        # lock, before the background thread emits anything). Otherwise a WS that
+        # connects between this POST and the run thread starting would replay the
+        # PRIOR run's tail — and because the buffer is capped, an early event
+        # (that run's detect_done) may already be evicted while its
+        # tournament_done survives, so the board shows a stale verdict with no
+        # matching detect. Resetting here guarantees the buffer only ever holds
+        # the current run once it has been accepted.
+        BUS.reset()
 
     def run():
         pool = _get_pool()
