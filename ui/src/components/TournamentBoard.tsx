@@ -24,8 +24,10 @@ const TOURNAMENT_URL = 'http://localhost:8000/tournament';
 const SEEDS: { label: string; paths: string[] }[] = [
   { label: 'test_dict_order.py', paths: ['seeds/test_dict_order.py', '../seeds/test_dict_order.py'] },
   { label: 'test_first_key.py', paths: ['seeds/test_first_key.py', '../seeds/test_first_key.py'] },
-  // Deterministic exit-1 regression seed — drives the ALWAYS_FAILING verdict.
-  { label: 'test_always_fails.py', paths: ['seeds/test_always_fails.py', '../seeds/test_always_fails.py'] },
+  // NOTE: the regression seed test_always_fails.py is intentionally NOT here — a
+  // stage misclick would stall the demo ~2min in diagnosing. Drive it by curl
+  // (POST /tournament {"seed_path":"seeds/test_always_fails.py"}) for the ALWAYS_FAILING
+  // card; the TerminalVerdictCard renders it identically however the run is triggered.
 ];
 
 // Which stepper index each phase lights up. Diagnosing is a pre-phase (nothing
