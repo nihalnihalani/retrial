@@ -44,9 +44,21 @@ entry below names the module that uses it, and how it is verified.
   `gh api` (ref/blob/PR), never touching the local working tree — behind the
   human promote gate (`POST /promote`, default on).
 
-## Not integrated (and not claimed)
+### ElevenLabs — the flake autopsy (opt-in)
+- `engine/retrial/narrator.py`: after `tournament_done`, templates a spoken
+  verdict from the evidence dossier (no LLM between dossier and speech) and
+  synthesizes mp3 via `eleven_v3`. Served at `GET /narration/<run_id>`; UI
+  play button in `ui/src/components/NarrationPlayer.tsx`. Gated by `NARRATE=1`
+  (default OFF). OUTPUT only — never voice input. Wilson phrasing applies to
+  speech too. Failures degrade to "no audio," never a failed run.
 
-No other sponsor tool has a code path in this repo. Earlier pitch material
-mentioned a code-review gate and a voice narration layer that were never
-built; those claims have been removed rather than reworded. If a future
-integration lands, it gets added here with its module path — that is the bar.
+## Not an engine integration (disclosed workflow only)
+
+### CodeRabbit — pre-run PR review
+- No SDK/API call in this repo. CodeRabbit's GitHub App can review the
+  fix/quarantine PR that PRSmith opens. Review latency is 1–5 minutes, so any
+  demo use is **pre-run and disclosed unprompted** — never claimed as live
+  on-stage turnaround.
+
+If a future integration lands with a real code path, it gets added under
+"Integrated" with its module path — that is the bar.
