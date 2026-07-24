@@ -23,7 +23,7 @@ type RawFrame = RetrialEvent & { _t?: number; seq?: number; ts?: number };
 
 const COMPRESS = 1.7; // 1.5-2x faster than wall-clock
 const MIN_GAP_MS = 30;
-const MAX_GAP_MS = 30000; // caps the ~25s live-diagnosis window for replay
+const MAX_GAP_MS = 4000; // caps the ~25s live-diagnosis window for replay
 const STITCH_MS = 250; // gap inserted where two segments are joined (_t resets)
 const FIRST_MS = 300;
 
