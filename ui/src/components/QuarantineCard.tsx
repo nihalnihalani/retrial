@@ -7,6 +7,7 @@ interface Props {
   bestHypothesis: Hypothesis | undefined;
   detect: DetectState;
   prUrl: string | null;
+  model: string | null; // prettified best-effort model, when known
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -21,7 +22,7 @@ const causeLabel = (c: string) =>
 // The no-dead-end verdict: nothing stabilized the test, so we quarantine it
 // WITH the full evidence dossier. Amber tone — a real, useful outcome, not a
 // failure. The receipts still ship (Braintrust autopsy + quarantine PR).
-export function QuarantineCard({ quarantine, bestHypothesis, detect, prUrl }: Props) {
+export function QuarantineCard({ quarantine, bestHypothesis, detect, prUrl, model }: Props) {
   const before = detect.flakeRate ?? 0.48;
 
   return (
@@ -47,7 +48,8 @@ export function QuarantineCard({ quarantine, bestHypothesis, detect, prUrl }: Pr
           </div>
         </div>
         <p className="quarantine-ci mono">
-          best candidate over {quarantine.trials} trials · {ciText(quarantine.wilsonCi)}
+          best candidate{model ? ` from ${model}` : ''} over {quarantine.trials} trials ·{' '}
+          {ciText(quarantine.wilsonCi)}
         </p>
 
         {bestHypothesis && (
@@ -55,6 +57,7 @@ export function QuarantineCard({ quarantine, bestHypothesis, detect, prUrl }: Pr
             <span className={`cause-tag cause-${bestHypothesis.causeClass}`}>
               {causeLabel(bestHypothesis.causeClass)}
             </span>
+            {model && <span className="model-chip">· {model}</span>}
             <span className="quarantine-best-label">closest cause</span>
             <p className="quarantine-best-exp">{bestHypothesis.explanation}</p>
           </div>

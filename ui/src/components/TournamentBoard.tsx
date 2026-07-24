@@ -1,5 +1,6 @@
 import { useEventStream } from '../useEventStream';
 import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
+import { modelForHypothesis } from '../models';
 import type { ConnectionMode, Phase } from '../types';
 import { DiagnosingView } from './DiagnosingView';
 import { DetectPhase } from './DetectPhase';
@@ -43,8 +44,12 @@ export function TournamentBoard({ onRestart }: Props) {
     genome,
     prUrl,
   } = state;
-  const winnerHyp = winner ? hypotheses.find((h) => h.id === winner.id) : undefined;
-  const bestHyp = quarantine ? hypotheses.find((h) => h.id === quarantine.bestId) : undefined;
+  const winnerIdx = winner ? hypotheses.findIndex((h) => h.id === winner.id) : -1;
+  const bestIdx = quarantine ? hypotheses.findIndex((h) => h.id === quarantine.bestId) : -1;
+  const winnerHyp = winnerIdx >= 0 ? hypotheses[winnerIdx] : undefined;
+  const bestHyp = bestIdx >= 0 ? hypotheses[bestIdx] : undefined;
+  const winnerModel = modelForHypothesis(diagnoseModelNames, winnerIdx);
+  const bestModel = modelForHypothesis(diagnoseModelNames, bestIdx);
 
   return (
     <div className="board">
@@ -67,9 +72,17 @@ export function TournamentBoard({ onRestart }: Props) {
         {phase === 'detect' && (
           <DetectPhase detect={detect} expectedTrials={plannedTrials ?? DETECT_EXPECTED} />
         )}
-        {phase === 'tournament' && <TournamentPhase hypotheses={hypotheses} />}
+        {phase === 'tournament' && (
+          <TournamentPhase hypotheses={hypotheses} modelNames={diagnoseModelNames} />
+        )}
         {phase === 'winner' && winner && (
-          <WinnerCard winner={winner} hypothesis={winnerHyp} detect={detect} prUrl={prUrl} />
+          <WinnerCard
+            winner={winner}
+            hypothesis={winnerHyp}
+            detect={detect}
+            prUrl={prUrl}
+            model={winnerModel}
+          />
         )}
         {phase === 'quarantine' && quarantine && (
           <QuarantineCard
@@ -77,6 +90,7 @@ export function TournamentBoard({ onRestart }: Props) {
             bestHypothesis={bestHyp}
             detect={detect}
             prUrl={prUrl}
+            model={bestModel}
           />
         )}
       </main>
