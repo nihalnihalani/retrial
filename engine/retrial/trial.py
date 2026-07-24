@@ -21,6 +21,11 @@ from .registry import REGISTRY
 
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 
+# The only exit codes that carry a test verdict: 0 = passed, 1 = failed. Anything
+# else (dependency install failure, ImportError wrapper, interpreter usage error,
+# pytest's reserved 2-5) is the harness failing, not the test — see run_trial.
+_VERDICT_EXIT_CODES = (0, 1)
+
 
 def run_trial(pool, test_code, timeout=60, isolation="process"):
     """Run test_code once in a leased sandbox.
@@ -68,6 +73,20 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         code = int(m.group(1))
         log_tail = out.strip()[-500:]
         REGISTRY.exec_finished(sid, cmd, code, log_tail, round(duration, 3))
+        if code not in _VERDICT_EXIT_CODES:
+            # Not a test verdict — the harness itself failed (dependency install,
+            # import error, interpreter usage error, pytest's 2-5 range). Counting
+            # these as failures is how a measurement tool lies: a seed whose
+            # dependency is missing would read as a confident 100% flake rate.
+            # Excluded from the flake-rate denominator like any other infra error.
+            infra_error = True
+            return {
+                "passed": False,
+                "duration_s": round(duration, 3),
+                "log_tail": log_tail,
+                "exit_code": code,
+                "error": f"non-verdict exit code {code} (harness/bootstrap failure)",
+            }
         return {
             "passed": code == 0,
             "duration_s": round(duration, 3),

@@ -15,6 +15,13 @@ import threading
 from .config import DEFAULT_THRESHOLD
 from .trial import run_trial
 
+# Minimum valid trials before an all-failing run may be called ALWAYS_FAILING.
+# Deliberately higher than `min_trials` (8): ALWAYS_FAILING is terminal via the
+# detect-gate, and a high-rate flake produces an all-fail opening batch far too
+# often to spend a run on. At 24 trials a p=0.88 flake reads all-fail 4.6% of the
+# time, versus 13% at 16.
+ALWAYS_FAILING_MIN_TRIALS = 24
+
 
 def wilson(fails, n, z=1.96):
     """Wilson score interval for a binomial proportion. Returns (p, lo, hi)."""
@@ -27,7 +34,8 @@ def wilson(fails, n, z=1.96):
     return (p, max(0.0, c - m), min(1.0, c + m))
 
 
-def _verdict(fails, n, lo, hi, threshold, min_trials):
+def _verdict(fails, n, lo, hi, threshold, min_trials,
+             af_min_trials=ALWAYS_FAILING_MIN_TRIALS):
     """Classify a rate from EVIDENCE, never a point estimate.
 
     - ERROR:          no valid trials (never STABLE by default).
@@ -36,11 +44,20 @@ def _verdict(fails, n, lo, hi, threshold, min_trials):
     - FLAKY:          both passes AND failures were observed and the whole CI sits
                       above the threshold (confidently, not just on average).
     - INCONCLUSIVE:   the CI still straddles the threshold (e.g. at max_trials).
+
+    ALWAYS_FAILING needs MORE evidence than the others (`af_min_trials`, not
+    `min_trials`) because it is terminal: the detect-gate ends the run on it, so a
+    false positive silently refuses to diagnose a real flake. A genuinely flaky
+    test at a high rate produces an all-fail opening batch often enough to matter
+    — at p=0.88, 16 straight failures happen ~13% of the time, and it happened on
+    the first live tournament against the real penman specimen. Below the floor an
+    all-fail run reads INCONCLUSIVE (honest: not enough evidence yet), not
+    "regression".
     """
     if n == 0:
         return "ERROR"
     passes = n - fails
-    if fails == n and n >= min_trials:
+    if fails == n and n >= max(min_trials, af_min_trials):
         return "ALWAYS_FAILING"
     if hi < threshold:
         return "STABLE"
@@ -103,8 +120,14 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
             trial_index += 1
 
         # Adaptive early-stop: the CI provably excludes the threshold either way.
+        # Exception: an all-failing run keeps going to ALWAYS_FAILING_MIN_TRIALS.
+        # Stopping at 8-16 here is what turns a high-rate flake into a terminal
+        # "REGRESSION" verdict, and the extra trials cost ~2s.
         p, lo, hi = wilson(fails, n)
-        if n >= min_trials and (hi < threshold or lo > threshold):
+        all_failing_under_floor = (n > 0 and fails == n
+                                   and n < ALWAYS_FAILING_MIN_TRIALS)
+        if (n >= min_trials and (hi < threshold or lo > threshold)
+                and not all_failing_under_floor):
             stopped_early = True
             break
 
