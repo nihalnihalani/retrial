@@ -10,12 +10,13 @@ import time
 
 import pytest
 
-from conftest import FakeCheckpointSandbox, FakeChild, FakeClient
+from conftest import FakeCheckpointSandbox, FakeChild, FakeClient, RaisingRegistry
 
 from retrial import forkpool as forkpool_mod
 from retrial.events import EventBus
 from retrial.forkpool import ForkSandboxPool, _retry
 from retrial.pool import SandboxPool, make_pool
+from retrial.registry import SandboxRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -390,3 +391,160 @@ def test_spend_guard_check_is_inside_fork_lock(monkeypatch):
     # The guard trip degrades that caller to the snapshot fallback (the
     # degrade contract) — but the cap itself was never overshot.
     assert pool._degraded is True
+
+
+# ======================= Sandbox Observatory wiring =======================
+def _fork_pool_reg(client, reg, **kwargs):
+    # The fallback gets its OWN registry: both FakeClients mint id "root-1" for
+    # their first sandbox, so sharing `reg` would collide the fallback's
+    # snapshot-pool sandbox onto the fork root. Production uses unique UUIDs, so
+    # both backends legitimately share one registry there.
+    kwargs.setdefault("fallback",
+                      SandboxPool(client=FakeClient(), registry=SandboxRegistry()))
+    return ForkSandboxPool(client=client, registry=reg, **kwargs)
+
+
+def test_registry_holds_fork_tree_after_warm():
+    reg = SandboxRegistry()
+    client = FakeClient()
+    pool = _fork_pool_reg(client, reg)
+    pool.warm(2)
+
+    root_id = client.roots[0].id
+    ckpt_id = client.checkpoints[0].id
+    snap = reg.snapshot()
+    by_id = {s["id"]: s for s in snap["sandboxes"]}
+    assert by_id[root_id]["role"] == "root" and by_id[root_id]["state"] == "warm"
+    # After the fork batch the checkpoint is re-frozen (paused), child of root.
+    assert by_id[ckpt_id]["role"] == "checkpoint"
+    assert by_id[ckpt_id]["state"] == "paused"
+    assert by_id[ckpt_id]["parent_id"] == root_id
+    clones = [s for s in snap["sandboxes"] if s["role"] == "trial-clone"]
+    assert len(clones) == 2
+    assert all(c["parent_id"] == ckpt_id and c["state"] == "warm" for c in clones)
+    assert snap["lineage"][root_id] == [ckpt_id]
+    assert len(snap["lineage"][ckpt_id]) == 2
+
+
+def test_registry_marks_root_and_ckpt_degraded_on_degrade():
+    reg = SandboxRegistry()
+    client = FakeClient(clone_script=[("raise",)])
+    pool = _fork_pool_reg(client, reg)
+    pool.warm(1)                                  # induced degrade
+    assert pool._degraded is True
+    root_id = client.roots[0].id
+    ckpt_id = client.checkpoints[0].id
+    assert reg.record(root_id)["state"] == "degraded"
+    assert reg.record(ckpt_id)["state"] == "degraded"
+
+
+def test_registry_all_destroyed_after_destroy_all():
+    reg = SandboxRegistry()
+    client = FakeClient()
+    pool = _fork_pool_reg(client, reg)
+    pool.warm(2)
+    live_before = reg.counts()["live"]
+    assert live_before == 4                        # root + ckpt + 2 clones
+    pool.destroy_all()
+    assert reg.counts()["live"] == 0
+    assert reg.counts()["destroyed"] == 4
+
+
+def test_fork_pool_raising_registry_never_breaks():
+    client = FakeClient()
+    pool = ForkSandboxPool(client=client, registry=RaisingRegistry(),
+                           fallback=SandboxPool(client=FakeClient(),
+                                                registry=RaisingRegistry()))
+    assert pool.warm(2) == 2
+    sb = pool.lease()
+    pool.release(sb, reusable=True)
+    assert pool.stats()["available"] >= 1
+    assert pool.destroy_all() >= 3                 # root + ckpt + clones
+
+
+# ============= destroy-mid-fork race (the fatal fix) + sentinels =============
+def test_destroy_all_blocks_on_in_flight_fork_batch_then_no_rebuild():
+    reg = SandboxRegistry()
+    client = FakeClient()
+    pool = _fork_pool_reg(client, reg)
+
+    fork_gate = threading.Event()
+    batch_started = threading.Event()
+    timeline = []
+    tl_lock = threading.Lock()
+
+    class BlockingCheckpoint(FakeCheckpointSandbox):
+        def pause(self):
+            with tl_lock:
+                timeline.append(("pause", self.id))
+            super().pause()
+
+        def _experimental_fork(self, name=None):
+            batch_started.set()
+            fork_gate.wait(timeout=5)
+            return super()._experimental_fork(name)
+
+    root = FakeChild("root-x")
+    ckpt = BlockingCheckpoint(cid="ckpt-x", registry=client.registry)
+    client.registry["root-x"] = root
+    client.registry["ckpt-x"] = ckpt
+    pool._root = root
+    pool._ckpt = ckpt
+
+    # Record deletion order onto the same timeline.
+    orig_delete = client.delete
+
+    def logging_delete(sb):
+        with tl_lock:
+            timeline.append(("delete", getattr(sb, "id", str(sb))))
+        orig_delete(sb)
+
+    client.delete = logging_delete
+
+    leased = {}
+
+    def thread_a():
+        leased["sb"] = pool.lease()      # holds _fork_lock inside _fork_clones
+
+    def thread_b():
+        batch_started.wait(timeout=5)    # A is mid-batch, _fork_lock held
+        pool.destroy_all()               # must block on _fork_lock until A done
+
+    ta = threading.Thread(target=thread_a)
+    tb = threading.Thread(target=thread_b)
+    ta.start()
+    assert batch_started.wait(timeout=5)
+    tb.start()
+    time.sleep(0.05)                     # give B a chance to block on the lock
+    fork_gate.set()                      # let A's fork complete + re-pause
+    ta.join(timeout=5)
+    tb.join(timeout=5)
+
+    # Every deletion happened strictly AFTER the batch's re-pause: destroy_all
+    # blocked on _fork_lock instead of yanking the checkpoint mid-fork.
+    kinds = [k for k, _ in timeline]
+    first_delete = kinds.index("delete")
+    last_pause = max(i for i, (k, _) in enumerate(timeline) if k == "pause")
+    assert last_pause < first_delete
+    # No orphaned clone; the pool was torn down.
+    assert pool._live == {}
+    assert pool._torn_down is True
+
+    # A surviving run fails HONESTLY and never silently rebuilds the checkpoint.
+    creates_before = client.create_calls
+    with pytest.raises(RuntimeError, match="torn down"):
+        pool.lease()
+    with pytest.raises(RuntimeError, match="torn down"):
+        pool.warm(1)
+    assert client.create_calls == creates_before   # no new root/ckpt built
+
+
+def test_snapshot_pool_torn_down_sentinel_refuses_lease():
+    pool = SandboxPool(client=FakeClient(), auto_delete_min=0,
+                       registry=SandboxRegistry())
+    pool.warm(1)
+    pool.destroy_all()
+    with pytest.raises(RuntimeError, match="torn down"):
+        pool.lease()
+    with pytest.raises(RuntimeError, match="torn down"):
+        pool.warm(1)

@@ -205,5 +205,65 @@
         "won": false
       }
     ]
+  },
+  {
+    "seq": 12,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 13,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 14,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 15,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 16,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 17,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
   }
 ]

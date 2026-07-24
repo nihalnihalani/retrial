@@ -35,6 +35,7 @@ from dotenv import load_dotenv
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 
 from .pool import SandboxPool
+from .registry import as_safe
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -61,7 +62,7 @@ class ForkSandboxPool:
     """Drop-in for SandboxPool: same 7-method surface, fork-clone provisioning."""
 
     def __init__(self, client=None, target=None, labels=None, hermetic=False,
-                 auto_delete_min=None, bus=None, fallback=None):
+                 auto_delete_min=None, bus=None, fallback=None, registry=None):
         self._client = client or Daytona(
             DaytonaConfig(target=target or os.environ.get("DAYTONA_TARGET", "us"))
         )
@@ -97,6 +98,17 @@ class ForkSandboxPool:
         self._degraded = False
         self._fallback = fallback     # SandboxPool, built lazily on first degrade
         self._bus = bus
+        # Sandbox Observatory feed (see pool.py): root/checkpoint/trial-clone
+        # lifecycle is mirrored into the registry. as_safe makes even a hostile
+        # injected registry unable to break a run.
+        self._registry = as_safe(registry)
+        # Sticky teardown sentinel checked by warm/lease/_ensure_checkpoint. A
+        # forced destroy_all sets it under _fork_lock so a tournament thread that
+        # survives the reap fails HONESTLY (its remaining trials surface as
+        # infra errors, already excluded by the trial layer) instead of silently
+        # rebuilding a fresh root+checkpoint — which would break the
+        # byte-identical-clone statistical invariant with no warning.
+        self._torn_down = False
         # Spend guard: hard cap on simultaneously live trial forks. Every live
         # fork bills real compute — no bug should be able to fork-bomb the wallet.
         self._max_forks = int(os.environ.get("RETRIAL_MAX_FORKS", "64"))
@@ -108,6 +120,9 @@ class ForkSandboxPool:
         Freeze = fork the live root (the root never stops — the Rewind
         invariant), then pause the fork-child, capturing fs + RAM.
         """
+        if self._torn_down:
+            raise RuntimeError("fork pool torn down by destroy_all — refusing "
+                               "to rebuild a checkpoint mid-process")
         with self._ckpt_lock:
             if self._ckpt is not None:
                 return
@@ -122,12 +137,19 @@ class ForkSandboxPool:
             root = self._client.create(CreateSandboxFromSnapshotParams(**kwargs),
                                        timeout=120)
             self._root = root
+            # Observatory: the root is the trunk of the fork-lineage tree. It
+            # dies only via destroy_all (leaf-first), so no per-sandbox
+            # destroy_fn — DELETE on it is leaf-guarded by the server.
+            self._registry.register(root, role="root", backend="fork",
+                                    labels=self._labels, destroy_fn=None,
+                                    state="creating")
             # Pay the root's first-exec cold-start now so every clone inherits
             # a hot sandbox (same rationale as SandboxPool.warm).
             try:
                 root.process.exec("echo warm")
             except Exception:
                 pass
+            self._registry.set_state(getattr(root, "id", None), "warm")
             # Optional bootstrap (repo clone / deps / cache warm) baked into the
             # checkpoint so every clone starts past it. Default empty — retrial
             # seeds only need python3, which the snapshot image already has.
@@ -138,6 +160,11 @@ class ForkSandboxPool:
                 name=f"retrial-ckpt-{uuid4().hex[:6]}"))
             _retry("ckpt.pause", fork.pause)
             self._ckpt = fork
+            # The frozen checkpoint: a paused fork-child of the root, and the
+            # source every trial clone forks from.
+            self._registry.register(fork, role="checkpoint", backend="fork",
+                                    parent_id=getattr(root, "id", None),
+                                    labels=self._labels, state="paused")
 
     def _fork_clones(self, n):
         """Wake the checkpoint, fork n byte-identical trial clones, re-freeze.
@@ -162,6 +189,9 @@ class ForkSandboxPool:
                     f"spend guard: {live} trial forks live; forking {n} more would "
                     f"exceed RETRIAL_MAX_FORKS={self._max_forks}")
             _retry("clones.start", self._ckpt.start)
+            # The checkpoint is awake for the fork batch (Observatory shows it
+            # briefly warm, then back to paused in the finally below).
+            self._registry.set_state(getattr(self._ckpt, "id", None), "warm")
             clones = []
             try:
                 for _ in range(n):
@@ -169,6 +199,13 @@ class ForkSandboxPool:
                         name=f"retrial-trial-{uuid4().hex[:6]}"))
                     with self._lock:
                         self._live[fork.id] = fork
+                    # Registry hook OUTSIDE self._lock: a byte-identical trial
+                    # clone, child of the checkpoint, destroyable via _evict.
+                    self._registry.register(fork, role="trial-clone",
+                                            backend="fork",
+                                            parent_id=getattr(self._ckpt, "id", None),
+                                            labels=self._labels,
+                                            destroy_fn=self._evict, state="warm")
                     clones.append(fork)
             except Exception:
                 # Roll back partial clones so no orphan sandboxes leak (best-effort).
@@ -182,7 +219,22 @@ class ForkSandboxPool:
                     self._ckpt.pause()
                 except Exception:
                     pass
+                self._registry.set_state(getattr(self._ckpt, "id", None), "paused")
             return clones
+
+    def _evict(self, sid):
+        """Per-sandbox destroyer the registry routes DELETE through (trial
+        clones only; root/ckpt have no destroy_fn). Removes the clone from
+        _available (by id) + reads its handle from _live, then destroys OUTSIDE
+        the lock. Idempotent — destruction goes through the owner so pool
+        bookkeeping can never lease a destroyed clone."""
+        with self._lock:
+            self._available = [s for s in self._available
+                               if getattr(s, "id", None) != sid]
+            handle = self._live.get(sid)
+        if handle is not None:
+            self._destroy(handle)
+        return None
 
     def _destroy(self, sb):
         try:
@@ -192,6 +244,8 @@ class ForkSandboxPool:
         finally:
             with self._lock:
                 self._live.pop(sb.id, None)
+            # Registry hook OUTSIDE _lock: the trial clone is gone.
+            self._registry.mark_destroyed(getattr(sb, "id", None))
 
     def _degrade(self, exc):
         """One-shot, sticky switch to the snapshot fallback. Never raises.
@@ -214,20 +268,32 @@ class ForkSandboxPool:
                     # Last resort: a client-less pool ctor failing means the
                     # SDK itself is unusable; leave fallback for the next call.
                     self._degraded = True
-        if first and self._bus is not None:
-            try:
-                self._bus.emit("pool_degraded", {
-                    "backend": "fork",
-                    "fallback": "snapshot",
-                    "reason": str(exc)[:200],
-                })
-            except Exception:
-                pass
+        if first:
+            # Show the dead fork spine honestly in the Observatory: the
+            # checkpoint and root this pool degraded away from are now degraded,
+            # not silently gone. Best-effort ids (either may be None if degrade
+            # fired before the checkpoint was built).
+            self._registry.mark_degraded(getattr(self._ckpt, "id", None))
+            self._registry.mark_degraded(getattr(self._root, "id", None))
+            if self._bus is not None:
+                try:
+                    self._bus.emit("pool_degraded", {
+                        "backend": "fork",
+                        "fallback": "snapshot",
+                        "reason": str(exc)[:200],
+                    })
+                except Exception:
+                    pass
 
     # -- public API ------------------------------------------------------
     def warm(self, n):
         """Fork n byte-identical clones from the checkpoint (creating root +
         checkpoint on first call). Returns the count made ready."""
+        if self._torn_down:
+            # Checked BEFORE the try below so a surviving run fails honestly
+            # rather than being caught, degraded, and served a rebuilt pool.
+            raise RuntimeError("fork pool torn down by destroy_all — refusing "
+                               "to rebuild a checkpoint mid-process")
         if self._degraded:
             # Sticky short-circuit: never re-pay a root-create + failed-fork
             # round-trip re-discovering the same missing primitive.
@@ -285,6 +351,9 @@ class ForkSandboxPool:
 
     def lease(self):
         """Hand out a trial clone, popping a warm one or forking on demand."""
+        if self._torn_down:
+            raise RuntimeError("fork pool torn down by destroy_all — refusing "
+                               "to fork a clone mid-process")
         if self._degraded:
             return self._fallback.lease()
         try:
@@ -328,26 +397,43 @@ class ForkSandboxPool:
         """Tear down everything this pool owns — leaf-first, mandatory order:
         trial forks, then the checkpoint, then the root (Daytona refuses to
         delete a parent while fork-children live). Then the fallback's
-        sandboxes, if one was ever built."""
-        with self._lock:
-            forks = list(self._live.values())
-            self._available.clear()
-        threads = [threading.Thread(target=self._destroy, args=(sb,)) for sb in forks]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        count = len(forks)
-        for sb in (self._ckpt, self._root):
-            if sb is None:
-                continue
-            try:
-                self._client.delete(self._client.get(sb.id))
-            except Exception:
-                pass
-            count += 1
-        self._ckpt = None
-        self._root = None
+        sandboxes, if one was ever built.
+
+        The ENTIRE body holds `_fork_lock` (the fatal-race fix): it therefore
+        blocks until any in-flight fork batch finishes and no batch can start
+        mid-teardown, so a concurrent forced reap can never delete the
+        checkpoint mid-fork of another thread's batch. Under that same lock the
+        sticky `_torn_down` sentinel is set FIRST, so a tournament thread that
+        survives the reap fails honestly (via warm/lease/_ensure_checkpoint)
+        instead of silently rebuilding a fresh checkpoint and corrupting the
+        byte-identical-clone invariant. No deadlock: `_destroy` worker threads
+        take only `self._lock`, and `_fork_lock` is never taken inside
+        `self._lock` anywhere."""
+        with self._fork_lock:
+            self._torn_down = True
+            with self._lock:
+                forks = list(self._live.values())
+                self._available.clear()
+            threads = [threading.Thread(target=self._destroy, args=(sb,))
+                       for sb in forks]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            count = len(forks)
+            for sb in (self._ckpt, self._root):
+                if sb is None:
+                    continue
+                try:
+                    self._client.delete(self._client.get(sb.id))
+                except Exception:
+                    pass
+                self._registry.mark_destroyed(getattr(sb, "id", None))
+                count += 1
+            self._ckpt = None
+            self._root = None
+        # The fallback is a plain SandboxPool with its own locks — tear it down
+        # outside _fork_lock to hold that lock for the minimum span.
         if self._fallback is not None:
             count += self._fallback.destroy_all()
         return count
