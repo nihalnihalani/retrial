@@ -16,11 +16,17 @@ class TournamentCoordinator:
     """Runs the detect -> diagnose-verify -> confirm tournament over hypotheses."""
 
     def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.05,
-                 min_trials=8, timeout=60, isolation="process", ledger=None):
+                 min_trials=8, timeout=60, isolation="process", ledger=None,
+                 tournament_conc=None):
         self.pool = pool
         self.bus = bus
         self.max_trials = max_trials
         self.conc = conc
+        # Per-lane concurrency during the PARALLEL hypothesis phase. N lanes each
+        # run this many trials at once, so peak sandboxes = N * tournament_conc;
+        # capping it (default 8) bounds that peak (~32 for 4 hypotheses) instead
+        # of N * conc. Detect/confirm are single-lane and use the full conc.
+        self.tournament_conc = tournament_conc or conc
         self.threshold = threshold
         self.min_trials = min_trials
         self.timeout = timeout
@@ -49,8 +55,10 @@ class TournamentCoordinator:
         except Exception:
             return None
 
-    def _verify(self, test_code, label, isolation, hypothesis_id=None, emit_trials=True):
-        return verify(self.pool, test_code, self.max_trials, self.conc,
+    def _verify(self, test_code, label, isolation, hypothesis_id=None,
+                emit_trials=True, conc=None):
+        return verify(self.pool, test_code, self.max_trials,
+                      conc if conc is not None else self.conc,
                       self.threshold, self.min_trials, self.bus, label,
                       self.timeout, isolation, hypothesis_id, emit_trials)
 
@@ -104,7 +112,7 @@ class TournamentCoordinator:
                 "explanation": h.get("explanation"),
             })
             v = self._verify(h["patched_code"], label=h["id"], isolation=isolation,
-                            hypothesis_id=h["id"])
+                            hypothesis_id=h["id"], conc=self.tournament_conc)
             record = {
                 "id": h["id"],
                 "cause_class": h.get("cause_class"),
