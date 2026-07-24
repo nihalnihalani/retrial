@@ -107,7 +107,7 @@ def test_health_shape_includes_pool_backend(server):
     server_mod, client = server
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    assert {"available", "live", "prewarming"} <= set(body["pool"])
+    assert {"available", "live", "prewarming", "error"} <= set(body["pool"])
     assert "pool_backend" in body["config"]
     assert body["config"]["pool_backend"] in ("snapshot", "fork")
     assert "promote_gate" in body["config"]

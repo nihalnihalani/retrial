@@ -27,7 +27,7 @@ export function TournamentPhase({ hypotheses, modelNames, plannedTrials, thresho
   return (
     <section className="phase tournament-phase">
       <header className="phase-head">
-        <h2 className="phase-title">Act 2 · The Tournament</h2>
+        <h2 className="phase-title">Act 2 · Tournament</h2>
         <p className="phase-sub">{tournamentSubtitle(plannedTrials)}</p>
       </header>
 
