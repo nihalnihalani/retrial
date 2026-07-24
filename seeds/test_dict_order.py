@@ -3,6 +3,6 @@ with PYTHONHASHSEED (fresh interpreter = fresh seed). Asserts first-processed it
 Authentic 'works on my machine' class: hash-randomization order dependency."""
 import sys
 
-events = {f"evt-{i}" for i in range(8)}
+events = {f"evt-{i}" for i in range(2)}
 first = next(iter(events))
-sys.exit(0 if first == "evt-0" else 1)
+sys.exit(0 if first == "evt-1" else 1)
