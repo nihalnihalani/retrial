@@ -35,22 +35,18 @@ Assumptions and honest limitations (also stated in the CLI --help epilog):
   reports it honestly.
 """
 import base64
-import os
 import re
 import threading
 import time
-from pathlib import Path
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 
 from .config import DEFAULT_THRESHOLD
 from .forkpool import _retry
 from .registry import as_safe
+from .settings import get_settings
 from .verifier import verify
-
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 
@@ -148,11 +144,11 @@ class FlakeBisector:
         # fork control over one long-lived root (same client construction and
         # create kwargs as SandboxPool._create_one).
         self._client = client or Daytona(
-            DaytonaConfig(target=target or os.environ.get("DAYTONA_TARGET", "us"))
+            DaytonaConfig(target=target or get_settings().resolved_pool_target())
         )
         self._labels = labels or {"retrial": "bisect"}
         self._auto_delete_min = (auto_delete_min if auto_delete_min is not None
-                                 else int(os.environ.get("AUTO_DELETE_MIN", "60")))
+                                 else get_settings().auto_delete_min)
         self._bus = bus
         # Sandbox Observatory feed: root/checkpoint/probe lifecycle + root execs
         # are mirrored into the registry (shared with the probe pools). as_safe

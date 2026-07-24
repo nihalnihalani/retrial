@@ -131,5 +131,7 @@ function finalize(sandboxes: Record<string, ObservatorySandbox>): ObservatorySta
     sandboxes,
     counts: { live: all.length - destroyed, totalEver: all.length, destroyed },
     seen: false,
+    // A reconstruction has no recorded lifetimes — it never invents money.
+    spend: null,
   };
 }
