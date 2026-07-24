@@ -1,3 +1,8 @@
+> **ARCHIVED — historical deck, not current product truth.** This script
+> predates the Rewind merge and mentions a CodeRabbit review step that was
+> never built (no code path exists). The truthful integration list lives in
+> `docs/SPONSORS.md`. Kept only as a record of the original pitch.
+
 # Retrial — Live Stage Pitch (3 min) + Q&A Prep (2 min)
 
 Round 2, top-8 stage: **3-minute pitch + 2-minute Q&A.** Panel skews

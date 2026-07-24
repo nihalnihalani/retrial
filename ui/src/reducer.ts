@@ -1,4 +1,11 @@
-import type { BoardState, Hypothesis, RetrialEvent, TrialCell } from './types';
+import type {
+  BisectCheckpoint,
+  BisectState,
+  BoardState,
+  Hypothesis,
+  RetrialEvent,
+  TrialCell,
+} from './types';
 
 export const initialState: BoardState = {
   phase: 'detect',
@@ -22,11 +29,18 @@ export const initialState: BoardState = {
   genome: null,
   prUrl: null,
   tournamentDone: false,
+  bisect: null,
+  promotion: null,
+  poolDegraded: null,
+  hermetic: null,
 };
 
 // Clears everything that belongs to a single run so a second live run can't
-// inherit the first run's board, while PRESERVING the cumulative genome (and
-// the diagnosing pre-phase's model list / test name, which the caller re-sets).
+// inherit the first run's board, while PRESERVING the cumulative genome and
+// the sticky poolDegraded badge (pool state outlives runs) — and the
+// diagnosing pre-phase's model list / test name, which the caller re-sets.
+// A stale pending promotion is also dropped, mirroring the server's
+// _accept_run wipe: a new run of ANY type dismisses an unclicked gate.
 function resetPerRun(state: BoardState): BoardState {
   return {
     ...state,
@@ -38,6 +52,9 @@ function resetPerRun(state: BoardState): BoardState {
     baselineVerdict: null,
     prUrl: null,
     tournamentDone: false,
+    bisect: null,
+    promotion: null,
+    hermetic: null,
   };
 }
 
@@ -58,7 +75,16 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       event.type === 'diagnosing' ||
       event.type === 'run_started' ||
       event.type === 'genome_updated' ||
-      event.type === 'pr_opened';
+      event.type === 'pr_opened' ||
+      // A new bisect run resets cleanly, same as diagnosing/run_started.
+      event.type === 'bisect_started' ||
+      // Late post-terminal traffic that is honest to show: the promote gate
+      // (emitted after tournament_done), pool degradation (pool-level, not
+      // run-level), and the hermetic finding (a detect-phase diagnostic).
+      event.type === 'promotion_pending' ||
+      event.type === 'promotion_closed' ||
+      event.type === 'pool_degraded' ||
+      event.type === 'hermetic_diagnosis';
     if (!passthrough) return state;
   }
 
@@ -273,9 +299,195 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       return { ...state, tournamentDone: true };
     }
 
+    case 'hermetic_diagnosis': {
+      // Previously silently dropped (missing from the union) — now stored.
+      return {
+        ...state,
+        hermetic: {
+          verdict: event.verdict,
+          networkedRate: event.networked_rate,
+          hermeticRate: event.hermetic_rate,
+          networkedCi: event.networked_ci,
+          hermeticCi: event.hermetic_ci,
+        },
+      };
+    }
+
+    case 'pool_degraded': {
+      // An honest badge, not an error: the fork backend fell back to the
+      // snapshot pool and the run continues on it.
+      return { ...state, poolDegraded: { reason: event.reason } };
+    }
+
+    case 'bisect_started': {
+      return {
+        ...resetPerRun(state),
+        phase: 'bisect',
+        testName: event.suspect,
+        bisect: {
+          suite: event.suite,
+          suspect: event.suspect,
+          nTests: event.n_tests,
+          checkpoints: [],
+          window: null,
+          polluter: null,
+          polluterIndex: null,
+          reason: null,
+          done: false,
+          error: null,
+        },
+      };
+    }
+
+    case 'checkpoint_created': {
+      const bisect = ensureBisect(state.bisect);
+      return {
+        ...state,
+        phase: 'bisect',
+        bisect: {
+          ...bisect,
+          checkpoints: upsertCheckpoint(bisect.checkpoints, event.k, (c) => ({
+            ...c,
+            label: event.label,
+            testPassed: event.test_passed ?? c.testPassed,
+          })),
+        },
+      };
+    }
+
+    case 'checkpoint_probed': {
+      const bisect = ensureBisect(state.bisect);
+      return {
+        ...state,
+        bisect: {
+          ...bisect,
+          checkpoints: upsertCheckpoint(bisect.checkpoints, event.k, (c) => ({
+            ...c,
+            probe: {
+              flakeRate: event.flake_rate,
+              wilsonCi: event.wilson_ci,
+              trials: event.trials,
+              verdict: event.verdict ?? null,
+            },
+          })),
+        },
+      };
+    }
+
+    case 'bisect_narrowed': {
+      const bisect = ensureBisect(state.bisect);
+      const window: [number, number] = [event.lo, event.hi];
+      return {
+        ...state,
+        bisect: {
+          ...bisect,
+          window,
+          checkpoints: bisect.checkpoints.map((c) => ({
+            ...c,
+            inWindow: c.k >= event.lo && c.k <= event.hi,
+          })),
+        },
+      };
+    }
+
+    case 'bisect_done': {
+      const bisect = ensureBisect(state.bisect);
+      // Fold the final probe table in (upsert-by-k, out-of-order safe).
+      let checkpoints = bisect.checkpoints;
+      for (const p of event.probes ?? []) {
+        if (!p) continue;
+        checkpoints = upsertCheckpoint(checkpoints, p.k, (c) => ({
+          ...c,
+          probe: {
+            flakeRate: p.flake_rate,
+            wilsonCi: p.wilson_ci,
+            trials: p.trials,
+            verdict: p.verdict ?? null,
+          },
+        }));
+      }
+      return {
+        ...state,
+        bisect: {
+          ...bisect,
+          checkpoints,
+          polluter: event.polluter_test ?? null,
+          polluterIndex: event.polluter_index ?? null,
+          reason: event.reason ?? null,
+          error: event.error ?? null,
+          done: true,
+        },
+      };
+    }
+
+    case 'promotion_pending': {
+      return {
+        ...state,
+        promotion: {
+          testName: event.test_name,
+          verdict: event.verdict,
+          winnerId: event.winner_id ?? null,
+          flakeRate: event.flake_rate ?? null,
+          confirmFlakeRate: event.confirm_flake_rate ?? null,
+          braintrustUrl: event.braintrust_url ?? null,
+          open: true,
+          approved: null,
+        },
+      };
+    }
+
+    case 'promotion_closed': {
+      if (!state.promotion) return state;
+      // Keep the record (approved feeds the "awaiting PR…" hint until
+      // pr_opened fills prUrl); only the modal closes.
+      return {
+        ...state,
+        promotion: { ...state.promotion, open: false, approved: event.approved },
+      };
+    }
+
     default:
       return state;
   }
+}
+
+// A checkpoint event can land before bisect_started on a lossy replay; start
+// from an empty rail rather than dropping it.
+function ensureBisect(bisect: BisectState | null): BisectState {
+  return (
+    bisect ?? {
+      suite: '',
+      suspect: '',
+      nTests: 0,
+      checkpoints: [],
+      window: null,
+      polluter: null,
+      polluterIndex: null,
+      reason: null,
+      done: false,
+      error: null,
+    }
+  );
+}
+
+// Rail rows can arrive out of order (probes especially); k is the key, and the
+// list stays sorted by k so the spine renders in suite order.
+function upsertCheckpoint(
+  checkpoints: BisectCheckpoint[],
+  k: number,
+  update: (c: BisectCheckpoint) => BisectCheckpoint,
+): BisectCheckpoint[] {
+  const blank: BisectCheckpoint = {
+    k,
+    label: k === 0 ? 'pristine' : `checkpoint ${k}`,
+    testPassed: null,
+    probe: null,
+    inWindow: false,
+  };
+  const i = checkpoints.findIndex((c) => c.k === k);
+  const next = i === -1 ? [...checkpoints, update(blank)] : checkpoints.slice();
+  if (i !== -1) next[i] = update(checkpoints[i]);
+  return next.sort((a, b) => a.k - b.k);
 }
 
 // Cells can arrive out of order across parallel sandboxes; index is the key.
