@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FlakeMeter } from './FlakeMeter';
 import { pct } from '../format';
 import type { ConnectionMode, PromotionState } from '../types';
+import { Button } from '@/components/ui/button';
 
 const PROMOTE_URL = 'http://localhost:8000/promote';
 
@@ -106,23 +107,28 @@ export function PromoteGate({
           )}
 
           {error && <p className="promote-error">{error}</p>}
-          {!live && <p className="promote-replay-hint">approval is live-engine only — this is a replay</p>}
+          {!live && (
+            <p className="promote-replay-hint">
+              Reconnect to the live engine before making a promotion decision.
+            </p>
+          )}
 
-          <div className="promote-actions">
-            <button
-              className="promote-btn reject"
+          <div className="promote-actions flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => decide(false)}
               disabled={posting || !live}
             >
               REJECT
-            </button>
-            <button
-              className="promote-btn approve"
+            </Button>
+            <Button
+              className="flex-[1.6]"
               onClick={() => decide(true)}
               disabled={posting || !live}
             >
               {posting ? 'SENDING…' : `APPROVE → OPEN ${fixed ? 'FIX' : 'QUARANTINE'} PR`}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

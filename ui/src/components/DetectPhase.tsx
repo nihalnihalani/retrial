@@ -21,9 +21,9 @@ export function DetectPhase({ detect, expectedTrials, threshold }: Props) {
   return (
     <section className="phase detect-phase">
       <header className="phase-head">
-        <h2 className="phase-title">Act 1 · The Lie Detector</h2>
+        <h2 className="phase-title">Act 1 · Lie detector</h2>
         <p className="phase-sub">
-          Same test. Same code. Rerun {total}× across the sandbox pool.
+          Same test. Same code. {total} fresh processes across the sandbox pool.
         </p>
       </header>
 

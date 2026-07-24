@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
+import { Boxes, GitBranch, Grid3X3, Play, RotateCcw, Scale, Telescope } from 'lucide-react';
 import { useEventStream } from '../useEventStream';
 import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
 import { modelForHypothesis, displayModel } from '../models';
 import type { ConnectionMode, Phase } from '../types';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { DiagnosingView } from './DiagnosingView';
 import { DetectPhase } from './DetectPhase';
 import { TournamentPhase } from './TournamentPhase';
@@ -59,7 +64,7 @@ interface Props {
 // The whole board is a pure function of the event stream. It owns nothing but
 // layout + the phase router.
 export function TournamentBoard({ onRestart }: Props) {
-  const { state, mode } = useEventStream();
+  const { state, mode, connectionMessage } = useEventStream();
   const health = useDaytonaHealth(mode);
   const {
     phase,
@@ -99,7 +104,12 @@ export function TournamentBoard({ onRestart }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [seedLabel, setSeedLabel] = useState(SEEDS[0].label);
-  const [view, setView] = useState<BoardView>('grid');
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const treeRequested =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('tree') === '1';
+  const [view, setView] = useState<BoardView>(treeRequested ? 'tree' : 'grid');
   // The Observatory is a backstage panel: opt-in, collapsed by default, never
   // replacing the phase router (the tournament stays the star).
   const [obsOpen, setObsOpen] = useState(false);
@@ -113,9 +123,13 @@ export function TournamentBoard({ onRestart }: Props) {
     tournamentDone ||
     (phase === 'bisect' && (bisect?.done ?? false));
   const runActive = testName !== null && !terminal;
+  const terminalPhase =
+    phase === 'winner' || phase === 'quarantine' || phase === 'baseline_verdict';
+  const waitingForRun = testName === null && !bisect;
+  const showViewToggle = phase === 'bisect' || treeRequested;
 
   // A running bisection IS the tree view — the checkpoint rail is its board.
-  const showTree = phase === 'bisect' || view === 'tree';
+  const showTree = phase === 'bisect' || (treeRequested && view === 'tree');
 
   useEffect(() => {
     if (!toast) return;
@@ -123,8 +137,29 @@ export function TournamentBoard({ onRestart }: Props) {
     return () => window.clearTimeout(t);
   }, [toast]);
 
+  // Stage clock: starts on diagnosing, ticks until a terminal verdict, clears when idle.
+  useEffect(() => {
+    if (waitingForRun) {
+      setRunStartedAt(null);
+      setElapsedSec(0);
+      return;
+    }
+    if (phase === 'diagnosing') {
+      setRunStartedAt(Date.now());
+      setElapsedSec(0);
+    }
+  }, [phase, waitingForRun]);
+
+  useEffect(() => {
+    if (runStartedAt == null || terminal) return;
+    const tick = () => setElapsedSec(Math.floor((Date.now() - runStartedAt) / 1000));
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [runStartedAt, terminal]);
+
   const startRun = async () => {
-    if (posting || runActive) return;
+    if (posting || runActive || mode !== 'live') return;
     const chosen = SEEDS.find((s) => s.label === seedLabel) ?? SEEDS[0];
     setPosting(true);
     setToast(null);
@@ -158,6 +193,20 @@ export function TournamentBoard({ onRestart }: Props) {
     }
   };
 
+  // Stage operator shortcut: Enter starts a live run when the board is idle.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT') return;
+      if (mode !== 'live' || runActive || posting) return;
+      e.preventDefault();
+      void startRun();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   return (
     <div className="board">
       <TopBar
@@ -167,8 +216,7 @@ export function TournamentBoard({ onRestart }: Props) {
         health={health}
         degraded={poolDegraded !== null}
         onRestart={onRestart}
-        canGo={mode === 'live'}
-        goDisabled={runActive || posting}
+        goDisabled={mode !== 'live' || runActive || posting}
         posting={posting}
         seedLabel={seedLabel}
         onSeedChange={setSeedLabel}
@@ -176,9 +224,13 @@ export function TournamentBoard({ onRestart }: Props) {
         view={view}
         onViewChange={setView}
         viewLocked={phase === 'bisect'}
+        showViewToggle={showViewToggle}
         obsOpen={obsOpen}
         onObsToggle={() => setObsOpen((o) => !o)}
         obsLiveCount={observatory.seen ? observatory.counts.live : null}
+        elapsedSec={runStartedAt != null ? elapsedSec : null}
+        runActive={runActive}
+        terminal={terminal}
       />
 
       {toast && (
@@ -187,8 +239,10 @@ export function TournamentBoard({ onRestart }: Props) {
         </div>
       )}
 
-      <main className="board-main">
-        {phase === 'diagnosing' ? (
+      <main className="board-main" id="evidence-board" aria-busy={runActive}>
+        {waitingForRun ? (
+          <LiveEmptyState mode={mode} message={connectionMessage} />
+        ) : phase === 'diagnosing' ? (
           <DiagnosingView
             testName={testName}
             n={diagnoseModels ?? 4}
@@ -239,12 +293,14 @@ export function TournamentBoard({ onRestart }: Props) {
       </main>
 
       {obsOpen && (
-        <SandboxObservatory state={state} mode={mode} runActive={runActive} />
+        <div id="sandbox-observatory">
+          <SandboxObservatory state={state} mode={mode} runActive={runActive} />
+        </div>
       )}
 
       <PromoteGate promotion={promotion} mode={mode} />
 
-      {(hypotheses.length > 0 || genome) && (
+      {!terminalPhase && (hypotheses.length > 0 || genome) && (
         <footer className="board-footer">
           <GenomeCard hypotheses={hypotheses} genome={genome} />
           <p className="tagline">
@@ -263,7 +319,6 @@ function TopBar({
   health,
   degraded,
   onRestart,
-  canGo,
   goDisabled,
   posting,
   seedLabel,
@@ -272,9 +327,13 @@ function TopBar({
   view,
   onViewChange,
   viewLocked,
+  showViewToggle,
   obsOpen,
   onObsToggle,
   obsLiveCount,
+  elapsedSec,
+  runActive,
+  terminal,
 }: {
   mode: ConnectionMode;
   phase: Phase;
@@ -282,7 +341,6 @@ function TopBar({
   health: PoolHealth | null;
   degraded: boolean;
   onRestart: () => void;
-  canGo: boolean;
   goDisabled: boolean;
   posting: boolean;
   seedLabel: string;
@@ -291,50 +349,71 @@ function TopBar({
   view: BoardView;
   onViewChange: (view: BoardView) => void;
   viewLocked: boolean;
+  showViewToggle: boolean;
   obsOpen: boolean;
   onObsToggle: () => void;
   obsLiveCount: number | null;
+  elapsedSec: number | null;
+  runActive: boolean;
+  terminal: boolean;
 }) {
   const activeIndex = PHASE_STEP[phase];
   return (
     <header className="topbar">
-      <div className="brand">
-        <span className="brand-mark">⚖</span>
-        <span className="brand-name">RETRIAL</span>
-        {testName ? (
-          <span className="brand-test mono" title={testName}>
-            {shortTestName(testName)}
-          </span>
-        ) : (
-          <span className="brand-tag">empirical flake court</span>
-        )}
+      <div className="topbar-primary">
+        <div className="brand">
+          <Scale className="brand-mark" aria-hidden="true" />
+          <span className="brand-name">RETRIAL</span>
+          {testName ? (
+            <span className="brand-test mono" title={testName}>
+              {shortTestName(testName)}
+            </span>
+          ) : (
+            <span className="brand-tag">evidence before confidence</span>
+          )}
+        </div>
+
+        <nav className="stepper" aria-label="Tournament progress">
+          {STEPS.map((label, i) => (
+            <div
+              key={label}
+              className={`step ${i === activeIndex ? 'active' : ''} ${
+                i < activeIndex ? 'done' : ''
+              }`}
+              aria-current={i === activeIndex ? 'step' : undefined}
+            >
+              <span className="step-index mono">0{i + 1}</span>
+              <span className="step-label">{label}</span>
+            </div>
+          ))}
+        </nav>
+
+        <div className="topbar-status">
+          {elapsedSec != null && (
+            <span
+              className={`run-clock mono ${runActive ? 'is-live' : ''} ${terminal ? 'is-done' : ''}`}
+              title={terminal ? 'Total run time' : 'Elapsed since GO'}
+              aria-label={terminal ? `Finished in ${formatClock(elapsedSec)}` : `Elapsed ${formatClock(elapsedSec)}`}
+            >
+              {formatClock(elapsedSec)}
+            </span>
+          )}
+          <ModeBadge mode={mode} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRestart}
+            title="Clear the board and reconnect"
+            aria-label="Clear the board and reconnect"
+            className="mobile-touch-target h-8 gap-1.5 border-border/80 bg-transparent text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw aria-hidden="true" /> Reset
+          </Button>
+        </div>
       </div>
 
-      <nav className="stepper">
-        {STEPS.map((label, i) => (
-          <div
-            key={label}
-            className={`step ${i === activeIndex ? 'active' : ''} ${
-              i < activeIndex ? 'done' : ''
-            }`}
-          >
-            <span className="step-dot" />
-            {label}
-          </div>
-        ))}
-      </nav>
-
-      <div className="topbar-right">
-        <button
-          className={`obs-toggle ${obsOpen ? 'active' : ''}`}
-          onClick={onObsToggle}
-          title="Sandbox Observatory — every sandbox the engine tracks"
-        >
-          <span className="hex">⬢</span> Observatory
-          {obsLiveCount !== null && <span className="obs-toggle-badge mono">{obsLiveCount}</span>}
-        </button>
-        <ViewToggle view={view} onViewChange={onViewChange} locked={viewLocked} />
-        {canGo && (
+      <div className="topbar-secondary">
+        <div className="operator-controls">
           <GoControl
             seedLabel={seedLabel}
             onSeedChange={onSeedChange}
@@ -342,17 +421,82 @@ function TopBar({
             disabled={goDisabled}
             posting={posting}
           />
-        )}
-        <SandboxTicker mode={mode} health={health} degraded={degraded} />
+          {showViewToggle && (
+            <ViewToggle view={view} onViewChange={onViewChange} locked={viewLocked} />
+          )}
+        </div>
+        <div className="telemetry-controls">
+          <SandboxTicker mode={mode} health={health} degraded={degraded} />
+        <Button
+          variant={obsOpen ? 'secondary' : 'outline'}
+          size="sm"
+          className="mobile-touch-target h-8 gap-1.5"
+          onClick={onObsToggle}
+          title="Sandbox Observatory — every sandbox the engine tracks"
+          aria-expanded={obsOpen}
+          aria-controls="sandbox-observatory"
+        >
+          <Telescope aria-hidden="true" /> Observatory
+          {obsLiveCount !== null && (
+            <Badge variant="muted" className="ml-0.5 h-5 px-1.5 font-mono text-[10px]">
+              {obsLiveCount}
+            </Badge>
+          )}
+        </Button>
         {mode === 'disconnected' && (
-          <span className="stale-note">connection lost — data may be stale</span>
+          <span className="stale-note">stream paused · reconnecting</span>
         )}
-        <ModeBadge mode={mode} />
-        <button className="restart-btn" onClick={onRestart} title="Replay the run">
-          ↻ Replay
-        </button>
+        </div>
       </div>
     </header>
+  );
+}
+
+function LiveEmptyState({
+  mode,
+  message,
+}: {
+  mode: ConnectionMode;
+  message: string | null;
+}) {
+  const disconnected = mode === 'disconnected';
+  const connecting = mode === 'connecting';
+  return (
+    <Card
+      className={cn(
+        'live-empty border-border/60 bg-card/40 shadow-none',
+        disconnected && 'is-error border-destructive/40',
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      <CardContent className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      <div className="live-empty-orbit" aria-hidden="true">
+        <span />
+      </div>
+      <Badge variant={disconnected ? 'destructive' : connecting ? 'muted' : 'live'} className="mb-4 tracking-[0.18em]">
+        {connecting ? 'CONNECTING' : disconnected ? 'ENGINE OFFLINE' : 'LIVE · READY'}
+      </Badge>
+      <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+        {connecting
+          ? 'Connecting to the evidence stream.'
+          : disconnected
+            ? 'No evidence without an engine.'
+            : 'Put the test on trial.'}
+      </h1>
+      <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground">
+        {message ??
+          (connecting
+            ? 'Waiting for the live WebSocket on port 8000.'
+            : 'Choose a calibrated seed and press GO — or hit Enter. Every cell and rate comes from the engine.')}
+      </p>
+      <div className="live-empty-proof mt-8">
+        <span><i className="proof-dot pass" /> Daytona sandboxes</span>
+        <span><i className="proof-dot accent" /> Fireworks diagnosis</span>
+        <span><i className="proof-dot gold" /> Braintrust receipts</span>
+      </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -372,13 +516,14 @@ function GoControl({
   posting: boolean;
 }) {
   return (
-    <div className="go-control">
+    <div className="go-control flex items-center gap-0 rounded-[calc(var(--radius)+2px)] border border-border bg-secondary p-[3px] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.03)]">
       <select
-        className="go-seed mono"
+        className="mobile-touch-target go-seed mono h-9 min-w-[190px] border-0 bg-transparent px-2.5 text-[13px] text-foreground outline-none disabled:opacity-50"
         value={seedLabel}
         onChange={(e) => onSeedChange(e.target.value)}
         disabled={disabled}
         title="Seed to prosecute"
+        aria-label="Choose a flaky test"
       >
         {SEEDS.map((s) => (
           <option key={s.label} value={s.label}>
@@ -386,14 +531,16 @@ function GoControl({
           </option>
         ))}
       </select>
-      <button
-        className="go-btn"
+      <Button
+        size="sm"
+        className="mobile-touch-target h-9 px-5 tracking-[0.08em]"
         onClick={onGo}
         disabled={disabled}
         title="Start a live run on the engine"
+        aria-label={posting ? 'Starting live tournament' : 'Start live tournament'}
       >
-        {posting ? 'STARTING…' : '▶ GO'}
-      </button>
+        {posting ? 'STARTING…' : <><Play aria-hidden="true" /> GO</>}
+      </Button>
     </div>
   );
 }
@@ -410,25 +557,27 @@ function ViewToggle({
   locked: boolean;
 }) {
   return (
-    <div className="view-toggle" role="group" aria-label="Board view">
+    <div className="view-toggle inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Board view">
       {(['grid', 'tree'] as const).map((v) => (
-        <button
+        <Button
           key={v}
-          className={`view-toggle-btn ${(locked ? 'tree' : view) === v ? 'active' : ''}`}
+          type="button"
+          variant={(locked ? 'tree' : view) === v ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-8 rounded-none border-0 px-3"
           onClick={() => onViewChange(v)}
           disabled={locked}
           title={locked ? 'bisection always shows the timeline rail' : `${v} view`}
         >
-          {v === 'grid' ? '▦ Grid' : '⑂ Tree'}
-        </button>
+          {v === 'grid' ? <><Grid3X3 aria-hidden="true" /> Grid</> : <><GitBranch aria-hidden="true" /> Tree</>}
+        </Button>
       ))}
     </div>
   );
 }
 
-// Daytona presence: live pool counts while LIVE, a static badge in replay.
-// `degraded` renders the honest "snapshot fallback" tag once pool_degraded
-// was seen (the fork backend fell back; runs continue on the snapshot pool).
+// Daytona presence is always live. `degraded` renders the honest snapshot
+// fallback tag once the fork backend has fallen back.
 function SandboxTicker({
   mode,
   health,
@@ -438,33 +587,19 @@ function SandboxTicker({
   health: PoolHealth | null;
   degraded: boolean;
 }) {
-  if (mode === 'connecting') return null;
-
   const degradedTag = degraded ? (
     <span className="sandbox-degraded" title="fork backend degraded — running on the snapshot pool">
       snapshot fallback
     </span>
   ) : null;
 
-  if (mode === 'replay') {
-    return (
-      <span
-        className="sandbox-ticker replay"
-        title="Daytona sandbox pool — recorded from a live run, 2026-07-23"
-      >
-        <span className="hex">⬢</span>
-        <span className="sandbox-text">16 sandboxes</span>
-        <span className="sandbox-dim">(recorded)</span>
-        {degradedTag}
-      </span>
-    );
-  }
-
-  // LIVE — counts appear once the first /health poll lands.
   return (
-    <span className="sandbox-ticker live" title="Daytona sandbox pool (live)">
-      <span className="hex live-hex">⬢</span>
-      {health ? (
+    <span
+      className={`sandbox-ticker ${mode === 'live' ? 'live' : ''}`}
+      title="Daytona sandbox pool"
+    >
+      <Boxes className="live-hex" aria-hidden="true" />
+      {mode === 'live' && health ? (
         <>
           <span className="sandbox-text">
             <strong>{health.live}</strong> sandboxes live
@@ -475,7 +610,9 @@ function SandboxTicker({
           </span>
         </>
       ) : (
-        <span className="sandbox-dim">connecting to pool…</span>
+        <span className="sandbox-dim">
+          {mode === 'connecting' ? 'pool connecting…' : 'pool unavailable'}
+        </span>
       )}
       {degradedTag}
     </span>
@@ -489,26 +626,35 @@ function shortTestName(name: string): string {
   return [file, ...rest].join('::');
 }
 
+function formatClock(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 function ModeBadge({ mode }: { mode: ConnectionMode }) {
-  const map: Record<ConnectionMode, { text: string; cls: string; title: string }> = {
-    live: { text: 'LIVE', cls: 'live', title: 'Live engine over WebSocket' },
+  const map: Record<
+    ConnectionMode,
+    { text: string; variant: 'live' | 'warning' | 'muted' | 'destructive'; title: string }
+  > = {
+    live: { text: 'LIVE', variant: 'live', title: 'Live engine over WebSocket' },
     replay: {
-      text: 'RECORDED RUN',
-      cls: 'replay',
-      title: 'Replay of a real captured run — recorded from a live run, 2026-07-23',
+      text: 'DISCONNECTED',
+      variant: 'warning',
+      title: 'The live engine is not connected',
     },
-    connecting: { text: 'CONNECTING…', cls: 'connecting', title: 'Connecting to the engine' },
+    connecting: { text: 'CONNECTING…', variant: 'muted', title: 'Connecting to the engine' },
     disconnected: {
       text: 'DISCONNECTED',
-      cls: 'disconnected',
+      variant: 'warning',
       title: 'Connection lost — data may be stale. Attempting to reconnect…',
     },
   };
-  const { text, cls, title } = map[mode];
+  const { text, variant, title } = map[mode];
   return (
-    <span className={`mode-badge ${cls}`} title={title}>
-      <span className="mode-dot" />
+    <Badge variant={variant} className="h-8 gap-2 px-3 tracking-[0.14em]" title={title}>
+      <span className={`mode-dot ${mode === 'live' || mode === 'connecting' || mode === 'disconnected' ? mode : 'disconnected'}`} />
       {text}
-    </span>
+    </Badge>
   );
 }
