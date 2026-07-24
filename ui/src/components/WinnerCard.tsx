@@ -1,3 +1,4 @@
+import { DecryptText } from './fx/DecryptText';
 import { ciUpper, pct } from '../format';
 import { ReceiptTiles } from './ReceiptTiles';
 import type { DetectState, Hypothesis, WinnerState } from '../types';
@@ -34,7 +35,7 @@ export function WinnerCard({ winner, hypothesis, detect, prUrl, model }: Props) 
   return (
     <section className="phase winner-phase">
       <div className="winner-card">
-        <div className="winner-badge">VERDICT · FIXED &amp; PROVEN</div>
+        <div className="winner-badge"><DecryptText text="VERDICT · FIXED & PROVEN" /></div>
 
         {hypothesis && (
           <div className="winner-cause">
