@@ -1145,77 +1145,109 @@ body {
   color: var(--gold-2);
 }
 
-/* ---------- Always-failing verdict (regression, not flake) ---------- */
-.always-failing-phase {
+/* ---------- Terminal baseline verdicts (no tournament ran) ---------- */
+/* One card, four tones: ALWAYS_FAILING (red), STABLE (green),
+   INCONCLUSIVE (amber), ERROR (grey). Tone drives every accent via --tv. */
+.terminal-phase {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.always-failing-card {
+.terminal-card {
+  --tv: var(--fail);
+  --tv-soft: rgba(255, 84, 104, 0.08);
+  --tv-border: rgba(255, 84, 104, 0.45);
+  --tv-glow: rgba(255, 84, 104, 0.45);
   width: 100%;
   max-width: 820px;
   text-align: center;
-  background: linear-gradient(165deg, rgba(255, 84, 104, 0.08), var(--panel));
-  border: 1px solid rgba(255, 84, 104, 0.45);
+  background: linear-gradient(165deg, var(--tv-soft), var(--panel));
+  border: 1px solid var(--tv-border);
   border-radius: 26px;
   padding: 40px 48px 34px;
-  box-shadow: 0 40px 120px -55px rgba(255, 84, 104, 0.45);
+  box-shadow: 0 40px 120px -55px var(--tv-glow);
   animation: fade-up 0.5s ease;
 }
-.always-failing-badge {
+.terminal-card.tv-red {
+  --tv: var(--fail);
+  --tv-soft: rgba(255, 84, 104, 0.08);
+  --tv-border: rgba(255, 84, 104, 0.45);
+  --tv-glow: rgba(255, 84, 104, 0.45);
+}
+.terminal-card.tv-green {
+  --tv: var(--pass);
+  --tv-soft: rgba(35, 209, 139, 0.08);
+  --tv-border: rgba(35, 209, 139, 0.4);
+  --tv-glow: rgba(35, 209, 139, 0.4);
+}
+.terminal-card.tv-amber {
+  --tv: var(--gold);
+  --tv-soft: rgba(242, 193, 78, 0.08);
+  --tv-border: rgba(242, 193, 78, 0.45);
+  --tv-glow: rgba(242, 193, 78, 0.4);
+}
+.terminal-card.tv-grey {
+  --tv: var(--ink-dim);
+  --tv-soft: rgba(154, 162, 192, 0.06);
+  --tv-border: var(--line-2);
+  --tv-glow: rgba(0, 0, 0, 0.4);
+}
+.terminal-badge {
   display: inline-block;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.2em;
-  color: var(--fail);
-  border: 1px solid rgba(255, 84, 104, 0.5);
-  background: rgba(255, 84, 104, 0.12);
+  color: var(--tv);
+  border: 1px solid var(--tv-border);
+  background: var(--tv-soft);
   padding: 8px 16px;
   border-radius: 999px;
 }
-.always-failing-headline {
+.terminal-headline {
   font-size: 32px;
   font-weight: 800;
   margin: 22px 0 8px;
   letter-spacing: -0.01em;
 }
-.always-failing-lead {
+.terminal-lead {
   font-size: 17px;
   line-height: 1.6;
   color: var(--ink-dim);
   margin: 0 auto;
   max-width: 640px;
 }
-.always-failing-numbers {
+.terminal-numbers {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   margin: 28px 0 6px;
 }
-.af-value {
+.tv-value {
   font-family: var(--mono);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   font-size: 64px;
   line-height: 1;
-  color: var(--fail);
-  text-shadow: 0 0 40px rgba(255, 84, 104, 0.4);
+  color: var(--tv);
+  text-shadow: 0 0 40px var(--tv-glow);
 }
-.af-label {
+.tv-label {
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
-.always-failing-ci {
+.terminal-ci {
   font-size: 13px;
   color: var(--ink-dim);
   margin: 4px 0 0;
 }
-.af-foot {
-  color: var(--fail);
+.terminal-foot {
+  margin-top: 24px;
+  font-style: italic;
+  color: var(--tv);
 }
 
 /* ---------- Diagnosing pre-phase ---------- */
