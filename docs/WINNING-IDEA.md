@@ -86,3 +86,9 @@ Build window: the event schedule is a 1-day sprint (~5.5h), but user said "2 day
 - **TRAP OPENING REDESIGNED (branch-proof, works at any flake rate):** run the test ONCE live. Green → "raise your hand if you'd merge." Red → "CI's red... do what we all do: hit rerun" → reruns until green (expected ≤2) → "NOW would you merge?" Either branch dramatizes the lie; the red branch is actually stronger (it acts out the rerun-until-green anti-pattern every engineer does).
 - **VIDEO MUST BE RECORDED TODAY** (one-day event; no calm window tomorrow). First 15s = cold-open on the split-screen + stat ("passed 3 times today — it's 51% broken"), not scene-setting.
 - **USER ACTION (only blocker no agent can clear): redeem FIREWORKS (DEVREL-WEBINAR1), BRAINTRUST (BT-DISCOUNT-HACKATHON), ELEVENLABS (Discord) keys into retrial/.env.** DiagnosisEngine = the creative core; unbuildable without the Fireworks key. Cached-hypothesis fallback will exist but live generation is the honest path.
+
+## MEASURED DEMO-TIMING TRUTH (engine, 2026-07-23 night — cite these, not estimates)
+- Process isolation (warm-pool reuse, fresh python3 per trial): **6.1 trials/s** → ~200 trials ≈ 33s. Sandbox isolation (fresh sandbox per trial): 2.7 trials/s.
+- Full tournament (detect + 2 hypotheses + confirm, 80 trials): **17.3s**, verdict FIXED, all event types fired. The fully-live 3-minute demo is REAL with margin.
+- Perf lever was collapsing write+run into ONE Daytona exec round-trip (~5s per 16-concurrent batch is the true unit cost, not sandbox create).
+- Pitch line now measured: "isolation level matched to flake class — fresh interpreter for order/scheduling flakes, full sandbox teardown only for state-polluting flakes."
