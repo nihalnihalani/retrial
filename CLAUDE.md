@@ -39,7 +39,7 @@ npm run build                                       # must pass before committin
 - A trial with an INFRA error never returns its sandbox to the pool. Infra errors are excluded from flake-rate math (`errors` key), never counted as failures.
 
 ## Seeds — calibration law
-- A seed is only usable if **calibrated on Daytona** (not locally!): 40+ trials, target 40–55% fail = IDEAL. Current primary: `seeds/test_dict_order.py` — **51% (CI 36–66%), locked**.
+- A seed is only usable if **calibrated on Daytona** (not locally!): 40+ trials, target 40–55% fail = IDEAL. Current primary: `seeds/test_dict_order.py` — calibrated IDEAL (readings 42-51% across rounds). Backup: `seeds/test_first_key.py` — **45% (CI 31-60%), IDEAL**. Real-patient evidence (NOT for timed demo): `seeds/real/penman_*` — IDoFT-catalogued OSS flake, 88% on Daytona.
 - **Thread/timing races DO NOT flake on this substrate** (0/120 measured across 3 variants incl. Barrier + split read-modify-write). Do not write race/timing seeds; do not claim "we reproduce race conditions" in any copy.
 - Local flake rates are meaningless — CPython version and CPU constraints differ. Always calibrate via `scripts/calibrate_seeds.py`.
 - Seeds are dependency-free single-file python scripts using `sys.exit(0|1)`. Keep them that way (they must run on the bare container python3).

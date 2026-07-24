@@ -1,0 +1,103 @@
+{
+  "original_rate_prior": 0.88,
+  "hypotheses": [
+    {
+      "id": "h1",
+      "model": "accounts/fireworks/models/glm-5p2",
+      "cause_class": "order_dependency",
+      "explanation": "The test calls rearrange with model.random_order, which sorts roles using random.random(), but the RNG is never seeded deterministically in the test process, so the resulting role ordering varies across runs and only coincidentally matches the expected output.",
+      "adds_random_seed": true,
+      "patch_len": 962,
+      "trials": 16,
+      "fails": 0,
+      "errors": 0,
+      "flake_rate": 0.0,
+      "wilson_ci": [
+        0.0,
+        0.194
+      ],
+      "err_samples": [],
+      "sample": "EXIT:0\n"
+    },
+    {
+      "id": "h2",
+      "model": "accounts/fireworks/models/glm-5p1",
+      "cause_class": "shared_state",
+      "explanation": "The test relies on `random.random()` inside `model.random_order` but never seeds the global RNG before calling `rearrange`, so the random state inherited from prior test/module execution is unpredictable and produces different role orderings across runs.",
+      "adds_random_seed": true,
+      "patch_len": 633,
+      "trials": 16,
+      "fails": 0,
+      "errors": 0,
+      "flake_rate": 0.0,
+      "wilson_ci": [
+        0.0,
+        0.194
+      ],
+      "err_samples": [],
+      "sample": "EXIT:0\n"
+    },
+    {
+      "id": "h3",
+      "model": "accounts/fireworks/models/kimi-k2p6",
+      "cause_class": "timing",
+      "explanation": "",
+      "adds_random_seed": true,
+      "patch_len": 1134,
+      "trials": 16,
+      "fails": 15,
+      "errors": 0,
+      "flake_rate": 0.938,
+      "wilson_ci": [
+        0.717,
+        0.989
+      ],
+      "err_samples": [],
+      "sample": "EXIT:1\n"
+    },
+    {
+      "id": "h4",
+      "model": "accounts/fireworks/models/deepseek-v4-pro",
+      "cause_class": "order_dependency",
+      "explanation": "The test calls rearrange(t, model.random_order) which uses random.shuffle to reorder triples. Without a fixed random seed, the output order varies across runs, causing the assertion to fail when the order does not match the hardcoded expected string.",
+      "adds_random_seed": true,
+      "patch_len": 668,
+      "trials": 16,
+      "fails": 0,
+      "errors": 0,
+      "flake_rate": 0.0,
+      "wilson_ci": [
+        0.0,
+        0.194
+      ],
+      "err_samples": [],
+      "sample": "EXIT:0\n"
+    }
+  ],
+  "baseline": {
+    "trials": 16,
+    "fails": 14,
+    "errors": 0,
+    "flake_rate": 0.875,
+    "wilson_ci": [
+      0.64,
+      0.965
+    ],
+    "err_samples": [],
+    "sample": ""
+  },
+  "winner_id": "h1",
+  "confirmation": {
+    "trials": 25,
+    "fails": 0,
+    "errors": 0,
+    "flake_rate": 0.0,
+    "wilson_ci": [
+      0.0,
+      0.133
+    ],
+    "err_samples": [],
+    "sample": "EXIT:0\n"
+  },
+  "wallclock_s": 57.2
+}

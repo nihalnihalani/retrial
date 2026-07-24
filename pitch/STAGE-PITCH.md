@@ -59,9 +59,9 @@ carry the moment.
 > fresh environment every trial — and measures the real flake rate with a Wilson
 > confidence interval. Not weeks of CI history. Sixty seconds of sandboxes."
 
-*(detect grid fills, settles ~48%)*
+*(detect grid fills, settles ~50%)*
 
-> "Forty-eight percent. Now Fireworks models propose **competing** root causes —
+> "Fifty percent. Now Fireworks models propose **competing** root causes —
 > order dependency, shared state — each with a patch. And here's the part that
 > matters —"
 
@@ -74,10 +74,10 @@ carry the moment.
 *(winner + confirmation round)*
 
 > "The winner runs a **fresh** confirmation round — selection bias is real, we
-> guard against it. Forty-eight percent, down to zero out of fifty. And we say
-> it honestly: **at most seven percent, ninety-five percent confidence.** A full
-> tournament runs in about seventeen seconds, end to end. Nothing you just
-> watched was pre-recorded."
+> guard against it. Fifty percent, down to zero out of forty. And we say it
+> honestly: **at most nine percent, ninety-five percent confidence.** The whole
+> arc — detect, diagnose, tournament, confirm, real model calls and all — ran in
+> about forty seconds. Nothing you just watched was pre-recorded."
 
 ### Beat 3 — The receipt + the ship (2:15–2:40)
 
@@ -85,15 +85,18 @@ carry the moment.
 > hypothesis is an experiment; the permalink is a governance record. We didn't
 > just fix it, we *proved* it's fixed, reproducibly, at a link a CTO can audit.
 >
-> Then it ships a real PR with that evidence in the body — reviewed by CodeRabbit
-> — or, if nothing stabilizes the test, a quarantine PR with the same dossier.
-> The run never dead-ends."
+> And this isn't a slide — it ships a real PR with that evidence in the body.
+> Here's one it opened on our own repo, retrial pull-request one: sixty-nine
+> percent down to zero, the winning model named, five Braintrust permalinks
+> attached, reviewed by CodeRabbit. Or, if nothing stabilizes the test, a
+> quarantine PR with the same dossier. The run never dead-ends."
 
 ### Beat 4 — The close: flywheel + intent (2:40–3:00)
 
 > "And every run records your repo's **flake genome** — which model wins on which
-> kind of flake, on *your* code. 'Kimi wins sixty-three percent of
-> order-dependency fixes on your repo.' It gets sharper the more you run it.
+> kind of flake, on *your* code. It's already accumulating: our genome endpoint
+> shows `glm-5p2` two-for-two on order-dependency fixes right now. That grows
+> into a per-repo model leaderboard. It gets sharper the more you run it.
 >
 > Detection tools need a month of history. We need sixty seconds. Every flaky
 > test deserves a retrial — fifty of them, actually. We're going to keep
@@ -114,6 +117,19 @@ carry the moment.
 
 ## Q&A bank (2 min) — prepared honest answers
 
+**Q: "Is this just a toy? Does it work on real code, or only your seeded test?"**
+> "Real code. We took a documented flaky test — `test_rearrange` from the penman
+> library, version 1.2.1, a real MIT Python project — that's catalogued in
+> IDoFT, the academic flakiness dataset out of Illinois, and was already fixed by
+> the maintainer. We pointed Retrial at it and reproduced the flake on Daytona at
+> **eighty-eight percent, confidence interval seventy-four to ninety-five, zero
+> infra errors**, using the exact same process-isolation model the engine ships.
+> A real, in-the-wild, maintainer-confirmed flake, reproduced on our substrate.
+> The demo seed is calibrated for a clean 40-to-55-percent band; this proves the
+> engine reaches real-world flakes, not just our fixture. [If the tournament
+> experiment lands: 'and our model tournament rediscovered the maintainer's exact
+> fix.']"
+
 **Q: "Why not just run `pytest --count=50` locally? Why the sandboxes?"**
 > "Because shared-state and environment flakes need a *fresh* environment per
 > run — same-process reruns share filesystem, ports, env, and interpreter state,
@@ -133,9 +149,11 @@ carry the moment.
 > prove the fix."
 
 **Q: "Does this compound, or is it a feature not a company?"**
-> "The flake genome. Every run classifies the flake by cause class and records
-> which model won on it, per repo. That becomes a repo-specific flake
-> leaderboard — your suite's failure taxonomy, and the fixer most likely to beat
+> "The flake genome — and it's already accumulating, not a roadmap promise. Every
+> run classifies the flake by cause class and records which model won on it, per
+> repo. Our genome endpoint right now shows two runs, two fixes, both
+> order-dependency, `glm-5p2` winning both. That becomes a repo-specific
+> leaderboard — your suite's failure taxonomy and the fixer most likely to beat
 > each kind. Detection today, prediction and prevention next: a CI gate that
 > knows your flake profile before a human ever sees the red."
 
@@ -148,8 +166,9 @@ carry the moment.
 > that settles it."
 
 **Q: "Is this really live, or staged?"**
-> "The tournament is live — a full run is about seventeen seconds, we have the
-> margin. Two things are pre-computed and I'll say so plainly: the Fireworks
+> "The tournament is live — a full run, real model calls included, is about forty
+> seconds, so we have the margin. Two things are pre-computed and I'll say so
+> plainly: the Fireworks
 > hypotheses can be cached so a model hiccup doesn't stall the demo, and the
 > **CodeRabbit review is pre-run** because its latency is one to five minutes —
 > that's a real product constraint, not something we can fake to look instant.
@@ -164,11 +183,11 @@ carry the moment.
 > at 51%. We only say 'scheduling-dependent flakes' where it's true. We'd rather
 > be narrow and honest than broad and wrong."
 
-**Q: "0/50 — so it's fixed, guaranteed?"**
-> "We never say zero. Zero out of fifty is 'at most seven percent, ninety-five
-> percent confidence' — that's the Wilson interval, and it's on the screen and
-> in the PR. Honest uncertainty is the product. A tool that claims certainty on
-> a flaky test is just a new way to lie."
+**Q: "Zero failures — so it's fixed, guaranteed?"**
+> "We never say zero. Zero out of forty is 'at most eight-point-eight percent,
+> ninety-five percent confidence' — that's the Wilson interval, and it's on the
+> screen and in the PR. Honest uncertainty is the product. A tool that claims
+> certainty on a flaky test is just a new way to lie."
 
 **Q: "How much does all this sandbox burn cost?"**
 > "Four hypotheses times fifty reruns is about two hundred sandbox-runs — roughly
