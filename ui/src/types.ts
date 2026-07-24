@@ -5,6 +5,12 @@
 
 export type WilsonCI = [number, number]; // [low, high], each 0..1
 
+export interface RunStarted {
+  type: 'run_started';
+  test_name: string;
+  planned_trials: number; // detect-phase rerun budget; sizes the grid
+}
+
 export interface TrialDone {
   type: 'trial_done';
   // null => a DETECT-phase rerun of the unmodified test (the lie detector).
@@ -52,22 +58,36 @@ export interface WinnerConfirmed {
   confirm_flake_rate: number; // rate during the dedicated confirmation round
 }
 
+// No fix stabilized the test — the no-dead-end path: quarantine WITH evidence.
+export interface QuarantineConfirmed {
+  type: 'quarantine_confirmed';
+  best_id: string; // the least-bad hypothesis (best effort, still not stable)
+  dossier: {
+    flake_rate: number;
+    wilson_ci: WilsonCI;
+    trials: number;
+    reason: string;
+  };
+}
+
 export interface TournamentDone {
   type: 'tournament_done';
 }
 
 export type RetrialEvent =
+  | RunStarted
   | TrialDone
   | DetectDone
   | HypothesisCreated
   | HypothesisVerified
   | HypothesisEliminated
   | WinnerConfirmed
+  | QuarantineConfirmed
   | TournamentDone;
 
 // ---- Derived view state (built by the reducer) ----
 
-export type Phase = 'detect' | 'tournament' | 'winner';
+export type Phase = 'detect' | 'tournament' | 'winner' | 'quarantine';
 
 export interface TrialCell {
   index: number;
@@ -102,11 +122,22 @@ export interface WinnerState {
   confirmFlakeRate: number;
 }
 
+export interface QuarantineState {
+  bestId: string;
+  flakeRate: number;
+  wilsonCi: WilsonCI;
+  trials: number;
+  reason: string;
+}
+
 export interface BoardState {
   phase: Phase;
+  testName: string | null;
+  plannedTrials: number | null;
   detect: DetectState;
   hypotheses: Hypothesis[];
   winner: WinnerState | null;
+  quarantine: QuarantineState | null;
   tournamentDone: boolean;
 }
 
