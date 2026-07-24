@@ -18,6 +18,7 @@ export interface RunStarted {
   type: 'run_started';
   test_name: string;
   planned_trials: number; // detect-phase rerun budget; sizes the grid
+  threshold?: number; // flake decision threshold as a 0..1 fraction, when the engine advertises it
 }
 
 export interface TrialDone {
@@ -36,6 +37,9 @@ export interface DetectDone {
   wilson_ci: WilsonCI;
   trials: number;
   fails: number;
+  // The engine tags the detect pass: "FLAKY" (nondeterministic) or
+  // "ALWAYS_FAILING" (a regression — fails every time, nothing to prove).
+  verdict?: string;
 }
 
 export interface HypothesisCreated {
@@ -60,6 +64,17 @@ export interface HypothesisEliminated {
   reason?: string;
 }
 
+// The evidence couldn't decide this lane: its CI straddles the decision
+// threshold, so it's neither verified nor eliminated (and not winner-eligible).
+export interface HypothesisInconclusive {
+  type: 'hypothesis_inconclusive';
+  id: string;
+  flake_rate?: number;
+  wilson_ci?: WilsonCI;
+  trials?: number;
+  reason?: string;
+}
+
 export interface WinnerConfirmed {
   type: 'winner_confirmed';
   id: string;
@@ -69,6 +84,17 @@ export interface WinnerConfirmed {
   wilson_ci?: WilsonCI; // CI of the confirmed winner
   orig_flake_rate?: number; // baseline flake before the fix
   braintrust_url?: string; // real Braintrust experiment permalink (the receipt)
+  model?: string; // real model slug credited with the winning fix — prefer over index-mapping
+}
+
+// The test isn't flaky — it fails every time. That's a regression, not
+// nondeterminism, so it gets its own terminal verdict (a distinct red card).
+export interface AlwaysFailing {
+  type: 'always_failing';
+  flake_rate?: number; // ~1.0
+  wilson_ci?: WilsonCI;
+  trials?: number;
+  fails?: number;
 }
 
 // No fix stabilized the test — the no-dead-end path: quarantine WITH evidence.
@@ -110,7 +136,9 @@ export type RetrialEvent =
   | HypothesisCreated
   | HypothesisVerified
   | HypothesisEliminated
+  | HypothesisInconclusive
   | WinnerConfirmed
+  | AlwaysFailing
   | QuarantineConfirmed
   | GenomeUpdated
   | PrOpened
@@ -118,7 +146,13 @@ export type RetrialEvent =
 
 // ---- Derived view state (built by the reducer) ----
 
-export type Phase = 'diagnosing' | 'detect' | 'tournament' | 'winner' | 'quarantine';
+export type Phase =
+  | 'diagnosing'
+  | 'detect'
+  | 'tournament'
+  | 'winner'
+  | 'quarantine'
+  | 'always_failing';
 
 export interface TrialCell {
   index: number;
@@ -134,7 +168,12 @@ export interface DetectState {
   done: boolean;
 }
 
-export type HypothesisStatus = 'racing' | 'verified' | 'eliminated' | 'winner';
+export type HypothesisStatus =
+  | 'racing'
+  | 'verified'
+  | 'eliminated'
+  | 'inconclusive'
+  | 'winner';
 
 export interface Hypothesis {
   id: string;
@@ -155,6 +194,15 @@ export interface WinnerState {
   wilsonCi: WilsonCI | null;
   origFlakeRate: number | null;
   braintrustUrl: string | null;
+  model: string | null; // real winning-model slug when the engine credits one
+}
+
+// The test always fails — a regression surfaced by the detect pass, not a flake.
+export interface AlwaysFailingState {
+  flakeRate: number | null;
+  wilsonCi: WilsonCI | null;
+  trials: number | null;
+  fails: number | null;
 }
 
 export interface QuarantineState {
@@ -177,13 +225,15 @@ export interface BoardState {
   diagnoseModels: number | null; // N models drafting during the diagnosing pre-phase
   diagnoseModelNames: string[] | null; // real model slugs, only when supplied
   plannedTrials: number | null;
+  threshold: number | null; // flake decision threshold (0..1), from run_started when advertised
   detect: DetectState;
   hypotheses: Hypothesis[];
   winner: WinnerState | null;
   quarantine: QuarantineState | null;
+  alwaysFailing: AlwaysFailingState | null;
   genome: GenomeState | null;
   prUrl: string | null;
   tournamentDone: boolean;
 }
 
-export type ConnectionMode = 'live' | 'replay' | 'connecting';
+export type ConnectionMode = 'live' | 'replay' | 'connecting' | 'disconnected';
