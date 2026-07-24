@@ -1,0 +1,27 @@
+name: live-smoke
+# MANUAL ONLY. Real Daytona spend (~2-4 sandbox-minutes, budget-capped).
+# Never wired to push/PR — CI stays credential-free (see ci.yml).
+on:
+  workflow_dispatch:
+    inputs:
+      fork_snapshot: { description: "VM snapshot", default: "daytona-vm-small" }
+      fork_target:   { description: "Region",      default: "us-east-1" }
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - name: Live fork smoke (budget-capped)
+        env:
+          DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+          RETRIAL_POOL_BACKEND: fork
+          RETRIAL_FORK_SNAPSHOT: ${{ github.event.inputs.fork_snapshot }}
+          RETRIAL_FORK_TARGET: ${{ github.event.inputs.fork_target }}
+        run: python scripts/live_smoke.py | tee live-smoke-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: live-smoke-report, path: live-smoke-report.json }

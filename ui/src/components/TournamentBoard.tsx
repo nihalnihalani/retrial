@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Boxes, GitBranch, Grid3X3, Play, RotateCcw, Scale, Telescope } from 'lucide-react';
+import { Boxes, GitBranch, Grid3X3, History, Play, RotateCcw, Scale, Telescope } from 'lucide-react';
 import { useEventStream } from '../useEventStream';
 import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
 import { modelForHypothesis, displayModel } from '../models';
@@ -18,6 +18,9 @@ import { GenomeCard } from './GenomeCard';
 import { TreeTimeline } from './TreeTimeline';
 import { PromoteGate } from './PromoteGate';
 import { SandboxObservatory } from './SandboxObservatory';
+import { RunHistory } from './RunHistory';
+import { DegradeBanner } from './DegradeBanner';
+import { authAware } from '../authError';
 
 const DETECT_EXPECTED = 40;
 const TOURNAMENT_URL = 'http://localhost:8000/tournament';
@@ -84,6 +87,7 @@ export function TournamentBoard({ onRestart }: Props) {
     bisect,
     promotion,
     poolDegraded,
+    preflight,
     observatory,
   } = state;
   const winnerIdx = winner ? hypotheses.findIndex((h) => h.id === winner.id) : -1;
@@ -113,6 +117,8 @@ export function TournamentBoard({ onRestart }: Props) {
   // The Observatory is a backstage panel: opt-in, collapsed by default, never
   // replacing the phase router (the tournament stays the star).
   const [obsOpen, setObsOpen] = useState(false);
+  // Run history: the same backstage grammar — opt-in, collapsed, read-only.
+  const [runsOpen, setRunsOpen] = useState(false);
 
   // A run is "active" from the moment it names a test until it reaches a
   // terminal verdict; the GO button disables itself for that whole window.
@@ -165,6 +171,7 @@ export function TournamentBoard({ onRestart }: Props) {
     setToast(null);
     try {
       let lastStatus = 0;
+      let lastRes: Response | null = null;
       // Try each candidate path; a 404 means "wrong path shape for this engine",
       // so fall through to the next. Any other status (200, 409, 5xx) is final.
       for (const path of chosen.paths) {
@@ -174,6 +181,7 @@ export function TournamentBoard({ onRestart }: Props) {
           body: JSON.stringify({ seed_path: path }),
         });
         lastStatus = res.status;
+        lastRes = res;
         if (res.ok) return; // engine now streams diagnosing/run_started over the WS
         if (res.status !== 404) break; // 409 already-running, 5xx, etc. — stop
       }
@@ -185,7 +193,8 @@ export function TournamentBoard({ onRestart }: Props) {
             : lastStatus === 400
               ? ' — seed path rejected by the engine'
               : ` — engine returned ${lastStatus}`;
-      setToast(`Couldn't start run${extra}`);
+      const fallback = `Couldn't start run${extra}`;
+      setToast(lastRes ? authAware(lastRes, fallback) : fallback);
     } catch {
       setToast('Engine unreachable on :8000 — is it running?');
     } finally {
@@ -209,6 +218,7 @@ export function TournamentBoard({ onRestart }: Props) {
 
   return (
     <div className="board">
+      <DegradeBanner poolDegraded={poolDegraded} preflight={preflight} />
       <TopBar
         mode={mode}
         phase={phase}
@@ -231,6 +241,8 @@ export function TournamentBoard({ onRestart }: Props) {
         elapsedSec={runStartedAt != null ? elapsedSec : null}
         runActive={runActive}
         terminal={terminal}
+        runsOpen={runsOpen}
+        onRunsToggle={() => setRunsOpen((o) => !o)}
       />
 
       {toast && (
@@ -298,6 +310,8 @@ export function TournamentBoard({ onRestart }: Props) {
         </div>
       )}
 
+      {runsOpen && <RunHistory mode={mode} />}
+
       <PromoteGate promotion={promotion} mode={mode} />
 
       {!terminalPhase && (hypotheses.length > 0 || genome) && (
@@ -334,6 +348,8 @@ function TopBar({
   elapsedSec,
   runActive,
   terminal,
+  runsOpen,
+  onRunsToggle,
 }: {
   mode: ConnectionMode;
   phase: Phase;
@@ -356,6 +372,8 @@ function TopBar({
   elapsedSec: number | null;
   runActive: boolean;
   terminal: boolean;
+  runsOpen: boolean;
+  onRunsToggle: () => void;
 }) {
   const activeIndex = PHASE_STEP[phase];
   return (
@@ -442,6 +460,17 @@ function TopBar({
               {obsLiveCount}
             </Badge>
           )}
+        </Button>
+        <Button
+          variant={runsOpen ? 'secondary' : 'outline'}
+          size="sm"
+          className="mobile-touch-target h-8 gap-1.5"
+          onClick={onRunsToggle}
+          title="Run history — recent completed runs from the engine"
+          aria-expanded={runsOpen}
+          aria-controls="run-history"
+        >
+          <History aria-hidden="true" /> Runs
         </Button>
         {mode === 'disconnected' && (
           <span className="stale-note">stream paused · reconnecting</span>

@@ -4321,3 +4321,243 @@ body {
     height: 44px;
   }
 }
+
+/* ---- Persistent loud-degrade banner (mounted at the board root) ---- */
+/* Silent degrade on stage is the disaster this prevents: a pool fallback or a
+   failed boot preflight must be impossible to miss, in EVERY view. */
+.degrade-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px 16px;
+  border: 1px solid var(--fail);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 84, 104, 0.16), rgba(255, 84, 104, 0.08));
+  color: var(--ink);
+  font-size: 13.5px;
+  box-shadow: 0 0 24px -10px var(--fail-glow);
+}
+.degrade-banner strong {
+  color: var(--fail);
+  letter-spacing: 0.02em;
+}
+.degrade-banner.warn {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(242, 193, 78, 0.14), rgba(242, 193, 78, 0.06));
+  box-shadow: none;
+  font-size: 12.5px;
+  padding: 8px 14px;
+  color: var(--ink-dim);
+}
+.degrade-icon {
+  font-size: 15px;
+  color: var(--fail);
+  animation: degrade-pulse 1.6s ease-in-out infinite;
+}
+.degrade-banner.warn .degrade-icon {
+  color: var(--gold);
+}
+.degrade-reason {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+.degrade-hint {
+  color: var(--ink-dim);
+}
+.degrade-hint code {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+@keyframes degrade-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ---- Observatory spend chip (always-honest estimate) ---- */
+.obs-spend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+.obs-spend-est {
+  color: var(--gold-2);
+}
+.obs-spend-hint {
+  color: var(--ink-faint);
+}
+
+/* ---- run history panel (same grammar as the Observatory) ---- */
+.runs-panel {
+  position: relative;
+  margin: 0 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  overflow: hidden;
+  animation: fade-up 0.24s ease;
+}
+.runs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.runs-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.runs-title .hex {
+  color: var(--accent);
+  font-size: 15px;
+}
+.runs-title-text {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.runs-source {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--ink-dim);
+  background: rgba(110, 168, 255, 0.1);
+  border: 1px solid var(--line-2);
+}
+.runs-refresh {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.runs-refresh:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.runs-refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.runs-body {
+  padding: 12px 18px 16px;
+}
+.runs-empty {
+  color: var(--ink-dim);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.runs-error {
+  color: var(--fail);
+}
+.runs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.runs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 12.5px;
+}
+.runs-kind {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(110, 168, 255, 0.12);
+}
+.runs-kind.bisect {
+  color: var(--gold);
+  background: rgba(242, 193, 78, 0.12);
+}
+.runs-test {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.runs-verdict {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  color: var(--ink-dim);
+}
+.runs-verdict.fixed {
+  color: var(--pass);
+  background: rgba(35, 209, 139, 0.1);
+  border-color: rgba(35, 209, 139, 0.32);
+}
+.runs-verdict.quarantine {
+  color: var(--gold);
+  background: rgba(242, 193, 78, 0.1);
+  border-color: rgba(242, 193, 78, 0.4);
+}
+.runs-verdict.polluter {
+  color: #c792ea;
+  background: rgba(199, 146, 234, 0.1);
+  border-color: rgba(199, 146, 234, 0.4);
+}
+.runs-verdict.error {
+  color: var(--fail);
+  background: rgba(255, 84, 104, 0.1);
+  border-color: rgba(255, 84, 104, 0.4);
+}
+.runs-rates {
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.runs-model {
+  color: var(--accent);
+  font-size: 11.5px;
+}
+.runs-bt {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+.runs-bt:hover {
+  text-decoration: underline;
+}
+.runs-when {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
