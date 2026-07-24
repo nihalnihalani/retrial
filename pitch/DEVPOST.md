@@ -51,46 +51,52 @@ them.
 
 ---
 
-## It rediscovered the human's fix
+## Proven on a real bug: four plausible fixes, one survivor
 
-The headline result: on a **real, documented flake from the academic flakiness
-dataset**, Retrial's model tournament independently converged on the *exact fix
-the human maintainer shipped* — and empirically rejected the model that got it
-wrong.
+The headline result is the thesis made real. On a **real, documented flake from
+the academic flakiness dataset**, all four models talked a good game — and only
+the empirical rerun could tell the working fix from the plausible-but-broken ones.
 
-We pointed it at `test_rearrange` from
+We pointed Retrial at `test_rearrange` from
 [penman](https://github.com/goodmami/penman) `v1.2.1` — a real MIT-licensed
 Python OSS project, catalogued in **IDoFT** (the Illinois Dataset of Flaky
 Tests, py-data.csv, category NOD, status Accepted) and already fixed by the
-maintainer in [penman#102](https://github.com/goodmami/penman/pull/102). The
-documented root cause: a `random.random()` sort key whose module-level RNG seed
-was ineffective. Retrial reproduced the flake on Daytona at **88%** and ran the
-full four-model tournament:
+maintainer in [penman#102](https://github.com/goodmami/penman/pull/102). The root
+cause is `model.random_order`, which orders roles with Python's `random` module —
+non-deterministic across runs. We fed the models a **sanitized reproduction with
+every root-cause hint stripped out** (neutral docstring, no mention of randomness
+or seeding), then ran the full four-model tournament:
 
-- Detect measured the baseline at **88% flake (14/16, 95% CI 64–96%)** — the
-  test really is broken.
-- **3 of 4 models — `glm-5p2`, `glm-5p1`, and `deepseek-v4-pro` — independently
-  converged on the same fix: seed the RNG before the `random_order` rearrange.**
-  That is byte-for-byte the maintainer's approach in PR #102. All three drove the
-  flake to **0/16**.
-- **`kimi-k2p6`'s hypothesis was wrong** — its patch was still **94% flaky
-  (15/16)** — and it was **empirically eliminated.** Evidence killed it, not
-  vibes.
-- The winner (`glm-5p2`) survived a **fresh confirmation round: 0/25 sandboxes
-  (95% CI 0–13%).** Whole tournament: **57 seconds, 0 infra errors.**
+- Detect measured the baseline at **100% flake (16/16, 95% CI 81–100%)** on the
+  sanitized repro — the test really is broken.
+- **All four models correctly identified the randomness root cause** from the
+  failing test alone — their analyses each traced it to `random_order`'s
+  non-deterministic ordering.
+- **But only one produced a fix that actually worked.** `glm-5p2`'s patch — a
+  *valid alternative fix*, not the maintainer's seed approach — drove the flake
+  to **0/16**, then survived a **fresh confirmation round of 25 fresh-process
+  trials across 5 sandboxes (0 failures, 95% CI 0–13%).**
+- **The other three looked just as plausible and were rejected on measured
+  evidence:** `glm-5p1` still **69% flaky (11/16)**, `kimi-k2p6` **88% (14/16)**,
+  `deepseek-v4-pro` **94% (15/16)**. Evidence eliminated them, not vibes.
+- Whole tournament: **85.5 seconds, 0 infra errors.**
 
-This is the thesis made real: three models proposed a fix that *looked* right,
-one proposed a fix that looked right too — and only the empirical rerun told them
-apart. It reproduces and repairs the honest class the substrate reaches:
-**randomness and hash-ordering flakes** (thread/timing races do not flake here —
-measured 0/120 elsewhere in this repo).
+That's the whole argument in one run: **four fixes that all sounded right, one
+that held up under fifty reruns.** Naming the cause is cheap; proving the cure is
+the hard part, and it's the part we automate. It reproduces and repairs the
+honest class the substrate reaches — **randomness and hash-ordering flakes**
+(thread/timing races do not flake here, measured 0/120 elsewhere in this repo).
 
-> *Fine print (we disclose it):* the standalone reproduction runs the test under
-> its documented bug condition (RNG seed ineffective); `kimi-k2p6`'s cause label
-> came from a fallback hint, but its patch was verified live and lost on the
-> evidence like every other. Baseline calibration over a larger 40-trial run put
-> the same flake at 88% (95% CI 74–95%). Source:
-> `seeds/real/tournament_penman_result.json`.
+> *Transparency (we caught our own overclaim, and we'll say so):* an earlier run
+> of this experiment let the reproduction's comments name the root cause, and we
+> initially reported that models "rediscovered the maintainer's exact fix." A
+> sanitized rerun with the hints removed did **not** support that — with no
+> hints, no model reproduced the maintainer's seed fix. The result above is the
+> corrected, hint-free run. The standalone reproduction runs the test under its
+> documented bug condition; the models' one-word cause labels varied while their
+> written analyses converged on randomness. Source:
+> [`seeds/real/penman_test_rearrange.md`](https://github.com/nihalnihalani/retrial/blob/main/seeds/real/penman_test_rearrange.md)
+> and `seeds/real/tournament_penman_sanitized_result.json`.
 
 ---
 
@@ -227,19 +233,22 @@ exists — the board is a subscriber, not the system.
 
 The compounding moat is the **flake genome**, and it's **already accumulating** —
 not a roadmap slide. Every run classifies the flake and records which model won
-on which cause class. Our live `GET /genome` after two runs already returns:
+on which cause class. Our live `GET /genome` already returns real, growing data:
 
 ```json
-{"runs": 2, "fixed": 2,
- "by_cause_class": {"order_dependency": 2},
- "model_win_rates": {"glm-5p2": {"wins": 2, "win_rate": 1.0}}}
+{"runs": 5, "fixed": 5,
+ "by_cause_class": {"order_dependency": 5},
+ "model_win_rates": {"glm-5p2":        {"wins": 2, "win_rate": 0.4},
+                     "deepseek-v4-pro": {"wins": 2, "win_rate": 0.4},
+                     "glm-5p1":         {"wins": 1, "win_rate": 0.2}}}
 ```
 
-That's the seed of a repo-specific **flake leaderboard** — "`glm-5p2` is 2-for-2
-on order-dependency fixes on this repo" today, a statistically-weighted model
-routing table tomorrow — so Retrial gets sharper the more you run it. Detection
-today, prediction and prevention next: a CI gate that knows your suite's failure
-taxonomy before the flake ever reaches a human.
+Five runs in, no single model dominates — `glm-5p2` and `deepseek-v4-pro` are
+tied at two wins each — which is *exactly* why a tournament beats picking one
+favorite model. That's the seed of a repo-specific **flake leaderboard**: a
+statistically-weighted model routing table that sharpens the more you run it.
+Detection today, prediction and prevention next: a CI gate that knows your
+suite's failure taxonomy before the flake ever reaches a human.
 
 Every flaky test deserves a retrial. Fifty of them, actually.
 
