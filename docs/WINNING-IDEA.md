@@ -94,3 +94,10 @@ Build window: the event schedule is a 1-day sprint (~5.5h), but user said "2 day
 - **Pre-warm (measured): run_started → first trial = 0.60s** (was 12.5s cold; pool warm-up execs pay cold-start before GO).
 - **FULLY-GENERATED RUN (2026-07-23, no cached hypotheses):** detect 44% (7/16, CI 23-67%) → 4 live Fireworks hypotheses → 3/4 correctly identified order-dependency/PYTHONHASHSEED; the 'timing' guess stayed 56% flaky and was ELIMINATED ("CI overlaps original flake rate") → winner confirmed 0/24 (CI ≤14%) → verdict FIXED with real Braintrust permalink. The differential-diagnosis story happened for real, autonomously.
 - Pitch line now measured: "isolation level matched to flake class — fresh interpreter for order/scheduling flakes, full sandbox teardown only for state-polluting flakes."
+
+## LIVE-DIAGNOSIS TIMING DECISION (2026-07-23)
+- Measured: live 4-model Fireworks diagnosis = 23-29s (parallel, bounded by slowest model). POST returns instantly; `diagnosing` event fires; run_started ~29s later.
+- **DEMO STRUCTURE: hit GO at second ZERO of the pitch.** The trap opening + problem statement (~45-60s of narration) covers the diagnosis window — the tournament starts live right as the story arrives at it. FULLY live, nothing cached, no dead air; the DIAGNOSING badge is a teaser during the open.
+- Fallback (bad venue wifi): POST cached hypotheses (path exists), disclosed unprompted per honesty rules.
+- TOURNAMENT_CONC=8 (peak ~32 concurrent at 4 lanes) verified; detect/confirm still full conc.
+- Hypothesis quality across 2 live runs: 2-3 of 4 models correctly identify order_dependency w/ accurate PYTHONHASHSEED explanations; wrong guesses (shared_state, timing) get empirically eliminated with reasons — the differential-diagnosis story happens for real.

@@ -1,4 +1,5 @@
 import { useEventStream } from '../useEventStream';
+import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
 import type { ConnectionMode, Phase } from '../types';
 import { DetectPhase } from './DetectPhase';
 import { TournamentPhase } from './TournamentPhase';
@@ -26,13 +27,20 @@ interface Props {
 // layout + the phase router.
 export function TournamentBoard({ onRestart }: Props) {
   const { state, mode } = useEventStream();
+  const health = useDaytonaHealth(mode);
   const { phase, detect, hypotheses, winner, quarantine, testName, plannedTrials } = state;
   const winnerHyp = winner ? hypotheses.find((h) => h.id === winner.id) : undefined;
   const bestHyp = quarantine ? hypotheses.find((h) => h.id === quarantine.bestId) : undefined;
 
   return (
     <div className="board">
-      <TopBar mode={mode} phase={phase} testName={testName} onRestart={onRestart} />
+      <TopBar
+        mode={mode}
+        phase={phase}
+        testName={testName}
+        health={health}
+        onRestart={onRestart}
+      />
 
       <main className="board-main">
         {phase === 'detect' && (
@@ -63,11 +71,13 @@ function TopBar({
   mode,
   phase,
   testName,
+  health,
   onRestart,
 }: {
   mode: ConnectionMode;
   phase: Phase;
   testName: string | null;
+  health: PoolHealth | null;
   onRestart: () => void;
 }) {
   const activeIndex = PHASE_STEP[phase];
@@ -100,12 +110,48 @@ function TopBar({
       </nav>
 
       <div className="topbar-right">
+        <SandboxTicker mode={mode} health={health} />
         <ModeBadge mode={mode} />
         <button className="restart-btn" onClick={onRestart} title="Replay the run">
           ↻ Replay
         </button>
       </div>
     </header>
+  );
+}
+
+// Daytona presence: live pool counts while LIVE, a static badge in replay.
+function SandboxTicker({ mode, health }: { mode: ConnectionMode; health: PoolHealth | null }) {
+  if (mode === 'connecting') return null;
+
+  if (mode === 'replay') {
+    return (
+      <span className="sandbox-ticker replay" title="Daytona sandbox pool (scripted replay)">
+        <span className="hex">⬢</span>
+        <span className="sandbox-text">16 sandboxes</span>
+        <span className="sandbox-dim">(replay)</span>
+      </span>
+    );
+  }
+
+  // LIVE — counts appear once the first /health poll lands.
+  return (
+    <span className="sandbox-ticker live" title="Daytona sandbox pool (live)">
+      <span className="hex live-hex">⬢</span>
+      {health ? (
+        <>
+          <span className="sandbox-text">
+            <strong>{health.live}</strong> sandboxes live
+          </span>
+          <span className="sandbox-dim">·</span>
+          <span className="sandbox-text">
+            <strong>{health.available}</strong> warm
+          </span>
+        </>
+      ) : (
+        <span className="sandbox-dim">connecting to pool…</span>
+      )}
+    </span>
   );
 }
 
