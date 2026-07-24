@@ -21,6 +21,10 @@ from .settings import get_settings
 BASE_URL = "https://api.fireworks.ai/inference/v1"
 DEFAULT_MODELS = ["accounts/fireworks/models/glm-5p2"]  # "p", not "." — verified slug
 
+# Completion budget. Sized from measurement, not taste — see _complete's
+# docstring for the per-model token distribution that set it.
+_MAX_TOKENS = 16384
+
 CAUSE_CLASSES = (
     "order_dependency",
     "shared_state",
@@ -165,15 +169,39 @@ def diagnose(test_code, test_name, log_tail="", n=4, models=None,
 
 
 def _complete(client, model, messages):
-    """One chat completion; prefers JSON mode, retries without it if unsupported."""
+    """One chat completion; prefers JSON mode, retries without it if unsupported.
+
+    On MAX_TOKENS: reasoning models spend most of their budget thinking before
+    they emit the JSON, and a truncated response has no closing brace, so it
+    parses as `no_valid_patch` — a silent, expensive non-answer.
+
+    Measured over 229 logged production calls (Braintrust project logs,
+    2026-07-25) at the previous budget of 4096:
+
+        model             calls  finish_reason=length  unparseable  avg out tok
+        glm-5p2              53                     0            0          287
+        glm-5p1              53                     3            3          872
+        deepseek-v4-pro      54                     1            2         1424
+        kimi-k2p6            69                    35 (51%)     35 (51%)    3202
+
+    39 of the 40 unparseable responses across all history ended in `length`.
+    The useful output is ~500 tokens; the rest is reasoning. Since you are
+    billed for tokens generated rather than for the ceiling, raising the cap
+    costs nothing on models that don't need it and recovers a quarter of the
+    tournament's hypothesis capacity on the ones that do.
+
+    The no-JSON-mode fallback must NOT be smaller than the primary budget —
+    it previously dropped to 2048, i.e. below the measured requirement, which
+    guaranteed failure for both reasoning models the moment it was reached."""
     try:
         resp = client.chat.completions.create(
             model=model, messages=messages,
             response_format={"type": "json_object"},
-            temperature=0.7, max_tokens=4096)
+            temperature=0.7, max_tokens=_MAX_TOKENS)
     except Exception:
         resp = client.chat.completions.create(
-            model=model, messages=messages, temperature=0.7, max_tokens=2048)
+            model=model, messages=messages, temperature=0.7,
+            max_tokens=_MAX_TOKENS)
     return resp.choices[0].message.content
 
 

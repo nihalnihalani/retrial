@@ -99,6 +99,12 @@ class LedgerRun:
                 }.items() if v is not None},
                 set_current=False,   # thread-safe: no shared global experiment
                 update=False,        # immutable per run — never overwrite a receipt
+                # The permalink is pitched as "the audit receipt" and gets pasted
+                # into PR bodies. A private experiment serves an anonymous reader
+                # a login wall, which makes the receipt unreadable by exactly the
+                # audience it exists for (verified 2026-07-25: unauthenticated GET
+                # returned a sign-in shell). Public = the evidence is checkable.
+                is_public=True,
             )
             for trial_index, passed in rows:
                 exp.log(input={"trial_index": trial_index},
