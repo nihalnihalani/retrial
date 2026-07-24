@@ -33,7 +33,7 @@ def _cmd_check(args):
     try:
         pool.warm(min(conc, max_trials))
         result = verify(pool, test_code, max_trials=max_trials, conc=conc,
-                        threshold=args.threshold)
+                        threshold=args.threshold, isolation=args.isolation)
     finally:
         pool.destroy_all()
     wall = round(time.monotonic() - t0, 1)
@@ -51,6 +51,7 @@ def _cmd_check(args):
     print(f"flake:     {result['fails']}/{result['trials']} fail = {p:.0%}")
     print(f"95% CI:    {lo:.0%} - {hi:.0%}")
     print(f"threshold: {args.threshold:.0%}")
+    print(f"isolation: {result['isolation']}")
     print(f"verdict:   {result['verdict']}"
           + ("  <- your CI is lying to you" if result["verdict"] == "FLAKY" else ""))
     print(f"wallclock: {wall}s")
@@ -66,6 +67,9 @@ def build_parser():
     chk.add_argument("--max-trials", type=int, default=0, help="max reruns (env MAX_TRIALS)")
     chk.add_argument("--conc", type=int, default=0, help="concurrent sandboxes (env CONC)")
     chk.add_argument("--threshold", type=float, default=0.05, help="flake-rate decision threshold")
+    chk.add_argument("--isolation", choices=("process", "sandbox"), default="process",
+                     help="process=reuse warm sandboxes (fast, fresh interpreter per trial); "
+                          "sandbox=fresh sandbox per trial (state-polluting flakes)")
     chk.set_defaults(func=_cmd_check)
     return p
 
