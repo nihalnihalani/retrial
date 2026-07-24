@@ -43,6 +43,7 @@ from .config import DEFAULT_THRESHOLD
 from .events import EventBus
 from .pool import make_pool
 from .coordinator import TournamentCoordinator
+from .guards import inert_seed_reason
 from .diagnosis import DiagnosisEngine
 from .preflight import run_preflight
 from .prsmith import PRSmith
@@ -501,6 +502,13 @@ def start_tournament(req: TournamentRequest):
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"seed not found: {req.seed_path}")
     test_code = path.read_text()
+    # Refuse a seed that would measure nothing rather than measuring nothing and
+    # reporting "already stable" with a Wilson interval attached. 400, not a
+    # verdict: a silent confident answer about an input we never executed is the
+    # exact failure this product exists to detect.
+    inert = inert_seed_reason(test_code)
+    if inert:
+        raise HTTPException(status_code=400, detail=inert)
     supplied = req.hypotheses or []
     isolation = req.isolation or ISOLATION
     open_pr = req.open_pr or PRSMITH
@@ -573,13 +581,24 @@ def start_tournament(req: TournamentRequest):
                                                  "test_name": path.name}
                     winner = result.get("winner") or {}
                     confirmation = result.get("confirmation") or {}
+                    detect = result.get("detect") or {}
                     bt = result.get("braintrust") or {}
+                    # The intervals ride along because the promote gate is the
+                    # single highest-stakes screen in the product — a human
+                    # authorising a real PR — and it was the ONE place that
+                    # showed bare rates with no CI while asserting "measured —
+                    # not vibes". The statistics law is not a display
+                    # preference; a 0% with no interval is exactly the claim
+                    # this project exists to refuse.
                     BUS.emit("promotion_pending", {
                         "test_name": path.name,
                         "verdict": result["verdict"],
                         "winner_id": winner.get("id"),
                         "flake_rate": result.get("orig_flake_rate"),
+                        "wilson_ci": detect.get("wilson_ci"),
                         "confirm_flake_rate": confirmation.get("flake_rate"),
+                        "confirm_wilson_ci": confirmation.get("wilson_ci"),
+                        "confirm_trials": confirmation.get("trials"),
                         "braintrust_url": bt.get(winner.get("id")) or bt.get("detect"),
                     })
                 else:

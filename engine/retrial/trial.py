@@ -21,9 +21,17 @@ from .registry import REGISTRY
 
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 
-# The only exit codes that carry a test verdict: 0 = passed, 1 = failed. Anything
-# else (dependency install failure, ImportError wrapper, interpreter usage error,
-# pytest's reserved 2-5) is the harness failing, not the test — see run_trial.
+# The only exit codes that carry a test verdict: 0 = passed, 1 = failed.
+#
+# SCOPE — this does NOT rescue every harness failure, and an earlier version of
+# this comment wrongly implied it did. CPython exits **1** on an uncaught
+# ImportError (verified), which is indistinguishable from an assertion failure at
+# this layer. A seed whose dependency is missing therefore still reads as 40/40
+# genuine failures, not infra errors. Only a seed that *catches* its own setup
+# failure and exits with a non-verdict code (as seeds/real/penman_live.py does
+# with exit 3) is protected, plus pytest's reserved 2-5 once real pytest runs
+# here. Distinguishing a bare ImportError from a real failure needs the harness
+# to own the import, not a wider exit-code table.
 _VERDICT_EXIT_CODES = (0, 1)
 
 

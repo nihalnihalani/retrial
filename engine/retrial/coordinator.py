@@ -12,7 +12,7 @@ from .config import DEFAULT_THRESHOLD
 from .verifier import verify, confirm, verify_hermetic
 from .ledger import EvidenceLedger
 from .genome import Genome
-from .guards import neutering_check
+from .guards import NeuteringResult, neutering_check
 from .settings import get_settings
 
 
@@ -136,12 +136,27 @@ class TournamentCoordinator:
         }
         return {"verdict": verdict, "done_payload": done_payload, "result": result}
 
-    def _elim_reason(self, r, orig_rate):
-        """Why the evidence knocked this hypothesis out of contention."""
+    def _elim_reason(self, r, orig_rate, winner=None):
+        """Why the evidence knocked this hypothesis out of contention.
+
+        The tie case is called out explicitly rather than folded into "another
+        hypothesis reached a lower flake rate". When several patches all reach
+        0/40 — which is the COMMON outcome on a single-cause seed, measured
+        4-for-4 on 2026-07-25 — that sentence is simply false, and it is false on
+        the one screen where the product's "evidence, not opinion" claim lives.
+        A tie broken by the deterministic (flake_rate, ci_upper, id) sort is an
+        honest and more interesting thing to say than an invented ranking."""
         if r["wilson_ci"][1] >= orig_rate:
             return "confidence interval overlaps the original flake rate"
         if r["verdict"] != "STABLE":
             return f"confidence interval does not clear the {self.threshold:.0%} threshold"
+        if winner is not None and r.get("flake_rate") == winner.get("flake_rate"):
+            rate = f"{r['flake_rate']:.0%}"
+            if r["wilson_ci"][1] == winner["wilson_ci"][1]:
+                return (f"tied with the winner at {rate} on equal evidence — "
+                        f"broken by deterministic tiebreak, not by flake rate")
+            return (f"tied with the winner at {rate}, but on a wider "
+                    f"confidence interval")
         return "another hypothesis reached a lower flake rate"
 
     def run_tournament(self, test_code, hypotheses, isolation=None, test_name=None):
@@ -288,9 +303,22 @@ class TournamentCoordinator:
                 guard = neutering_check(
                     test_code, cand["patched_code"], pool=self.pool,
                     isolation=isolation, timeout=self.timeout)
-            except Exception:
-                guard = None  # a guard crash must never block a legitimate fix
-            if guard is None or guard.ok:
+            except Exception as e:
+                # FAIL CLOSED. This previously set guard = None and fell into the
+                # `guard is None or guard.ok` branch, so a CRASH IN THE SAFETY
+                # CHECK PROMOTED THE CANDIDATE — the one mechanism standing
+                # between the tournament's objective (fail least often) and a
+                # patch that deletes the test. "A guard crash must never block a
+                # legitimate fix" optimises the wrong direction: the cost of
+                # wrongly disqualifying a good patch is one lost candidate; the
+                # cost of wrongly promoting a bad one is shipping a PR that
+                # silently removes coverage, with a statistical dossier
+                # attesting it. The run still has other candidates, and a
+                # no-winner run ends in QUARANTINE, which never dead-ends.
+                guard = NeuteringResult(
+                    False, f"neutering guard errored ({type(e).__name__}) — "
+                    f"disqualified rather than promoted unchecked", "error")
+            if guard.ok:
                 winner = cand
                 break
             neutered[cand["id"]] = guard.reason
@@ -310,7 +338,7 @@ class TournamentCoordinator:
             if winner is None or r["id"] != winner["id"]:
                 self._emit("hypothesis_eliminated", {
                     "id": r["id"],
-                    "reason": self._elim_reason(r, orig_rate),
+                    "reason": self._elim_reason(r, orig_rate, winner),
                     "cause_class": r["cause_class"],
                     "flake_rate": r["flake_rate"],
                     "wilson_ci": r["wilson_ci"],
@@ -319,12 +347,21 @@ class TournamentCoordinator:
 
         # --- CONFIRM the winner with a fresh, independent run (trials suppressed) ---
         confirmation = None
+        confirm_permalink = None
         if winner is not None:
             confirmation = confirm(self.pool, winner["patched_code"],
                                    self.max_trials, self.conc, self.threshold,
                                    self.min_trials, self.bus,
                                    label=f"confirm:{winner['id']}",
                                    timeout=self.timeout, isolation=isolation)
+            # The confirmation round is the evidence that guards selection bias
+            # across N candidates — the strongest statistical claim the product
+            # makes. It was the ONE round with no Braintrust receipt, so
+            # "0/50 across a fresh round, reproducibly" cited a permalink
+            # pointing at the tournament lane instead.
+            confirm_permalink = self._log_series(
+                ledger_run, f"confirm:{winner['id']}", confirmation,
+                cause_class=winner.get("cause_class"))
 
         # A winner only stands if the confirmation run also reads STABLE.
         if winner is not None and confirmation["verdict"] == "STABLE":
@@ -342,6 +379,8 @@ class TournamentCoordinator:
                 "wilson_ci": confirmation["wilson_ci"],
                 "orig_flake_rate": orig_rate,
                 "braintrust_url": ledger_run.permalink(winner["id"]),
+                # The receipt for the round the headline number comes from.
+                "confirm_braintrust_url": confirm_permalink,
             })
         else:
             verdict = "QUARANTINE"
@@ -372,7 +411,12 @@ class TournamentCoordinator:
             self._emit("quarantine_confirmed", {
                 "best_id": best_id,
                 "dossier": dossier,
-                "braintrust_url": ledger_run.permalink(best_id) if best_id else None,
+                # Fall back to the detect experiment: when zero hypotheses were
+                # generated (Fireworks down/keyless) best_id is empty, and
+                # emitting None threw away a receipt that DOES exist — on the one
+                # run where the evidence matters most.
+                "braintrust_url": (ledger_run.permalink(best_id) if best_id
+                                   else ledger_run.permalink("detect")),
             })
             winner = None
 

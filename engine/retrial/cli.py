@@ -28,6 +28,7 @@ from .config import DEFAULT_THRESHOLD
 from .pool import make_pool
 from .preflight import run_preflight
 from .settings import get_settings
+from .guards import inert_seed_reason
 from .verifier import verify
 from .diagnosis import diagnose
 
@@ -41,6 +42,12 @@ def _cmd_check(args):
         print(f"error: no such file: {test_path}", file=sys.stderr)
         return 2
     test_code = test_path.read_text()
+    # Same refusal as POST /tournament: a file that executes no test would be
+    # measured 40 times and reported "already stable". Fail loudly instead.
+    inert = inert_seed_reason(test_code)
+    if inert:
+        print(f"error: {inert}", file=sys.stderr)
+        return 2
 
     _s = get_settings()
     max_trials = args.max_trials or _s.max_trials or 50

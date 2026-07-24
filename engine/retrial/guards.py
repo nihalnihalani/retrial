@@ -47,6 +47,56 @@ import ast
 from .trial import run_trial
 
 
+def inert_seed_reason(code):
+    """Return why this file would measure NOTHING if run as a script, or None.
+
+    The engine executes a seed with `python3 /tmp/seed.py` and reads the exit
+    code. A pytest-style module — `def test_x(): assert ...` with no top-level
+    invocation — merely DEFINES functions and exits 0. Retrial then reruns it 40
+    times, observes 0/40, computes a Wilson interval, and reports STABLE ->
+    "already stable, nothing to fix".
+
+    That is the worst failure a measurement instrument can have: a confident
+    clean bill of health for an input it never measured, with full statistical
+    ceremony and no error. It is also the single most likely thing a new user
+    feeds it, because it is what every real Python test looks like.
+
+    Detect it statically and refuse, rather than measure nothing and report a
+    verdict. Conservative by construction: a file with ANY top-level statement
+    that could run the test (a call, an exit, an assert, a loop, an if) is
+    accepted, so this can only reject files that provably do nothing."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return f"seed does not parse as Python ({e.msg} at line {e.lineno})"
+
+    test_defs = [n for n in tree.body
+                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and n.name.startswith("test")]
+    if not test_defs:
+        return None
+
+    # Any top-level statement that is not a pure definition/import/docstring
+    # could execute the test, so the file is not provably inert.
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                             ast.Import, ast.ImportFrom)):
+            continue
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            continue  # module docstring
+        if isinstance(node, ast.Assign):
+            continue  # module-level constant, still doesn't run anything
+        return None
+
+    names = ", ".join(n.name for n in test_defs[:3])
+    return (f"seed defines test function(s) ({names}) but never calls them at "
+            f"module level, so running it as a script executes no test and "
+            f"exits 0 — Retrial would measure nothing and report it as stable. "
+            f"Retrial runs a self-contained script, not pytest: call the test "
+            f"and signal the result with sys.exit(0) or sys.exit(1). "
+            f"See seeds/test_dict_order.py for the shape.")
+
+
 class NeuteringResult:
     """Outcome of a neutering check. Truthy == the patch is a legitimate fix."""
 
