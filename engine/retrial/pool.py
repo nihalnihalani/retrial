@@ -163,3 +163,18 @@ class SandboxPool:
         """Snapshot of pool occupancy (for the UI / debugging)."""
         with self._lock:
             return {"available": len(self._available), "live": len(self._live)}
+
+
+def make_pool(bus=None, **kwargs):
+    """RETRIAL_POOL_BACKEND=fork|snapshot (default snapshot, the safe choice).
+
+    fork = the Rewind engine: one warm root frozen as a checkpoint, trial
+    sandboxes forked from it byte-identically — with automatic, sticky
+    fallback to this SandboxPool on any fork-path failure (emits
+    `pool_degraded`). snapshot = this SandboxPool, unchanged.
+    """
+    backend = os.environ.get("RETRIAL_POOL_BACKEND", "snapshot").lower()
+    if backend == "fork":
+        from .forkpool import ForkSandboxPool  # lazy: avoids import cycle
+        return ForkSandboxPool(bus=bus, **kwargs)
+    return SandboxPool(**kwargs)
