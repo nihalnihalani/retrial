@@ -1,0 +1,20 @@
+[
+  {
+    "seq": 1,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2"
+  },
+  {
+    "seq": 2,
+    "test_name": "test_dict_order.py",
+    "verdict": "QUARANTINE",
+    "cause_class": "timing",
+    "orig_flake_rate": 0.4375,
+    "final_flake_rate": 0.625,
+    "winner_model": null
+  }
+]

@@ -1,0 +1,1655 @@
+[
+ {
+  "test_name": "test_dict_order.py",
+  "n": 4,
+  "type": "diagnosing",
+  "seq": 1,
+  "ts": 4.2774,
+  "_t": 0.03
+ },
+ {
+  "test_name": "test_dict_order.py",
+  "planned_trials": 40,
+  "type": "run_started",
+  "seq": 2,
+  "ts": 28.5014,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 0,
+  "passed": true,
+  "duration_s": 0.306,
+  "type": "trial_done",
+  "seq": 3,
+  "ts": 29.0879,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 1,
+  "passed": true,
+  "duration_s": 0.301,
+  "type": "trial_done",
+  "seq": 4,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 2,
+  "passed": false,
+  "duration_s": 0.583,
+  "type": "trial_done",
+  "seq": 5,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.302,
+  "type": "trial_done",
+  "seq": 6,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.29,
+  "type": "trial_done",
+  "seq": 7,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 5,
+  "passed": false,
+  "duration_s": 0.299,
+  "type": "trial_done",
+  "seq": 8,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.291,
+  "type": "trial_done",
+  "seq": 9,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 7,
+  "passed": false,
+  "duration_s": 0.293,
+  "type": "trial_done",
+  "seq": 10,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 8,
+  "passed": false,
+  "duration_s": 0.306,
+  "type": "trial_done",
+  "seq": 11,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 9,
+  "passed": false,
+  "duration_s": 0.287,
+  "type": "trial_done",
+  "seq": 12,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 10,
+  "passed": false,
+  "duration_s": 0.293,
+  "type": "trial_done",
+  "seq": 13,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 11,
+  "passed": true,
+  "duration_s": 0.472,
+  "type": "trial_done",
+  "seq": 14,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 12,
+  "passed": true,
+  "duration_s": 0.304,
+  "type": "trial_done",
+  "seq": 15,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 13,
+  "passed": true,
+  "duration_s": 0.31,
+  "type": "trial_done",
+  "seq": 16,
+  "ts": 29.088,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 14,
+  "passed": false,
+  "duration_s": 0.303,
+  "type": "trial_done",
+  "seq": 17,
+  "ts": 29.0881,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 15,
+  "passed": false,
+  "duration_s": 0.269,
+  "type": "trial_done",
+  "seq": 18,
+  "ts": 29.0881,
+  "_t": 0.03
+ },
+ {
+  "flake_rate": 0.5,
+  "wilson_ci": [
+   0.28,
+   0.72
+  ],
+  "trials": 16,
+  "fails": 8,
+  "verdict": "FLAKY",
+  "type": "detect_done",
+  "seq": 19,
+  "ts": 30.618,
+  "_t": 0.03
+ },
+ {
+  "id": "h1",
+  "cause_class": "order_dependency",
+  "explanation": "The test iterates over a set whose order is randomized by PYTHONHASHSEED, so the first element is nondeterministic and 'evt-1' only appears sometimes. Using an ordered container (e.g., sorted list) makes the assertion deterministic.",
+  "type": "hypothesis_created",
+  "seq": 20,
+  "ts": 30.6183,
+  "_t": 0.03
+ },
+ {
+  "id": "h2",
+  "cause_class": "order_dependency",
+  "explanation": "The test iterates over a set and asserts the first item is 'evt-1', but set iteration order is non-deterministic due to PYTHONHASHSEED randomization, causing the test to pass or fail depending on the interpreter's hash seed.",
+  "type": "hypothesis_created",
+  "seq": 21,
+  "ts": 30.6193,
+  "_t": 0.03
+ },
+ {
+  "id": "h3",
+  "cause_class": "timing",
+  "explanation": "",
+  "type": "hypothesis_created",
+  "seq": 22,
+  "ts": 30.6197,
+  "_t": 0.03
+ },
+ {
+  "id": "h4",
+  "cause_class": "order_dependency",
+  "explanation": "The test iterates over a set, whose order is non-deterministic due to Python's hash randomization (PYTHONHASHSEED). This causes the first element to vary between runs, leading to intermittent failures.",
+  "type": "hypothesis_created",
+  "seq": 23,
+  "ts": 30.6227,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 0,
+  "passed": false,
+  "duration_s": 0.315,
+  "type": "trial_done",
+  "seq": 24,
+  "ts": 31.2853,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 1,
+  "passed": false,
+  "duration_s": 0.303,
+  "type": "trial_done",
+  "seq": 25,
+  "ts": 31.2853,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 2,
+  "passed": false,
+  "duration_s": 0.291,
+  "type": "trial_done",
+  "seq": 26,
+  "ts": 31.2853,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 3,
+  "passed": false,
+  "duration_s": 0.325,
+  "type": "trial_done",
+  "seq": 27,
+  "ts": 31.2853,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 4,
+  "passed": false,
+  "duration_s": 0.3,
+  "type": "trial_done",
+  "seq": 28,
+  "ts": 31.2853,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 5,
+  "passed": false,
+  "duration_s": 0.327,
+  "type": "trial_done",
+  "seq": 29,
+  "ts": 31.2854,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 6,
+  "passed": false,
+  "duration_s": 0.304,
+  "type": "trial_done",
+  "seq": 30,
+  "ts": 31.2854,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h2",
+  "trial_index": 7,
+  "passed": false,
+  "duration_s": 0.325,
+  "type": "trial_done",
+  "seq": 31,
+  "ts": 31.2854,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 0,
+  "passed": false,
+  "duration_s": 0.299,
+  "type": "trial_done",
+  "seq": 32,
+  "ts": 31.4575,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 1,
+  "passed": false,
+  "duration_s": 0.313,
+  "type": "trial_done",
+  "seq": 33,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.292,
+  "type": "trial_done",
+  "seq": 34,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.288,
+  "type": "trial_done",
+  "seq": 35,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.305,
+  "type": "trial_done",
+  "seq": 36,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 5,
+  "passed": false,
+  "duration_s": 0.473,
+  "type": "trial_done",
+  "seq": 37,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.38,
+  "type": "trial_done",
+  "seq": 38,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h3",
+  "trial_index": 7,
+  "passed": true,
+  "duration_s": 0.342,
+  "type": "trial_done",
+  "seq": 39,
+  "ts": 31.4576,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 0,
+  "passed": true,
+  "duration_s": 0.339,
+  "type": "trial_done",
+  "seq": 40,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 1,
+  "passed": true,
+  "duration_s": 0.336,
+  "type": "trial_done",
+  "seq": 41,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.291,
+  "type": "trial_done",
+  "seq": 42,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.296,
+  "type": "trial_done",
+  "seq": 43,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.262,
+  "type": "trial_done",
+  "seq": 44,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 5,
+  "passed": true,
+  "duration_s": 0.293,
+  "type": "trial_done",
+  "seq": 45,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.479,
+  "type": "trial_done",
+  "seq": 46,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 7,
+  "passed": true,
+  "duration_s": 0.324,
+  "type": "trial_done",
+  "seq": 47,
+  "ts": 31.5128,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 8,
+  "passed": true,
+  "duration_s": 0.307,
+  "type": "trial_done",
+  "seq": 48,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 9,
+  "passed": true,
+  "duration_s": 0.465,
+  "type": "trial_done",
+  "seq": 49,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 10,
+  "passed": true,
+  "duration_s": 0.473,
+  "type": "trial_done",
+  "seq": 50,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 11,
+  "passed": true,
+  "duration_s": 0.292,
+  "type": "trial_done",
+  "seq": 51,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 12,
+  "passed": true,
+  "duration_s": 0.556,
+  "type": "trial_done",
+  "seq": 52,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 13,
+  "passed": true,
+  "duration_s": 0.285,
+  "type": "trial_done",
+  "seq": 53,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 14,
+  "passed": true,
+  "duration_s": 0.296,
+  "type": "trial_done",
+  "seq": 54,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 15,
+  "passed": true,
+  "duration_s": 0.28,
+  "type": "trial_done",
+  "seq": 55,
+  "ts": 32.0704,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 16,
+  "passed": true,
+  "duration_s": 0.378,
+  "type": "trial_done",
+  "seq": 56,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 17,
+  "passed": true,
+  "duration_s": 0.481,
+  "type": "trial_done",
+  "seq": 57,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 18,
+  "passed": true,
+  "duration_s": 0.463,
+  "type": "trial_done",
+  "seq": 58,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 19,
+  "passed": true,
+  "duration_s": 0.377,
+  "type": "trial_done",
+  "seq": 59,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 20,
+  "passed": true,
+  "duration_s": 0.712,
+  "type": "trial_done",
+  "seq": 60,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 21,
+  "passed": true,
+  "duration_s": 0.377,
+  "type": "trial_done",
+  "seq": 61,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 22,
+  "passed": true,
+  "duration_s": 0.376,
+  "type": "trial_done",
+  "seq": 62,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 23,
+  "passed": true,
+  "duration_s": 0.376,
+  "type": "trial_done",
+  "seq": 63,
+  "ts": 32.7833,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 24,
+  "passed": true,
+  "duration_s": 0.337,
+  "type": "trial_done",
+  "seq": 64,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 25,
+  "passed": true,
+  "duration_s": 0.465,
+  "type": "trial_done",
+  "seq": 65,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 26,
+  "passed": true,
+  "duration_s": 0.471,
+  "type": "trial_done",
+  "seq": 66,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 27,
+  "passed": true,
+  "duration_s": 0.314,
+  "type": "trial_done",
+  "seq": 67,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 28,
+  "passed": true,
+  "duration_s": 0.289,
+  "type": "trial_done",
+  "seq": 68,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 29,
+  "passed": true,
+  "duration_s": 0.266,
+  "type": "trial_done",
+  "seq": 69,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 30,
+  "passed": true,
+  "duration_s": 0.302,
+  "type": "trial_done",
+  "seq": 70,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 31,
+  "passed": true,
+  "duration_s": 0.3,
+  "type": "trial_done",
+  "seq": 71,
+  "ts": 33.2553,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 32,
+  "passed": true,
+  "duration_s": 0.47,
+  "type": "trial_done",
+  "seq": 72,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 33,
+  "passed": true,
+  "duration_s": 0.753,
+  "type": "trial_done",
+  "seq": 73,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 34,
+  "passed": true,
+  "duration_s": 0.311,
+  "type": "trial_done",
+  "seq": 74,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 35,
+  "passed": true,
+  "duration_s": 0.306,
+  "type": "trial_done",
+  "seq": 75,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 36,
+  "passed": true,
+  "duration_s": 0.3,
+  "type": "trial_done",
+  "seq": 76,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 37,
+  "passed": true,
+  "duration_s": 0.291,
+  "type": "trial_done",
+  "seq": 77,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 38,
+  "passed": true,
+  "duration_s": 0.292,
+  "type": "trial_done",
+  "seq": 78,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 39,
+  "passed": true,
+  "duration_s": 0.291,
+  "type": "trial_done",
+  "seq": 79,
+  "ts": 34.0089,
+  "_t": 0.03
+ },
+ {
+  "id": "h2",
+  "flake_rate": 1.0,
+  "wilson_ci": [
+   0.6756,
+   1.0
+  ],
+  "trials": 8,
+  "cause_class": "order_dependency",
+  "verdict": "FLAKY",
+  "type": "hypothesis_verified",
+  "seq": 80,
+  "ts": 35.288,
+  "_t": 0.03
+ },
+ {
+  "id": "h3",
+  "flake_rate": 0.375,
+  "wilson_ci": [
+   0.1368,
+   0.6943
+  ],
+  "trials": 8,
+  "cause_class": "timing",
+  "verdict": "FLAKY",
+  "type": "hypothesis_verified",
+  "seq": 81,
+  "ts": 35.2881,
+  "_t": 0.03
+ },
+ {
+  "id": "h1",
+  "flake_rate": 0.0,
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "trials": 40,
+  "cause_class": "order_dependency",
+  "verdict": "STABLE",
+  "type": "hypothesis_verified",
+  "seq": 82,
+  "ts": 35.2883,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 0,
+  "passed": true,
+  "duration_s": 0.299,
+  "type": "trial_done",
+  "seq": 83,
+  "ts": 37.72,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 1,
+  "passed": true,
+  "duration_s": 0.313,
+  "type": "trial_done",
+  "seq": 84,
+  "ts": 37.72,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.366,
+  "type": "trial_done",
+  "seq": 85,
+  "ts": 37.7201,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.311,
+  "type": "trial_done",
+  "seq": 86,
+  "ts": 37.7201,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.485,
+  "type": "trial_done",
+  "seq": 87,
+  "ts": 37.7201,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 5,
+  "passed": true,
+  "duration_s": 6.761,
+  "type": "trial_done",
+  "seq": 88,
+  "ts": 37.7201,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.314,
+  "type": "trial_done",
+  "seq": 89,
+  "ts": 37.7201,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 7,
+  "passed": true,
+  "duration_s": 0.373,
+  "type": "trial_done",
+  "seq": 90,
+  "ts": 37.7201,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 8,
+  "passed": true,
+  "duration_s": 0.305,
+  "type": "trial_done",
+  "seq": 91,
+  "ts": 38.7285,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 9,
+  "passed": true,
+  "duration_s": 0.512,
+  "type": "trial_done",
+  "seq": 92,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 10,
+  "passed": true,
+  "duration_s": 0.511,
+  "type": "trial_done",
+  "seq": 93,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 11,
+  "passed": true,
+  "duration_s": 0.313,
+  "type": "trial_done",
+  "seq": 94,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 12,
+  "passed": true,
+  "duration_s": 0.318,
+  "type": "trial_done",
+  "seq": 95,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 13,
+  "passed": true,
+  "duration_s": 0.298,
+  "type": "trial_done",
+  "seq": 96,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 14,
+  "passed": true,
+  "duration_s": 1.002,
+  "type": "trial_done",
+  "seq": 97,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 15,
+  "passed": true,
+  "duration_s": 0.268,
+  "type": "trial_done",
+  "seq": 98,
+  "ts": 38.7286,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 16,
+  "passed": true,
+  "duration_s": 0.3,
+  "type": "trial_done",
+  "seq": 99,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 17,
+  "passed": true,
+  "duration_s": 0.553,
+  "type": "trial_done",
+  "seq": 100,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 18,
+  "passed": true,
+  "duration_s": 0.521,
+  "type": "trial_done",
+  "seq": 101,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 19,
+  "passed": true,
+  "duration_s": 0.304,
+  "type": "trial_done",
+  "seq": 102,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 20,
+  "passed": true,
+  "duration_s": 0.311,
+  "type": "trial_done",
+  "seq": 103,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 21,
+  "passed": true,
+  "duration_s": 0.304,
+  "type": "trial_done",
+  "seq": 104,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 22,
+  "passed": true,
+  "duration_s": 0.3,
+  "type": "trial_done",
+  "seq": 105,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 23,
+  "passed": true,
+  "duration_s": 0.294,
+  "type": "trial_done",
+  "seq": 106,
+  "ts": 39.2829,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 24,
+  "passed": true,
+  "duration_s": 0.862,
+  "type": "trial_done",
+  "seq": 107,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 25,
+  "passed": true,
+  "duration_s": 0.861,
+  "type": "trial_done",
+  "seq": 108,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 26,
+  "passed": true,
+  "duration_s": 0.859,
+  "type": "trial_done",
+  "seq": 109,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 27,
+  "passed": true,
+  "duration_s": 0.859,
+  "type": "trial_done",
+  "seq": 110,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 28,
+  "passed": true,
+  "duration_s": 0.86,
+  "type": "trial_done",
+  "seq": 111,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 29,
+  "passed": true,
+  "duration_s": 0.859,
+  "type": "trial_done",
+  "seq": 112,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 30,
+  "passed": true,
+  "duration_s": 0.859,
+  "type": "trial_done",
+  "seq": 113,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 31,
+  "passed": true,
+  "duration_s": 0.859,
+  "type": "trial_done",
+  "seq": 114,
+  "ts": 40.1456,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 32,
+  "passed": true,
+  "duration_s": 0.329,
+  "type": "trial_done",
+  "seq": 115,
+  "ts": 40.6406,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 33,
+  "passed": true,
+  "duration_s": 0.313,
+  "type": "trial_done",
+  "seq": 116,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 34,
+  "passed": true,
+  "duration_s": 0.493,
+  "type": "trial_done",
+  "seq": 117,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 35,
+  "passed": true,
+  "duration_s": 0.296,
+  "type": "trial_done",
+  "seq": 118,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 36,
+  "passed": true,
+  "duration_s": 0.298,
+  "type": "trial_done",
+  "seq": 119,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 37,
+  "passed": true,
+  "duration_s": 0.3,
+  "type": "trial_done",
+  "seq": 120,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 38,
+  "passed": true,
+  "duration_s": 0.316,
+  "type": "trial_done",
+  "seq": 121,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "hypothesis_id": "h4",
+  "trial_index": 39,
+  "passed": true,
+  "duration_s": 0.311,
+  "type": "trial_done",
+  "seq": 122,
+  "ts": 40.6407,
+  "_t": 0.03
+ },
+ {
+  "id": "h4",
+  "flake_rate": 0.0,
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "trials": 40,
+  "cause_class": "order_dependency",
+  "verdict": "STABLE",
+  "type": "hypothesis_verified",
+  "seq": 123,
+  "ts": 43.4483,
+  "_t": 0.03
+ },
+ {
+  "id": "h2",
+  "reason": "confidence interval overlaps the original flake rate",
+  "cause_class": "order_dependency",
+  "flake_rate": 1.0,
+  "wilson_ci": [
+   0.6756,
+   1.0
+  ],
+  "type": "hypothesis_eliminated",
+  "seq": 124,
+  "ts": 43.4486,
+  "_t": 0.03
+ },
+ {
+  "id": "h3",
+  "reason": "confidence interval overlaps the original flake rate",
+  "cause_class": "timing",
+  "flake_rate": 0.375,
+  "wilson_ci": [
+   0.1368,
+   0.6943
+  ],
+  "type": "hypothesis_eliminated",
+  "seq": 125,
+  "ts": 43.4486,
+  "_t": 0.03
+ },
+ {
+  "id": "h4",
+  "reason": "another hypothesis reached a lower flake rate",
+  "cause_class": "order_dependency",
+  "flake_rate": 0.0,
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "type": "hypothesis_eliminated",
+  "seq": 126,
+  "ts": 43.4486,
+  "_t": 0.03
+ },
+ {
+  "id": "h1",
+  "flake_rate": 0.0,
+  "confirm_flake_rate": 0.0,
+  "cause_class": "order_dependency",
+  "wilson_ci": [
+   0.0,
+   0.0876
+  ],
+  "orig_flake_rate": 0.5,
+  "braintrust_url": "https://www.braintrust.dev/app/NIHAL/p/retrial/experiments/test_dict_order.py%2Fh1",
+  "type": "winner_confirmed",
+  "seq": 127,
+  "ts": 45.0241,
+  "_t": 0.03
+ },
+ {
+  "verdict": "FIXED",
+  "orig_flake_rate": 0.5,
+  "winner_id": "h1",
+  "winner_flake_rate": 0.0,
+  "num_hypotheses": 4,
+  "type": "tournament_done",
+  "seq": 128,
+  "ts": 45.0242,
+  "_t": 0.03
+ },
+ {
+  "runs": 1,
+  "by_cause_class": {
+   "order_dependency": 1
+  },
+  "type": "genome_updated",
+  "seq": 129,
+  "ts": 45.0254,
+  "_t": 0.03
+ },
+ {
+  "test_name": "test_dict_order.py",
+  "planned_trials": 40,
+  "type": "run_started",
+  "seq": 130,
+  "ts": 82.966,
+  "_t": 2.95
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 0,
+  "passed": false,
+  "duration_s": 0.422,
+  "type": "trial_done",
+  "seq": 131,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 1,
+  "passed": false,
+  "duration_s": 0.486,
+  "type": "trial_done",
+  "seq": 132,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.377,
+  "type": "trial_done",
+  "seq": 133,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 3,
+  "passed": false,
+  "duration_s": 0.336,
+  "type": "trial_done",
+  "seq": 134,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 4,
+  "passed": true,
+  "duration_s": 0.336,
+  "type": "trial_done",
+  "seq": 135,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 5,
+  "passed": true,
+  "duration_s": 0.336,
+  "type": "trial_done",
+  "seq": 136,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 6,
+  "passed": true,
+  "duration_s": 0.337,
+  "type": "trial_done",
+  "seq": 137,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 7,
+  "passed": false,
+  "duration_s": 0.336,
+  "type": "trial_done",
+  "seq": 138,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 8,
+  "passed": true,
+  "duration_s": 0.334,
+  "type": "trial_done",
+  "seq": 139,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 9,
+  "passed": true,
+  "duration_s": 0.336,
+  "type": "trial_done",
+  "seq": 140,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 10,
+  "passed": false,
+  "duration_s": 0.335,
+  "type": "trial_done",
+  "seq": 141,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 11,
+  "passed": true,
+  "duration_s": 0.334,
+  "type": "trial_done",
+  "seq": 142,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 12,
+  "passed": false,
+  "duration_s": 0.334,
+  "type": "trial_done",
+  "seq": 143,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 13,
+  "passed": true,
+  "duration_s": 0.335,
+  "type": "trial_done",
+  "seq": 144,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 14,
+  "passed": true,
+  "duration_s": 0.333,
+  "type": "trial_done",
+  "seq": 145,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "hypothesis_id": null,
+  "trial_index": 15,
+  "passed": false,
+  "duration_s": 0.333,
+  "type": "trial_done",
+  "seq": 146,
+  "ts": 83.453,
+  "_t": 3.43
+ },
+ {
+  "flake_rate": 0.4375,
+  "wilson_ci": [
+   0.231,
+   0.6682
+  ],
+  "trials": 16,
+  "fails": 7,
+  "verdict": "FLAKY",
+  "type": "detect_done",
+  "seq": 147,
+  "ts": 86.1194,
+  "_t": 6.1
+ },
+ {
+  "id": "h1",
+  "cause_class": "timing",
+  "explanation": "Add a settle delay before reading (does not address ordering).",
+  "type": "hypothesis_created",
+  "seq": 148,
+  "ts": 86.1196,
+  "_t": 6.1
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 0,
+  "passed": false,
+  "duration_s": 0.541,
+  "type": "trial_done",
+  "seq": 149,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 1,
+  "passed": true,
+  "duration_s": 0.521,
+  "type": "trial_done",
+  "seq": 150,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 2,
+  "passed": true,
+  "duration_s": 0.345,
+  "type": "trial_done",
+  "seq": 151,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 3,
+  "passed": true,
+  "duration_s": 0.36,
+  "type": "trial_done",
+  "seq": 152,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 4,
+  "passed": false,
+  "duration_s": 0.337,
+  "type": "trial_done",
+  "seq": 153,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 5,
+  "passed": false,
+  "duration_s": 0.321,
+  "type": "trial_done",
+  "seq": 154,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 6,
+  "passed": false,
+  "duration_s": 0.332,
+  "type": "trial_done",
+  "seq": 155,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "hypothesis_id": "h1",
+  "trial_index": 7,
+  "passed": false,
+  "duration_s": 0.368,
+  "type": "trial_done",
+  "seq": 156,
+  "ts": 86.6606,
+  "_t": 6.64
+ },
+ {
+  "id": "h1",
+  "flake_rate": 0.625,
+  "wilson_ci": [
+   0.3057,
+   0.8632
+  ],
+  "trials": 8,
+  "cause_class": "timing",
+  "verdict": "FLAKY",
+  "type": "hypothesis_verified",
+  "seq": 157,
+  "ts": 88.5362,
+  "_t": 8.52
+ },
+ {
+  "id": "h1",
+  "reason": "confidence interval overlaps the original flake rate",
+  "cause_class": "timing",
+  "flake_rate": 0.625,
+  "wilson_ci": [
+   0.3057,
+   0.8632
+  ],
+  "type": "hypothesis_eliminated",
+  "seq": 158,
+  "ts": 88.5367,
+  "_t": 8.52
+ },
+ {
+  "best_id": "h1",
+  "dossier": {
+   "flake_rate": 0.625,
+   "wilson_ci": [
+    0.3057,
+    0.8632
+   ],
+   "trials": 8,
+   "reason": "no hypothesis stabilized the test below the 5% threshold"
+  },
+  "braintrust_url": "https://www.braintrust.dev/app/NIHAL/p/retrial/experiments/test_dict_order.py%2Fh1",
+  "type": "quarantine_confirmed",
+  "seq": 159,
+  "ts": 88.5367,
+  "_t": 8.52
+ },
+ {
+  "verdict": "QUARANTINE",
+  "orig_flake_rate": 0.4375,
+  "winner_id": null,
+  "winner_flake_rate": null,
+  "num_hypotheses": 1,
+  "type": "tournament_done",
+  "seq": 160,
+  "ts": 88.5369,
+  "_t": 8.52
+ }
+]
