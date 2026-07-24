@@ -127,3 +127,11 @@ def test_scan_covers_the_previously_drifted_event():
 def test_promotion_events_registered():
     assert "promotion_pending" in EVENT_TYPES
     assert "promotion_closed" in EVENT_TYPES
+
+
+def test_observatory_events_registered():
+    # The 5 Sandbox Observatory event names (the ast emit-site scan above already
+    # binds registry.py's emit sites; this documents intent cheaply).
+    for name in ("sandbox_registered", "sandbox_state", "sandbox_exec",
+                 "sandbox_destroyed", "registry_snapshot"):
+        assert name in EVENT_TYPES
