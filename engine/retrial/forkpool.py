@@ -63,8 +63,13 @@ class ForkSandboxPool:
 
     def __init__(self, client=None, target=None, labels=None, hermetic=False,
                  auto_delete_min=None, bus=None, fallback=None, registry=None):
+        # Fork-capable VM snapshots live in us-east-1 (not "us", the snapshot
+        # pool's default region) — Rewind's spike and live smoke both verified
+        # against us-east-1. Overridable via RETRIAL_FORK_TARGET.
         self._client = client or Daytona(
-            DaytonaConfig(target=target or os.environ.get("DAYTONA_TARGET", "us"))
+            DaytonaConfig(target=target or os.environ.get(
+                "RETRIAL_FORK_TARGET",
+                os.environ.get("DAYTONA_TARGET", "us-east-1")))
         )
         # Remember ctor args so the lazy fallback SandboxPool is built with the
         # same shape (same client if one was injected — the mocked tests rely
@@ -127,6 +132,13 @@ class ForkSandboxPool:
             if self._ckpt is not None:
                 return
             kwargs = {"labels": self._labels}
+            # _experimental_fork only works on Linux VM-class sandboxes; the
+            # default (container) snapshot rejects it with "Forking is not
+            # supported for this sandbox" (verified live 2026-07-25). Rewind's
+            # spike measured fork at 0.6-0.7s on this exact snapshot.
+            snapshot = os.environ.get("RETRIAL_FORK_SNAPSHOT", "daytona-vm-small")
+            if snapshot:
+                kwargs["snapshot"] = snapshot
             if self._auto_delete_min is None:
                 # Same belt-and-braces credit protection as SandboxPool.
                 self._auto_delete_min = int(os.environ.get("AUTO_DELETE_MIN", "60"))
