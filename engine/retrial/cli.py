@@ -18,6 +18,7 @@ import braintrust
 
 from .pool import SandboxPool
 from .verifier import verify
+from .diagnosis import diagnose
 
 
 def _cmd_check(args):
@@ -60,6 +61,30 @@ def _cmd_check(args):
     return 0
 
 
+def _cmd_diagnose(args):
+    test_path = Path(args.test)
+    if not test_path.exists():
+        print(f"error: no such file: {test_path}", file=sys.stderr)
+        return 2
+    test_code = test_path.read_text()
+    if not os.environ.get("FIREWORKS_API_KEY"):
+        print("error: FIREWORKS_API_KEY not set — cannot run diagnosis", file=sys.stderr)
+        return 3
+    try:
+        hyps = diagnose(test_code, test_path.name, log_tail="", n=args.n)
+    except Exception as e:
+        print(f"error: diagnosis failed: {e}", file=sys.stderr)
+        return 4
+
+    if args.json:
+        print(json.dumps({"test": str(test_path), "hypotheses": hyps}))
+        return 0
+    print(f"test: {test_path.name}  ->  {len(hyps)} competing hypotheses\n")
+    for h in hyps:
+        print(f"[{h['id']}] {h['cause_class']}: {h['explanation']}")
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -73,6 +98,12 @@ def build_parser():
                      help="process=reuse warm sandboxes (fast, fresh interpreter per trial); "
                           "sandbox=fresh sandbox per trial (state-polluting flakes)")
     chk.set_defaults(func=_cmd_check)
+
+    dia = sub.add_parser("diagnose", help="Fireworks: generate N competing root-cause hypotheses")
+    dia.add_argument("test", help="path to the flaky test file")
+    dia.add_argument("-n", type=int, default=4, help="number of competing hypotheses")
+    dia.add_argument("--json", action="store_true", help="machine-readable output")
+    dia.set_defaults(func=_cmd_diagnose)
     return p
 
 
