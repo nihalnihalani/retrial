@@ -41,10 +41,18 @@ export function DecryptText({ text, className }: { text: string; className?: str
     return () => cancelAnimationFrame(raf);
   }, [text]);
 
+  // The scrambled glyphs have different widths to the real ones, so in a
+  // proportional headline the line would re-wrap on every frame. An invisible
+  // copy of the final text holds the box; the animated copy is overlaid.
   return (
-    <span className={className}>
+    <span className={`decrypt ${className ?? ''}`}>
       <span className="sr-only">{text}</span>
-      <span aria-hidden="true">{display ?? text}</span>
+      <span className="decrypt-sizer" aria-hidden="true">
+        {text}
+      </span>
+      <span className="decrypt-live" aria-hidden="true">
+        {display ?? text}
+      </span>
     </span>
   );
 }

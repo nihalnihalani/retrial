@@ -35,10 +35,13 @@ function parseColor(c: string): [number, number, number] {
   return [148, 163, 184];
 }
 
+// Neutral by default: green and blue carry verdict meaning elsewhere on the
+// board, and a decorative field of them dilutes that. The motif is the trial
+// grid *before* any trial exists, so these squares are pending-cell greys.
 export function BlinkingSquares({
   gridSize = 44,
   fillPercent = 58,
-  colors = ['#34d399', '#60a5fa', '#52525b'],
+  colors = ['#3f3f46', '#52525b', '#71717a'],
   twinkleSpeed = 22,
   opacity = 0.4,
   className,
