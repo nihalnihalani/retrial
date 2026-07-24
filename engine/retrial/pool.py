@@ -1,10 +1,17 @@
 """SandboxPool: a thread-safe warm pool of disposable Daytona container sandboxes.
 
-Fresh-env-per-trial is the scientific requirement for measuring shared-state /
-ordering flakes, not an optimization: a sandbox that has run a test is *dirty*
-and must never serve a second trial. So `release(sb, dirty=True)` destroys the
-sandbox (in the background) and it is lazily replaced by a fresh create on the
-next `lease()`. Clean sandboxes (never used) may be handed back for reuse.
+Isolation is matched to the flake class (set by the Verifier per seed):
+
+- process isolation (the common case): the sandbox is REUSED across trials.
+  Each trial runs a fresh `python3 /tmp/seed.py` process, and a fresh
+  interpreter means a fresh PYTHONHASHSEED and fresh scheduling — the correct
+  isolation for hash-order and scheduling-race flakes. `release(reusable=True)`
+  returns the warm sandbox to the pool, so throughput is exec-bound, not
+  create-bound (crucial for a live ~200-trial demo).
+- sandbox isolation: the sandbox is DESTROYED after one trial (in the
+  background) and replaced lazily on the next `lease()`. Required only for
+  state-polluting flakes (filesystem/port/env pollution) where a reused process
+  would leak state between trials.
 
 Verified pattern (scripts/calibrate_seeds.py, DAYTONA-COOKBOOK.md): container
 create ~0.7s, 16 concurrent creates ~2.0s, region "us".
@@ -77,12 +84,17 @@ class SandboxPool:
                 return self._available.pop()
         return self._create_one()
 
-    def release(self, sb, dirty=True):
-        """Return a sandbox. Dirty ones are destroyed (background) and replaced
-        lazily on the next lease; clean ones go back to the warm pool."""
+    def release(self, sb, reusable=False):
+        """Return a sandbox to the pool.
+
+        reusable=True (process isolation): the sandbox stays warm and goes back
+        to the available pool for the next trial. reusable=False (sandbox
+        isolation, or a sandbox that hit an infra error): destroy it in the
+        background; it is replaced lazily on the next lease().
+        """
         if sb is None:
             return
-        if not dirty:
+        if reusable:
             with self._lock:
                 self._available.append(sb)
             return

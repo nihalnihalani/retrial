@@ -36,7 +36,7 @@ def _verdict(p, lo, hi, threshold):
 
 
 def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
-           min_trials=8, bus=None, label=None, timeout=60):
+           min_trials=8, bus=None, label=None, timeout=60, isolation="process"):
     """Rerun test_code up to max_trials times (conc at a time) and classify it.
 
     Returns {"trials", "fails", "errors", "flake_rate", "wilson_ci":[lo,hi],
@@ -54,7 +54,7 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
         results = [None] * batch
 
         def worker(i):
-            results[i] = run_trial(pool, test_code, timeout=timeout)
+            results[i] = run_trial(pool, test_code, timeout=timeout, isolation=isolation)
 
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(batch)]
         for t in threads:
@@ -98,34 +98,36 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
         "wilson_ci": [round(lo, 4), round(hi, 4)],
         "verdict": _verdict(p, lo, hi, threshold),
         "stopped_early": stopped_early,
+        "isolation": isolation,
         "history": history,
     }
 
 
 def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.05,
-            min_trials=8, bus=None, label=None, timeout=60):
+            min_trials=8, bus=None, label=None, timeout=60, isolation="process"):
     """A fresh, independent verify run to confirm a tournament winner."""
     return verify(pool, test_code, max_trials=max_trials, conc=conc,
                   threshold=threshold, min_trials=min_trials, bus=bus,
-                  label=label or "confirm", timeout=timeout)
+                  label=label or "confirm", timeout=timeout, isolation=isolation)
 
 
 class Verifier:
     """Object wrapper bundling default verify/confirm parameters."""
 
     def __init__(self, max_trials=50, conc=16, threshold=0.05, min_trials=8,
-                 bus=None, timeout=60):
+                 bus=None, timeout=60, isolation="process"):
         self.max_trials = max_trials
         self.conc = conc
         self.threshold = threshold
         self.min_trials = min_trials
         self.bus = bus
         self.timeout = timeout
+        self.isolation = isolation
 
     def verify(self, pool, test_code, label=None):
         return verify(pool, test_code, self.max_trials, self.conc, self.threshold,
-                      self.min_trials, self.bus, label, self.timeout)
+                      self.min_trials, self.bus, label, self.timeout, self.isolation)
 
     def confirm(self, pool, test_code, label=None):
         return confirm(pool, test_code, self.max_trials, self.conc, self.threshold,
-                       self.min_trials, self.bus, label, self.timeout)
+                       self.min_trials, self.bus, label, self.timeout, self.isolation)
