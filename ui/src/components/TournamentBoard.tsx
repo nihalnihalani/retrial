@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { DiagnosingView } from './DiagnosingView';
+import { BlinkingSquares } from './fx/BlinkingSquares';
+import { useMagnetic } from './fx/useMagnetic';
 import { DetectPhase } from './DetectPhase';
 import { TournamentPhase } from './TournamentPhase';
 import { WinnerCard } from './WinnerCard';
@@ -493,13 +495,14 @@ function LiveEmptyState({
   return (
     <Card
       className={cn(
-        'live-empty border-border/60 bg-card/40 shadow-none',
+        'live-empty relative overflow-hidden border-border/60 bg-card/40 shadow-none',
         disconnected && 'is-error border-destructive/40',
       )}
       role="status"
       aria-live="polite"
     >
-      <CardContent className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      {!disconnected && <BlinkingSquares aria-hidden opacity={connecting ? 0.18 : 0.34} />}
+      <CardContent className="relative flex flex-col items-center justify-center px-6 py-16 text-center">
       <div className="live-empty-orbit" aria-hidden="true">
         <span />
       </div>
@@ -544,6 +547,7 @@ function GoControl({
   disabled: boolean;
   posting: boolean;
 }) {
+  const goRef = useMagnetic<HTMLButtonElement>(8);
   return (
     <div className="go-control flex items-center gap-0 rounded-[calc(var(--radius)+2px)] border border-border bg-secondary p-[3px] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.03)]">
       <select
@@ -561,6 +565,7 @@ function GoControl({
         ))}
       </select>
       <Button
+        ref={goRef}
         size="sm"
         className="mobile-touch-target h-9 px-5 tracking-[0.08em]"
         onClick={onGo}
