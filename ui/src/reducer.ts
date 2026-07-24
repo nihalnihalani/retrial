@@ -3,6 +3,7 @@ import type { BoardState, Hypothesis, RetrialEvent, TrialCell } from './types';
 export const initialState: BoardState = {
   phase: 'detect',
   testName: null,
+  diagnoseModels: null,
   plannedTrials: null,
   detect: {
     trials: [],
@@ -26,9 +27,20 @@ function liveFlakeRate(trials: TrialCell[]): number | null {
 
 export function reduce(state: BoardState, event: RetrialEvent): BoardState {
   switch (event.type) {
+    case 'diagnosing': {
+      return {
+        ...state,
+        phase: 'diagnosing',
+        testName: event.test_name,
+        diagnoseModels: event.n,
+      };
+    }
+
     case 'run_started': {
       return {
         ...state,
+        // leave the diagnosing pre-phase; the live run begins
+        phase: 'detect',
         testName: event.test_name,
         plannedTrials: event.planned_trials,
       };

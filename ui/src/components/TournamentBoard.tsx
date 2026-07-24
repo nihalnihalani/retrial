@@ -1,6 +1,7 @@
 import { useEventStream } from '../useEventStream';
 import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
 import type { ConnectionMode, Phase } from '../types';
+import { DiagnosingView } from './DiagnosingView';
 import { DetectPhase } from './DetectPhase';
 import { TournamentPhase } from './TournamentPhase';
 import { WinnerCard } from './WinnerCard';
@@ -9,9 +10,10 @@ import { GenomeCard } from './GenomeCard';
 
 const DETECT_EXPECTED = 40;
 
-// Which stepper index each phase lights up. winner + quarantine share the
-// terminal "Verdict" step.
+// Which stepper index each phase lights up. Diagnosing is a pre-phase (nothing
+// lit yet); winner + quarantine share the terminal "Verdict" step.
 const PHASE_STEP: Record<Phase, number> = {
+  diagnosing: -1,
   detect: 0,
   tournament: 1,
   winner: 2,
@@ -28,7 +30,8 @@ interface Props {
 export function TournamentBoard({ onRestart }: Props) {
   const { state, mode } = useEventStream();
   const health = useDaytonaHealth(mode);
-  const { phase, detect, hypotheses, winner, quarantine, testName, plannedTrials } = state;
+  const { phase, detect, hypotheses, winner, quarantine, testName, plannedTrials, diagnoseModels } =
+    state;
   const winnerHyp = winner ? hypotheses.find((h) => h.id === winner.id) : undefined;
   const bestHyp = quarantine ? hypotheses.find((h) => h.id === quarantine.bestId) : undefined;
 
@@ -43,6 +46,9 @@ export function TournamentBoard({ onRestart }: Props) {
       />
 
       <main className="board-main">
+        {phase === 'diagnosing' && (
+          <DiagnosingView testName={testName} n={diagnoseModels ?? 4} />
+        )}
         {phase === 'detect' && (
           <DetectPhase detect={detect} expectedTrials={plannedTrials ?? DETECT_EXPECTED} />
         )}
