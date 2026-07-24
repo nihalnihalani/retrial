@@ -14,6 +14,7 @@ Public API:
                         boundaries, binary-search to the polluting test
     EvidenceLedger      Braintrust experiments + real permalinks (audit trail)
     DiagnosisEngine, diagnose   Fireworks differential-diagnosis hypotheses
+    SandboxRegistry     thread-safe ledger of every sandbox — the Observatory feed
 """
 from .pool import SandboxPool, make_pool
 from .forkpool import ForkSandboxPool
@@ -26,6 +27,7 @@ from .ledger import EvidenceLedger, LedgerRun
 from .diagnosis import DiagnosisEngine, diagnose
 from .genome import Genome
 from .prsmith import PRSmith
+from .registry import SandboxRegistry, REGISTRY
 
 __all__ = [
     "SandboxPool",
@@ -48,4 +50,6 @@ __all__ = [
     "diagnose",
     "Genome",
     "PRSmith",
+    "SandboxRegistry",
+    "REGISTRY",
 ]

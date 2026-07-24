@@ -1,10 +1,17 @@
 """SandboxPool tests with the injected FakeClient — lease/release semantics,
-resize arithmetic, stats shape, and background-destroy behavior. No Daytona."""
+resize arithmetic, stats shape, and background-destroy behavior. No Daytona.
+
+Plus the Sandbox Observatory wiring: an injected private registry sees
+snapshot-pool records go warm then destroyed, _evict routes DELETE through the
+owner, and a RaisingRegistry can never break the pool (never-break-a-run)."""
 import time
 
-from conftest import FakeClient
+import pytest
+
+from conftest import FakeClient, RaisingRegistry
 
 from retrial.pool import SandboxPool
+from retrial.registry import SandboxRegistry
 
 
 def _make_pool():
@@ -91,3 +98,54 @@ def test_destroy_all_and_idempotent():
     assert leased.id in client.deleted                # leased sandboxes die too
     assert pool.stats() == {"available": 0, "live": 0}
     assert pool.destroy_all() == 0                    # idempotent
+
+
+# ----------------------- Sandbox Observatory wiring -----------------------
+def _wait_until(cond, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return True
+        time.sleep(0.005)
+    return cond()
+
+
+def test_registry_records_snapshot_pool_sandboxes_warm():
+    reg = SandboxRegistry()
+    pool = SandboxPool(client=FakeClient(), auto_delete_min=0, registry=reg)
+    pool.warm(2)
+    snap = reg.snapshot()
+    assert reg.counts() == {"live": 2, "total_ever": 2, "destroyed": 0}
+    assert all(s["role"] == "snapshot-pool" and s["backend"] == "snapshot"
+               and s["state"] == "warm" for s in snap["sandboxes"])
+
+
+def test_registry_marks_destroyed_on_non_reusable_release():
+    reg = SandboxRegistry()
+    pool = SandboxPool(client=FakeClient(), auto_delete_min=0, registry=reg)
+    pool.warm(1)
+    sb = pool.lease()
+    pool.release(sb, reusable=False)          # background destroy
+    assert _wait_until(lambda: reg.counts()["destroyed"] == 1)
+    assert reg.record(sb.id)["state"] == "destroyed"
+
+
+def test_evict_removes_from_available_and_destroys():
+    reg = SandboxRegistry()
+    pool = SandboxPool(client=FakeClient(), auto_delete_min=0, registry=reg)
+    pool.warm(2)
+    sid = pool._available[0].id
+    pool._evict(sid)                          # the DELETE /sandboxes/{id} path
+    assert sid not in [s.id for s in pool._available]
+    assert sid in pool._client.deleted
+    assert reg.record(sid)["state"] == "destroyed"
+
+
+def test_raising_registry_never_breaks_the_pool():
+    pool = SandboxPool(client=FakeClient(), auto_delete_min=0,
+                       registry=RaisingRegistry())
+    assert pool.warm(2) == 2                  # register/set_state exploded: no-op
+    sb = pool.lease()
+    pool.release(sb, reusable=True)
+    assert pool.stats() == {"available": 2, "live": 2}
+    assert pool.destroy_all() == 2            # mark_destroyed exploded: still fine

@@ -44,3 +44,5 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build (replay mode — no backend needed)
         run: npm run build
+      - name: Test (F7b — sacred default-replay guard)
+        run: npm test
