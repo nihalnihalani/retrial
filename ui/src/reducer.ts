@@ -18,7 +18,7 @@ export const initialState: BoardState = {
   hypotheses: [],
   winner: null,
   quarantine: null,
-  alwaysFailing: null,
+  baselineVerdict: null,
   genome: null,
   prUrl: null,
   tournamentDone: false,
@@ -35,7 +35,7 @@ function resetPerRun(state: BoardState): BoardState {
     hypotheses: [],
     winner: null,
     quarantine: null,
-    alwaysFailing: null,
+    baselineVerdict: null,
     prUrl: null,
     tournamentDone: false,
   };
@@ -48,12 +48,12 @@ function liveFlakeRate(trials: TrialCell[]): number | null {
 }
 
 export function reduce(state: BoardState, event: RetrialEvent): BoardState {
-  // ALWAYS_FAILING is a terminal regression verdict: the original test fails
-  // every run, so there is nothing to fix. Once detect declares it, ignore any
-  // late tournament/winner traffic — a hardcoded failure shown as "FIXED" would
-  // be dishonest. A brand-new run (diagnosing/run_started) still resets cleanly;
+  // A baseline verdict (the original test wasn't FLAKY) is terminal: there is no
+  // tournament to run. Once detect declares one, ignore any late tournament/
+  // winner traffic — e.g. a hardcoded failure shown as "FIXED" would be
+  // dishonest. A brand-new run (diagnosing/run_started) still resets cleanly;
   // cumulative genome and the receipt PR are still allowed through.
-  if (state.phase === 'always_failing') {
+  if (state.phase === 'baseline_verdict') {
     const passthrough =
       event.type === 'diagnosing' ||
       event.type === 'run_started' ||
@@ -124,14 +124,17 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
         fails: event.fails,
         done: true,
       };
-      // A regression, not a flake: the detect pass tags it ALWAYS_FAILING, so we
-      // short-circuit straight to the red verdict (no tournament to run).
-      if (event.verdict === 'ALWAYS_FAILING') {
+      // Any non-FLAKY detect verdict is terminal — the engine's stable-test gate
+      // runs no tournament, so we short-circuit to the matching verdict card
+      // (ALWAYS_FAILING regression, STABLE, INCONCLUSIVE, ERROR). An absent or
+      // "FLAKY" verdict proceeds into the tournament as before (replays too).
+      if (event.verdict && event.verdict !== 'FLAKY') {
         return {
           ...state,
           detect,
-          phase: 'always_failing',
-          alwaysFailing: {
+          phase: 'baseline_verdict',
+          baselineVerdict: {
+            verdict: event.verdict,
             flakeRate: event.flake_rate,
             wilsonCi: event.wilson_ci,
             trials: event.trials,
