@@ -164,3 +164,22 @@ def test_verify_no_valid_trials_is_error():
     assert res["verdict"] == "ERROR"
     assert res["trials"] == 0
     assert res["errors"] == 10
+
+
+def test_verify_counts_lease_failures_as_infra_errors():
+    """Provisioning failures must not escape worker threads or hang a run."""
+
+    class FailingPool:
+        def lease(self):
+            raise RuntimeError("snapshot unavailable in selected region")
+
+        def release(self, _sb, reusable=False):
+            raise AssertionError("an unleased sandbox must never be released")
+
+    res = verify(FailingPool(), "print('never runs')", max_trials=4, conc=2)
+
+    assert res["trials"] == 0
+    assert res["errors"] == 4
+    assert res["verdict"] == "ERROR"
+    assert len(res["history"]) == 4
+    assert all("snapshot unavailable" in item["error"] for item in res["history"])

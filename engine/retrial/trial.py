@@ -34,12 +34,17 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
              "exit_code": int|None, "error": str|None}. `error` is non-None only
     for infrastructure failures (the trial did not yield a real pass/fail).
     """
-    sb = pool.lease()
-    sid = getattr(sb, "id", None)
+    # Leasing is infrastructure too. Keep it inside the guarded section so a
+    # provisioning failure becomes an excluded trial error instead of escaping
+    # the worker thread and leaving the tournament stuck as "active".
+    sb = None
+    sid = None
     t0 = time.monotonic()
     infra_error = False
     cmd = None
     try:
+        sb = pool.lease()
+        sid = getattr(sb, "id", None)
         # Write the test file AND run it in a single exec round-trip (the exec
         # round-trip, not create, is the per-trial cost — one call, not two).
         # The seed is shipped base64-encoded, not via a heredoc: candidate/patched
@@ -108,7 +113,8 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
     finally:
         # Reuse only a healthy sandbox under process isolation; otherwise destroy.
         reusable = (isolation == "process") and not infra_error
-        pool.release(sb, reusable=reusable)
+        if sb is not None:
+            pool.release(sb, reusable=reusable)
 
 
 class TrialRunner:
