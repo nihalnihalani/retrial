@@ -6,7 +6,8 @@ import threading
 
 import pytest
 
-from retrial.verifier import _verdict, verify, wilson
+from retrial.verifier import (ALWAYS_FAILING_MIN_TRIALS, _verdict, verify,
+                              wilson)
 
 
 # ----------------------------- wilson -----------------------------
@@ -32,16 +33,34 @@ def test_wilson_tightens_with_n():
     "fails,n,threshold,expected",
     [
         (0, 0, 0.1, "ERROR"),             # no valid trials
-        (10, 10, 0.1, "ALWAYS_FAILING"),  # 100% failing at min_trials
+        (24, 24, 0.1, "ALWAYS_FAILING"),  # 100% failing AT the terminal floor
+        (40, 40, 0.1, "ALWAYS_FAILING"),  # 100% failing well past the floor
         (0, 40, 0.1, "STABLE"),           # upper bound below threshold
         (20, 40, 0.1, "FLAKY"),           # mixed, whole CI above threshold
         (1, 10, 0.1, "INCONCLUSIVE"),     # CI straddles the threshold
         (2, 2, 0.1, "INCONCLUSIVE"),      # all-fail but below min_trials
+        (10, 10, 0.1, "INCONCLUSIVE"),    # all-fail past min_trials, under floor
+        (16, 16, 0.1, "INCONCLUSIVE"),    # a p=.88 flake's all-fail opening batch
     ],
 )
 def test_verdict_table(fails, n, threshold, expected):
     _, lo, hi = wilson(fails, n)
     assert _verdict(fails, n, lo, hi, threshold, min_trials=8) == expected
+
+
+def test_always_failing_needs_more_evidence_than_min_trials():
+    """A terminal ALWAYS_FAILING must outrank an ordinary early-stop.
+
+    Regression test for a live failure: the real penman specimen (measured 81%,
+    CI 57-93%) opened with 16/16 failures on its first tournament, tripped
+    ALWAYS_FAILING, and the detect-gate ended the run as "REGRESSION" without
+    ever diagnosing a genuinely flaky test."""
+    for n in range(8, ALWAYS_FAILING_MIN_TRIALS):
+        _, lo, hi = wilson(n, n)
+        assert _verdict(n, n, lo, hi, 0.1, min_trials=8) == "INCONCLUSIVE", n
+    _, lo, hi = wilson(ALWAYS_FAILING_MIN_TRIALS, ALWAYS_FAILING_MIN_TRIALS)
+    assert _verdict(ALWAYS_FAILING_MIN_TRIALS, ALWAYS_FAILING_MIN_TRIALS,
+                    lo, hi, 0.1, min_trials=8) == "ALWAYS_FAILING"
 
 
 # ----------------------------- scripted pool -----------------------------

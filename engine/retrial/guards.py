@@ -3,25 +3,44 @@
 A flaky-test tournament ranks patches by how rarely they fail. That objective is
 trivially gamed: a patch that drops the assertion, swallows it, or exits 0
 unconditionally reads 0% flake and would sweep the tournament while detecting
-nothing. This guard makes a patch prove it still tests the failure condition
-before it is allowed to win.
+nothing. This guard rejects those patches.
+
+SCOPE — read this before trusting the result. The guard verifies that a
+comparison still *governs the exit code*. It does NOT verify that the comparison
+still *means what it meant*. Those are different properties and only the second
+one is safety. Specifically it does NOT catch a patch that:
+
+  - swaps the call under test for a benign one and rewrites the oracle to match
+    (`rearrange(t, model.random_order)` -> `model.original_order`, then edits
+    `expected`) — the shape that won the penman experiment in `seeds/real/`;
+  - changes only the expected literal (`== "evt-1"` -> `== "evt-0"`);
+  - keeps a real but unrelated assertion while making the exit unconditional.
+
+Detecting those needs a semantic preservation check (same call graph / same
+public surface exercised), which is not implemented. Treat this as a
+DELETED-ASSERTION DETECTOR, and rely on the human promote gate for the rest. Do
+not describe it as proof that the patch still tests the failure condition.
 
 Two layers:
 
 1. STATIC (ast): the patched file must contain at least one *real* check — an
    `assert` or a conditional `sys.exit`/`exit` whose condition compares a
-   computed value (not two literals). A bare `sys.exit(0)` is rejected outright,
-   and the patched file must carry at least as many real checks as the original
-   (a patch may not delete assertions to win).
+   computed value (not two literals) and is not a tautology (`expected = first;
+   first == expected`). A bare `sys.exit(0)` is rejected outright, and the
+   patched file must carry at least as many real checks as the original (a patch
+   may not delete assertions to win).
 
 2. DYNAMIC canary: mutate the patched test so its final comparison is inverted
    (`==`->`!=`, token flip) — this forces the failure branch — and run it ONCE.
    A genuine test MUST now FAIL (exit != 0). If the mutant still passes, the
    patch's assertion is dead code (both branches exit 0, the assert is swallowed,
    etc.): the patch neutered the test and is DISQUALIFIED.
+   NOTE the asymmetry that limits this layer: inverting a tautology yields a
+   contradiction, which fails — so a tautology satisfies the canary *maximally*.
+   Layer 1's tautology rejection exists because of that.
 
-`neutering_check` returns a `NeuteringResult` that is truthy when the patch is a
-legitimate fix and falsy (with a `.reason`) when it is disqualified.
+`neutering_check` returns a `NeuteringResult` that is truthy when the patch
+survives both layers and falsy (with a `.reason`) when it is disqualified.
 """
 import ast
 
@@ -92,14 +111,63 @@ def _governing_compares(tree):
     return list(seen.values())
 
 
+def _alias_map(tree):
+    """Map of plain `x = y` name aliases (single Name target, single Name value).
+
+    Used to see through `expected = first` — the shape a tautology takes when a
+    patch defines its own oracle from the value it is about to compare."""
+    aliases = {}
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Name)):
+            aliases[node.targets[0].id] = node.value.id
+    return aliases
+
+
+def _resolve(name, aliases, _depth=0):
+    """Follow an alias chain to its root name (cycle- and depth-safe)."""
+    while name in aliases and _depth < 16:
+        name = aliases[name]
+        _depth += 1
+    return name
+
+
+def _is_tautology(compare, aliases):
+    """True if this comparison is guaranteed by construction rather than by the
+    behaviour under test — both sides are the same expression, or the same value
+    reached through `x = y` aliasing.
+
+    `expected = first; sys.exit(0 if first == expected else 1)` is the canonical
+    shape: it has a non-literal operand (so it looks like a real check), it is
+    load-bearing on the exit code (so the inverted canary dutifully fails), and it
+    tests nothing at all."""
+    if len(compare.ops) != 1 or not isinstance(compare.ops[0], (ast.Eq, ast.Is)):
+        return False
+    left, right = compare.left, compare.comparators[0]
+    if isinstance(left, ast.Name) and isinstance(right, ast.Name):
+        return _resolve(left.id, aliases) == _resolve(right.id, aliases)
+    try:
+        return ast.unparse(left) == ast.unparse(right)
+    except Exception:
+        return False
+
+
 def _real_checks(tree):
-    """Governing compares that actually test a computed value (at least one
-    operand is not a literal). `"a" == "a"` is not a real check."""
+    """Governing compares that actually test a computed value: at least one
+    operand is not a literal, and the comparison is not a tautology.
+
+    `"a" == "a"` is not a real check, and neither is `first == expected` where
+    `expected` was just assigned from `first`."""
+    aliases = _alias_map(tree)
     out = []
     for c in _governing_compares(tree):
         operands = [c.left] + list(c.comparators)
-        if any(not isinstance(o, ast.Constant) for o in operands):
-            out.append(c)
+        if all(isinstance(o, ast.Constant) for o in operands):
+            continue
+        if _is_tautology(c, aliases):
+            continue
+        out.append(c)
     return out
 
 

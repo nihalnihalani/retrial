@@ -19,7 +19,7 @@ import threading
 from .settings import get_settings
 
 BASE_URL = "https://api.fireworks.ai/inference/v1"
-DEFAULT_MODELS = ["accounts/fireworks/models/glm-5.2"]  # real slugs TBD when key lands
+DEFAULT_MODELS = ["accounts/fireworks/models/glm-5p2"]  # "p", not "." — verified slug
 
 CAUSE_CLASSES = (
     "order_dependency",
