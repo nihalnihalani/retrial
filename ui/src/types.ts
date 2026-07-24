@@ -47,6 +47,10 @@ export interface HypothesisCreated {
   id: string;
   cause_class: string; // e.g. "race_condition", "order_dependency"
   explanation: string;
+  model?: string; // raw slug that authored this hypothesis (same format as diagnosing.models)
+  // "no_valid_patch" => the model returned nothing parseable; this lane is
+  // created then immediately eliminated and never races (no trials).
+  status?: string;
 }
 
 export interface HypothesisVerified {
@@ -55,6 +59,10 @@ export interface HypothesisVerified {
   flake_rate: number;
   wilson_ci: WilsonCI;
   trials: number;
+  model?: string; // raw slug (same format as diagnosing.models)
+  // Per-lane verdict at max_trials: "STABLE" (a real fix) | "FLAKY" (still flaky)
+  // | "INCONCLUSIVE" (CI straddles the threshold — ineligible to win) | "ERROR".
+  verdict?: string;
 }
 
 export interface HypothesisEliminated {
@@ -62,17 +70,10 @@ export interface HypothesisEliminated {
   id: string;
   // optional — reason the evidence knocked it out
   reason?: string;
-}
-
-// The evidence couldn't decide this lane: its CI straddles the decision
-// threshold, so it's neither verified nor eliminated (and not winner-eligible).
-export interface HypothesisInconclusive {
-  type: 'hypothesis_inconclusive';
-  id: string;
-  flake_rate?: number;
-  wilson_ci?: WilsonCI;
-  trials?: number;
-  reason?: string;
+  model?: string; // raw slug (same format as diagnosing.models)
+  // "no_valid_patch" => the model never produced a parseable patch (no trials).
+  status?: string;
+  neutered?: boolean; // true => disqualified by the neutering guard
 }
 
 export interface WinnerConfirmed {
@@ -85,16 +86,6 @@ export interface WinnerConfirmed {
   orig_flake_rate?: number; // baseline flake before the fix
   braintrust_url?: string; // real Braintrust experiment permalink (the receipt)
   model?: string; // real model slug credited with the winning fix — prefer over index-mapping
-}
-
-// The test isn't flaky — it fails every time. That's a regression, not
-// nondeterminism, so it gets its own terminal verdict (a distinct red card).
-export interface AlwaysFailing {
-  type: 'always_failing';
-  flake_rate?: number; // ~1.0
-  wilson_ci?: WilsonCI;
-  trials?: number;
-  fails?: number;
 }
 
 // No fix stabilized the test — the no-dead-end path: quarantine WITH evidence.
@@ -136,9 +127,7 @@ export type RetrialEvent =
   | HypothesisCreated
   | HypothesisVerified
   | HypothesisEliminated
-  | HypothesisInconclusive
   | WinnerConfirmed
-  | AlwaysFailing
   | QuarantineConfirmed
   | GenomeUpdated
   | PrOpened
@@ -184,6 +173,9 @@ export interface Hypothesis {
   wilsonCi: WilsonCI | null;
   status: HypothesisStatus;
   eliminatedReason?: string;
+  model: string | null; // raw slug of the authoring model, when the engine supplies it
+  verdict?: string; // per-lane verdict from hypothesis_verified (STABLE/FLAKY/INCONCLUSIVE/…)
+  noValidPatch?: boolean; // the model produced nothing parseable — this lane never raced
 }
 
 export interface WinnerState {

@@ -726,6 +726,21 @@ body {
 .lane-reason.inconclusive-reason {
   color: #c9b063;
 }
+/* no-valid-patch: model named a cause but produced no testable patch */
+.lane.no-valid-patch {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.status-no-patch {
+  color: var(--ink-faint);
+  background: var(--panel-2);
+}
+.np-note {
+  display: flex;
+  align-items: center;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
 
 .lane-explanation {
   margin: 0;
