@@ -100,6 +100,43 @@ class TournamentCoordinator:
         except Exception:
             return None  # hermetic diagnosis is a bonus; never break the run
 
+    # Maps a non-FLAKY detect verdict to its honest terminal tournament verdict
+    # + a plain-language message. A non-flaky baseline never enters a tournament.
+    _GATE = {
+        "ALWAYS_FAILING": ("REGRESSION", "test always fails — fix the code, not the test"),
+        "STABLE": ("ALREADY_STABLE", "test is already stable — nothing to fix"),
+        "INCONCLUSIVE": ("INCONCLUSIVE_BASELINE",
+                         "baseline flake rate is inconclusive — cannot prove it's flaky"),
+        "ERROR": ("ERROR", "no valid trials — could not measure the test"),
+    }
+
+    def _gate_result(self, detect_verdict, orig_rate, detect, test_name):
+        """Build the terminal verdict for a non-FLAKY baseline (no tournament)."""
+        verdict, message = self._GATE.get(
+            detect_verdict, ("INCONCLUSIVE_BASELINE",
+                             "baseline is not flaky — no tournament run"))
+        done_payload = {
+            "verdict": verdict,
+            "orig_verdict": detect_verdict,
+            "orig_flake_rate": orig_rate,
+            "message": message,
+            "winner_id": None,
+            "winner_flake_rate": None,
+            "num_hypotheses": 0,
+        }
+        result = {
+            "verdict": verdict,
+            "orig_verdict": detect_verdict,
+            "orig_flake_rate": orig_rate,
+            "message": message,
+            "detect": detect,
+            "hypotheses": [],
+            "winner": None,
+            "confirmation": None,
+            "hermetic": None,
+        }
+        return {"verdict": verdict, "done_payload": done_payload, "result": result}
+
     def _elim_reason(self, r, orig_rate):
         """Why the evidence knocked this hypothesis out of contention."""
         if r["wilson_ci"][1] >= orig_rate:
@@ -142,6 +179,25 @@ class TournamentCoordinator:
             "fails": detect["fails"],
             "verdict": detect_verdict,
         })
+
+        # --- STABLE-TEST GATE: only a FLAKY baseline earns a tournament. ---
+        # Running the tournament on a non-flaky test is the dishonesty this project
+        # exists to kill: a deterministically-failing test (ALWAYS_FAILING) would
+        # otherwise be "fixed" by a model swapping the hardcoded failure for an
+        # unrelated passing assertion — the neutering guard can't catch that (the
+        # replacement IS a real detector, just of something else). So we stop here
+        # and report the baseline honestly: no diagnosis, no hypotheses, no PR.
+        if detect_verdict != "FLAKY":
+            gate = self._gate_result(detect_verdict, orig_rate, detect, test_name)
+            self._emit("tournament_done", gate["done_payload"])
+            try:
+                self.genome.record(test_name=test_name, verdict=gate["verdict"],
+                                   cause_class=None, orig_flake_rate=orig_rate,
+                                   final_flake_rate=orig_rate, winner_model=None,
+                                   attempts=[])
+            except Exception:
+                pass
+            return gate["result"]
 
         # Optional hermetic (network-blocked) detect pass — diagnose external-dep by infra.
         hermetic_finding = self._hermetic_detect(test_code, detect, isolation)
