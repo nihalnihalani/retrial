@@ -554,6 +554,14 @@ body {
 }
 .lane.eliminated {
   opacity: 0.5;
+  /* brief red flash the moment evidence knocks the theory out */
+  animation: elim-flash 0.7s ease;
+}
+.model-chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  letter-spacing: 0.02em;
 }
 .lane-strike {
   position: absolute;
@@ -698,6 +706,30 @@ body {
 }
 .winner-cause {
   margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.winner-model {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.verdict-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 4px;
+}
+.verdict-chip {
+  font-size: 13px;
+  color: var(--ink-dim);
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 6px 14px;
 }
 .winner-numbers {
   display: flex;
@@ -1171,6 +1203,23 @@ body {
   }
   to {
     transform: scaleX(1);
+  }
+}
+@keyframes elim-flash {
+  0% {
+    opacity: 1;
+    border-color: var(--fail);
+    box-shadow: 0 0 0 1px var(--fail), 0 0 26px -4px var(--fail-glow);
+  }
+  35% {
+    opacity: 0.85;
+    border-color: var(--fail);
+    box-shadow: 0 0 0 1px var(--fail), 0 0 30px -2px var(--fail-glow);
+  }
+  100% {
+    opacity: 0.5;
+    border-color: var(--line);
+    box-shadow: none;
   }
 }
 @keyframes scan-sweep {
