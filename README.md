@@ -51,6 +51,11 @@ The incumbents (Bitbucket, Datadog, Kong all shipped flake fixers in 2026) detec
 3. **Verify (the tournament).** Every hypothesis' patch is re-trialed across the swarm, in parallel lanes. The winner isn't the one that *looks* right — it's the one that empirically survives, then survives again in a **fresh confirmation round** that guards against selection bias. Each hypothesis is a [Braintrust](https://braintrust.dev) experiment; the permalink is the receipt.
 4. **Ship (human in the loop).** The winning fix — or an evidence-backed quarantine dossier — waits at a **promote gate** (React modal + `POST /promote`) until a human approves. Then PRSmith opens the PR via `gh api`, with flake rates, Wilson CIs, and Braintrust permalinks in the body.
 
+An optional, collapsed-by-default **CopilotKit evidence navigator** explains the
+current board state and can focus safe UI surfaces (Grid/Tree, Observatory,
+Runs, a permitted demo seed, or the promotion review). It cannot start a run,
+approve a promotion, open a PR, or destroy a sandbox.
+
 > Every flaky test deserves a retrial. Fifty of them, actually.
 
 ![Retrial live demo — a fully-generated run from armed board through 4-model differential diagnosis, tournament with a broken hypothesis eliminated at 100% flake, to the proven verdict](docs/assets/retrial-demo.gif)
@@ -396,6 +401,7 @@ Only integrations with a **real code path** are claimed. The bar for the "Integr
 | **Daytona** | The substrate — snapshot pool, fork/pause checkpoint engine, every trial | `pool.py`, `forkpool.py`, `bisect.py`, `trial.py`, `registry.py` | Snapshot-pool timings measured live; fork path exercised against a **mocked SDK** in CI, plus a manual live smoke |
 | **Fireworks AI** | Differential diagnosis — 4 competing hypotheses from round-robined models (OpenAI-compatible API) | `diagnosis.py` | Real code path, requires `FIREWORKS_API_KEY`; JSON parsing unit-tested; no key ⇒ detect-only, honestly |
 | **Braintrust** | Evidence ledger — one experiment per hypothesis, one log per trial; the permalink is the receipt | `ledger.py`, tracing in `server.py`/`cli.py` | Optional; with no key every ledger call is a silent no-op |
+| **CopilotKit** | Optional evidence navigator — loopback Node runtime, read-only engine tools, safe UI focus only | `ui/copilot/`, `ui/src/copilot/` | Feature-flagged (`VITE_COPILOT_ENABLED`); never GO/promote/destroy |
 | **ElevenLabs** | Spoken verdict autopsy after `tournament_done`, **output only** | `narrator.py`, `ui/src/components/NarrationPlayer.tsx` | `NARRATE=1`, default OFF. Script is **templated from the dossier**, never LLM-written, so speech cannot drift from the board. Failures degrade to silence, never to a failed run |
 | **GitHub (`gh` CLI)** | PRSmith opens fix/quarantine PRs server-side, behind the human promote gate | `prsmith.py` | Never touches the local working tree — `gh api` ref/blob/PR |
 
@@ -433,9 +439,45 @@ cd ui && npm run dev                       # board at localhost:5173 (append ?li
 
 The API server binds **127.0.0.1** by default — it has no auth and wide-open CORS, so it must stay on loopback. Set `HOST=0.0.0.0` only behind a trusted proxy. `POST /tournament` only accepts `seed_path`s that resolve inside `seeds/`, and `POST /bisect` only accepts `suite_dir`s inside it.
 
+### Tournament Board + CopilotKit
+
+The board still works without the copilot. `VITE_COPILOT_ENABLED=0` is the
+safe default: no CopilotKit UI is mounted and a missing AI runtime cannot take
+down the tournament.
+
+To run the live board with the evidence navigator:
+
+```bash
+# Terminal 1, from the repository root
+cd engine && ../.venv/bin/uvicorn retrial.server:app --host 127.0.0.1 --port 8000
+
+# Terminal 2, after setting FIREWORKS_API_KEY and VITE_COPILOT_ENABLED=1 in .env
+cd ui && npm install && npm run dev
+```
+
+`npm run dev` starts Vite on `127.0.0.1:5173` and the CopilotKit runtime on
+`127.0.0.1:4000`; Vite proxies `/api/copilotkit`, so the browser never receives
+`FIREWORKS_API_KEY`. Open `http://127.0.0.1:5173/?live=1`, then choose **Ask**
+from the top bar. Chat memory is intentionally per page load. For isolated
+debugging, `npm run dev:ui` starts Vite only and `npm run dev:copilot` starts
+the CopilotKit runtime only. The Python engine remains a separate process.
+
+The runtime's engine tools are read-only (`GET /health`, `GET /preflight`, and
+`GET /runs`). Frontend tools may reveal or focus an existing UI control, but
+they never call `POST` or `DELETE`. The human still presses **GO**, approves a
+promotion, and confirms destructive sandbox actions. Keep all three services
+on loopback; this local hackathon runtime is not an authenticated public API.
+
 ### Configuration reference
 
-Every env var is read through one typed [`pydantic-settings`](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) surface (`engine/retrial/settings.py`) — parsed and validated once, never scattered. Names are frozen (no renames); `get_settings()` constructs fresh on every call so per-run `monkeypatch.setenv` and live re-reads still work; a malformed value (e.g. `MAX_TRIALS=abc`) is recovered to the default and surfaced as a loud `settings_parse` failure rather than crashing boot.
+Engine env vars are read through one typed
+[`pydantic-settings`](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)
+surface (`engine/retrial/settings.py`) — parsed and validated once, never
+scattered. Names are frozen (no renames); `get_settings()` constructs fresh on
+every call so per-run `monkeypatch.setenv` and live re-reads still work; a
+malformed value (e.g. `MAX_TRIALS=abc`) is recovered to the default and
+surfaced as a loud `settings_parse` failure rather than crashing boot. The
+Copilot rows below belong to the separate local Node/Vite surface.
 
 | Env | Default | Consumer | Meaning |
 | --- | --- | --- | --- |
@@ -461,6 +503,12 @@ Every env var is read through one typed [`pydantic-settings`](https://docs.pydan
 | `RETRIAL_PREFLIGHT_LIVE` | `0` | server | `1` runs the **real** live fork deep check at boot (Daytona calls) |
 | `FIREWORKS_API_KEY` | *(none)* | diagnosis | Fireworks key; absent = detect-only (no hypotheses) |
 | `FIREWORKS_MODELS` | *(empty)* | diagnosis | comma-separated model slugs (round-robined) |
+| `VITE_COPILOT_ENABLED` | `0` | UI | `1` mounts the optional CopilotKit evidence navigator |
+| `COPILOT_RUNTIME_PORT` | `4000` | Copilot runtime | loopback port proxied by Vite at `/api/copilotkit` |
+| `COPILOT_MODEL` | first `FIREWORKS_MODELS` entry, then `accounts/fireworks/models/glm-5p2` | Copilot runtime | Fireworks model used by the navigator |
+| `COPILOT_MAX_OUTPUT_TOKENS` | `800` | Copilot runtime | response ceiling for concise evidence explanations |
+| `COPILOTKIT_TELEMETRY_DISABLED` | `true` in `.env.example` | Copilot runtime | keeps the local evidence navigator from sending anonymous runtime telemetry |
+| `RETRIAL_ENGINE_URL` | `http://127.0.0.1:8000` | Copilot runtime | origin for its bounded read-only engine tools |
 | `BRAINTRUST_API_KEY` | *(none)* | ledger / tracing | absent = evidence ledger disabled |
 | `NARRATE` | `0` | narrator / server | `1` = speak the verdict autopsy after `tournament_done` (needs `ELEVENLABS_API_KEY`) |
 | `ELEVENLABS_API_KEY` | *(none)* | narrator | absent = narration silently skipped (preflight warns if `NARRATE=1`) |

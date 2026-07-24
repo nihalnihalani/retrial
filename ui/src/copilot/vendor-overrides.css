@@ -1,0 +1,56 @@
+/* Rules that restyle CopilotKit's own DOM.
+   
+   These live outside design-system.css for one reason: CopilotKit's stylesheet
+   is a full Tailwind build that reuses our layer names, and its `[data-copilotkit]`
+   rules land in `utilities`. Layers beat specificity, so anything in `components`
+   — where the design system lives — loses to them no matter how specific it is.
+   index.css imports this file into `copilot`, declared last and therefore highest.
+
+   Only put rules here that target vendor markup. Retrial's own panel chrome
+   belongs in design-system.css with the rest of the visual language. */
+
+.retrial-copilot [data-copilotkit] {
+  --background: #0d1019;
+  --foreground: #f2f4f8;
+  --card: #121725;
+  --card-foreground: #f2f4f8;
+  --popover: #121725;
+  --popover-foreground: #f2f4f8;
+  --primary: #6ea8ff;
+  --primary-foreground: #07111f;
+  --secondary: #171c2a;
+  --secondary-foreground: #e8edf5;
+  --muted: #171c2a;
+  --muted-foreground: #98a2b3;
+  --accent: #1c2638;
+  --accent-foreground: #f2f4f8;
+  --border: #252c3c;
+  --input: #252c3c;
+  --ring: #6ea8ff;
+  --radius: 0.625rem;
+  height: 100%;
+  background: transparent;
+  font-family: var(--sans);
+}
+
+.retrial-copilot [data-copilotkit] textarea {
+  min-height: 42px;
+}
+
+.retrial-copilot [data-copilotkit] h1 {
+  max-width: 300px;
+  font-size: 18px;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+.retrial-copilot [data-testid="copilot-chat-input"] {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.retrial-copilot [data-testid="copilot-add-menu-button"]:disabled {
+  display: none;
+}

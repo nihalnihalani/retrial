@@ -1,9 +1,15 @@
 /* Tailwind first, then the board's own CSS in the components layer so that
    utility classes (shadcn primitives) can override component styling without
-   `!important` escalation. */
+   `!important` escalation.
+
+   The copilot layer is declared last, and therefore outranks every layer above.
+   CopilotKit ships a full Tailwind build that reuses these same layer names and
+   puts its [data-copilotkit] rules in `utilities`; since layer order beats
+   specificity, that is the only place a vendor override can win from. */
 @import "tailwindcss";
 @import "./styles.css" layer(components);
 @import "./design-system.css" layer(components);
+@import "./copilot/vendor-overrides.css" layer(copilot);
 
 @theme inline {
   --color-background: hsl(var(--background));

@@ -48,7 +48,7 @@ export function PromoteGate({
 
   return (
     <div className="promote-overlay" role="dialog" aria-modal="true" aria-label="Promote gate">
-      <div className="promote-modal">
+      <div className="promote-modal" id="promote-gate" tabIndex={-1}>
         <div className="promote-head">
           <span className="promote-head-label">Human Promote Gate</span>
           <span className="promote-head-blink">◆ approval required</span>

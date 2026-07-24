@@ -268,6 +268,410 @@
   },
   {
     "seq": 18,
+    "test_name": "test_first_key.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.25,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 19,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 20,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 21,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.625,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 22,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 23,
+    "test_name": "test_first_key.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5625,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      }
+    ]
+  },
+  {
+    "seq": 24,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 25,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 26,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.625,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 27,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5625,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 28,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.4375,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 29,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.6875,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 30,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 31,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.3182,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 32,
+    "test_name": "test_first_key.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5625,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 33,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 34,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.4375,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p1",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": true
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 35,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 36,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.375,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/glm-5p2",
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": true
+      }
+    ]
+  },
+  {
+    "seq": 37,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
+  },
+  {
+    "seq": 38,
     "test_name": "test_dict_order.py",
     "verdict": "ERROR",
     "cause_class": null,

@@ -15,13 +15,15 @@ cd engine && ../.venv/bin/python -m retrial.cli check ../seeds/test_dict_order.p
 .venv/bin/python scripts/calibrate_seeds.py        # TRIALS=40 env to change count
 
 # Server (engine/retrial/server.py): uvicorn on :8000 — GET /health, WS /ws, POST /tournament
-# UI (from ui/): npm run dev  → http://localhost:5173  (replay mode default; append ?live=1 for WS)
+# UI + optional CopilotKit runtime (from ui/): npm run dev → http://localhost:5173
+# Split debug: npm run dev:ui | npm run dev:copilot. Python engine remains separate on :8000.
+# Replay is default; append ?live=1 for WS. Copilot mounts only with VITE_COPILOT_ENABLED=1.
 npm run build                                       # must pass before committing UI changes
 ```
 
 ## Repo map
 - `engine/retrial/` — Python core: `pool.py` (SandboxPool), `trial.py` (TrialRunner), `verifier.py` (Wilson CI + adaptive early-stop), `coordinator.py` (TournamentCoordinator), `events.py` (EventBus, ring buffer 500), `cli.py`, `server.py` (FastAPI/WS)
-- `ui/` — React+Vite TournamentBoard; `src/types.ts` **is the authoritative event contract**; `src/mockRun.ts` scripted replay (demo fallback)
+- `ui/` — React+Vite TournamentBoard; `src/types.ts` **is the authoritative event contract**; `src/mockRun.ts` scripted replay (demo fallback); `copilot/` is the loopback-only CopilotKit runtime
 - `seeds/` — calibrated flaky tests (plain python scripts, exit 0=pass 1=fail; NOT pytest)
 - `scripts/calibrate_seeds.py` — the calibration harness (the verified Daytona usage pattern lives here — copy it, don't reinvent)
 - `docs/` — strategy + verified research. `WINNING-IDEA.md` = product/demo source of truth. `ARCHITECTURE.md` = design. `DAYTONA-COOKBOOK.md` = verified SDK patterns. `EVENT-RULES.md` = official hackathon rules.
@@ -70,7 +72,7 @@ Rules: `trial_index` is per-context 0-based (detect series = `hypothesis_id: nul
 - Adaptive early-stop: stop when CI fully excludes the decision threshold. Don't remove it; it's why the live demo fits 3 minutes.
 
 ## Sponsor integrations (depth over breadth — sponsor usage is a BONUS criterion, not a pillar)
-Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Experiment; each batch = eval run; permalink = the audit receipt), **Fireworks** (DiagnosisEngine: OpenAI-compat, base_url `https://api.fireworks.ai/inference/v1`, models VERIFIED 2026-07-23: `accounts/fireworks/models/{glm-5p2, glm-5p1, kimi-k2p6, deepseek-v4-pro}` — "p" not ".", read from env FIREWORKS_MODELS, never hardcode). Bonus: **CodeRabbit** (reviews the real output PR; latency 1–5 min — always pre-run, never claim live turnaround), **ElevenLabs** (`engine/retrial/narrator.py`: `eleven_v3` verdict autopsy, OUTPUT only — never voice input; NARRATE=1, default OFF; script is TEMPLATED from the dossier, never LLM-written, so speech can't drift from the board; ~20s synth, fired after `tournament_done` off the run thread; served at `GET /narration/<run_id>`). Cut: CopilotKit, WorkOS. Do not add sponsor calls that aren't load-bearing.
+Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Experiment; each batch = eval run; permalink = the audit receipt), **Fireworks** (DiagnosisEngine: OpenAI-compat, base_url `https://api.fireworks.ai/inference/v1`, models VERIFIED 2026-07-23: `accounts/fireworks/models/{glm-5p2, glm-5p1, kimi-k2p6, deepseek-v4-pro}` — "p" not ".", read from env FIREWORKS_MODELS, never hardcode), and optional **CopilotKit** (live evidence navigator; reuses Fireworks, read-only server tools, safe UI focus only, never GO/promote/destroy). Bonus: **CodeRabbit** (reviews the real output PR; latency 1–5 min — always pre-run, never claim live turnaround), **ElevenLabs** (`engine/retrial/narrator.py`: `eleven_v3` verdict autopsy, OUTPUT only — never voice input; NARRATE=1, default OFF; script is TEMPLATED from the dossier, never LLM-written, so speech can't drift from the board; ~20s synth, fired after `tournament_done` off the run thread; served at `GET /narration/<run_id>`). Cut: WorkOS. Do not add sponsor calls that aren't load-bearing.
 
 ## Honesty rules (judges include the engineers who built these tools)
 - Never state a latency/throughput/flake number that wasn't measured in THIS repo. Measured numbers live in `docs/WINNING-IDEA.md` ("MEASURED DEMO-TIMING TRUTH") and `calibration-results.json`.
@@ -98,7 +100,7 @@ Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Expe
 Default URL = winning-path REPLAY, spotless console. `?mock=quarantine` = no-winner rehearsal. `?live=1` = attempt engine WS (falls back to replay). ↻ Replay button restarts cleanly. Mock test name must always be an ORDER-DEPENDENCY-class name (never race/timing — we measured those don't flake here and must not imply otherwise).
 
 ## Env keys (.env at repo root; coupon codes in .env.example comments)
-`DAYTONA_API_KEY` ✅ filled · `FIREWORKS_API_KEY` ✅ · `BRAINTRUST_API_KEY` ✅ · `ELEVENLABS_API_KEY` ✅ (Creator tier, 131k chars/mo; a verdict autopsy costs ~900) · `GITHUB_TOKEN` (or gh CLI) for PRSmith.
+`DAYTONA_API_KEY` ✅ filled · `FIREWORKS_API_KEY` ✅ · `VITE_COPILOT_ENABLED=0` by default · `BRAINTRUST_API_KEY` ✅ · `ELEVENLABS_API_KEY` ✅ (Creator tier, 131k chars/mo; a verdict autopsy costs ~900) · `GITHUB_TOKEN` (or gh CLI) for PRSmith.
 
 ## When you make a mistake this file didn't prevent
 Add the rule here in the same commit as the fix. Keep this file under 150 lines — delete rules the code now makes obvious.

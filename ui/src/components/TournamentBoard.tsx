@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Boxes, GitBranch, Grid3X3, History, Play, RotateCcw, Scale, Telescope } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useState, type RefObject } from 'react';
+import { Bot, Boxes, GitBranch, Grid3X3, History, Play, RotateCcw, Scale, Telescope } from 'lucide-react';
 import { useEventStream } from '../useEventStream';
 import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
 import { modelForHypothesis, displayModel } from '../models';
@@ -24,6 +24,8 @@ import { SandboxObservatory } from './SandboxObservatory';
 import { RunHistory } from './RunHistory';
 import { DegradeBanner } from './DegradeBanner';
 import { authAware } from '../authError';
+import { useCopilotStatus } from '../copilot/CopilotStatusProvider';
+import type { BoardPanel } from '../copilot/actions';
 
 const DETECT_EXPECTED = 40;
 const TOURNAMENT_URL = 'http://localhost:8000/tournament';
@@ -62,6 +64,13 @@ const STEPS = ['Detect', 'Tournament', 'Verdict'];
 // tournament rendered as a timeline rail; also forced whenever a bisection
 // is running (the rail IS that feature's view).
 type BoardView = 'grid' | 'tree';
+type StageIndex = 0 | 1 | 2;
+
+const RetrialCopilot = lazy(() =>
+  import('../copilot/RetrialCopilot').then((module) => ({
+    default: module.RetrialCopilot,
+  })),
+);
 
 interface Props {
   onRestart: () => void;
@@ -72,6 +81,7 @@ interface Props {
 export function TournamentBoard({ onRestart }: Props) {
   const { state, mode, connectionMessage } = useEventStream();
   const health = useDaytonaHealth(mode);
+  const copilotStatus = useCopilotStatus();
   const {
     phase,
     detect,
@@ -123,6 +133,11 @@ export function TournamentBoard({ onRestart }: Props) {
   const [obsOpen, setObsOpen] = useState(false);
   // Run history: the same backstage grammar — opt-in, collapsed, read-only.
   const [runsOpen, setRunsOpen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  // null follows the live phase. A number means the operator is inspecting a
+  // completed stage while the engine's current phase continues independently.
+  const [selectedStep, setSelectedStep] = useState<StageIndex | null>(null);
+  const goRef = useMagnetic<HTMLButtonElement>(4);
 
   // A run is "active" from the moment it names a test until it reaches a
   // terminal verdict; the GO button disables itself for that whole window.
@@ -140,12 +155,61 @@ export function TournamentBoard({ onRestart }: Props) {
 
   // A running bisection IS the tree view — the checkpoint rail is its board.
   const showTree = phase === 'bisect' || (treeRequested && view === 'tree');
+  const copilotReady = copilotStatus === 'ready';
+  const activeStep = PHASE_STEP[phase];
+  const stageAvailable: readonly [boolean, boolean, boolean] = [
+    phase === 'detect' || detect.trials.length > 0 || detect.done,
+    phase === 'tournament' || hypotheses.length > 0,
+    terminalPhase,
+  ];
+  const viewedStep =
+    selectedStep !== null && stageAvailable[selectedStep]
+      ? selectedStep
+      : activeStep;
+
+  const focusAfterRender = useCallback((selector: string, focus = false) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const element = document.querySelector<HTMLElement>(selector);
+        element?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (focus) element?.focus({ preventScroll: true });
+      });
+    });
+  }, []);
+
+  const focusPanel = useCallback((panel: BoardPanel) => {
+    const selector =
+      panel === 'observatory'
+        ? '#sandbox-observatory'
+        : panel === 'runs'
+          ? '#run-history'
+          : '#evidence-board';
+    focusAfterRender(selector);
+  }, [focusAfterRender]);
+
+  const focusGo = useCallback(() => {
+    goRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    goRef.current?.focus({ preventScroll: true });
+  }, [goRef]);
+
+  const focusPromotion = useCallback(
+    () => focusAfterRender('#promote-gate', true),
+    [focusAfterRender],
+  );
 
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 6000);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  // A new diagnosis/idle board starts in follow-live mode; evidence navigation
+  // is scoped to the run whose retained state it is inspecting.
+  useEffect(() => {
+    if (waitingForRun || phase === 'diagnosing' || phase === 'bisect') {
+      setSelectedStep(null);
+    }
+  }, [phase, waitingForRun]);
 
   // Stage clock: starts on diagnosing, ticks until a terminal verdict, clears when idle.
   useEffect(() => {
@@ -221,7 +285,9 @@ export function TournamentBoard({ onRestart }: Props) {
   });
 
   return (
-    <div className={`board ${terminalPhase ? 'is-terminal' : ''}`}>
+    <div
+      className={`board ${terminalPhase ? 'is-terminal' : ''} ${copilotOpen ? 'copilot-open' : ''}`}
+    >
       <DegradeBanner poolDegraded={poolDegraded} preflight={preflight} />
       <TopBar
         mode={mode}
@@ -240,13 +306,33 @@ export function TournamentBoard({ onRestart }: Props) {
         viewLocked={phase === 'bisect'}
         showViewToggle={showViewToggle}
         obsOpen={obsOpen}
-        onObsToggle={() => setObsOpen((o) => !o)}
+        onObsToggle={() => {
+          setObsOpen((open) => !open);
+          setRunsOpen(false);
+          setCopilotOpen(false);
+        }}
         obsLiveCount={observatory.seen ? observatory.counts.live : null}
         elapsedSec={runStartedAt != null ? elapsedSec : null}
         runActive={runActive}
         terminal={terminal}
         runsOpen={runsOpen}
-        onRunsToggle={() => setRunsOpen((o) => !o)}
+        onRunsToggle={() => {
+          setRunsOpen((open) => !open);
+          setObsOpen(false);
+          setCopilotOpen(false);
+        }}
+        copilotStatus={copilotStatus}
+        copilotOpen={copilotOpen}
+        onCopilotToggle={() => {
+          if (!copilotReady) return;
+          setCopilotOpen((open) => !open);
+          setObsOpen(false);
+          setRunsOpen(false);
+        }}
+        viewedStep={viewedStep}
+        stageAvailable={stageAvailable}
+        onStageSelect={(step) => setSelectedStep(step === activeStep ? null : step)}
+        goRef={goRef}
       />
 
       {toast && (
@@ -264,6 +350,45 @@ export function TournamentBoard({ onRestart }: Props) {
             n={diagnoseModels ?? 4}
             modelNames={diagnoseModelNames}
           />
+        ) : phase === 'bisect' ? (
+          <TreeTimeline state={state} />
+        ) : selectedStep === 0 && stageAvailable[0] ? (
+          <DetectPhase
+            detect={detect}
+            expectedTrials={plannedTrials ?? DETECT_EXPECTED}
+            threshold={threshold}
+          />
+        ) : selectedStep === 1 && stageAvailable[1] ? (
+          <TournamentPhase
+            hypotheses={hypotheses}
+            modelNames={diagnoseModelNames}
+            plannedTrials={plannedTrials}
+            threshold={threshold}
+          />
+        ) : selectedStep === 2 && stageAvailable[2] ? (
+          <>
+            {phase === 'winner' && winner && (
+              <WinnerCard
+                winner={winner}
+                hypothesis={winnerHyp}
+                detect={detect}
+                prUrl={prUrl}
+                model={winnerModel}
+              />
+            )}
+            {phase === 'quarantine' && quarantine && (
+              <QuarantineCard
+                quarantine={quarantine}
+                bestHypothesis={bestHyp}
+                detect={detect}
+                prUrl={prUrl}
+                model={bestModel}
+              />
+            )}
+            {phase === 'baseline_verdict' && baselineVerdict && (
+              <TerminalVerdictCard state={baselineVerdict} />
+            )}
+          </>
         ) : showTree ? (
           <TreeTimeline state={state} />
         ) : (
@@ -320,9 +445,35 @@ export function TournamentBoard({ onRestart }: Props) {
         </div>
       )}
 
-      {runsOpen && <RunHistory mode={mode} />}
+      {runsOpen && (
+        <div id="run-history">
+          <RunHistory mode={mode} />
+        </div>
+      )}
 
       <PromoteGate promotion={promotion} mode={mode} />
+
+      {copilotReady && (
+        <Suspense fallback={null}>
+          <RetrialCopilot
+            open={copilotOpen}
+            onClose={() => setCopilotOpen(false)}
+            state={state}
+            mode={mode}
+            view={view}
+            treeAvailable={showViewToggle}
+            treeLocked={phase === 'bisect'}
+            runInProgress={runActive}
+            setView={setView}
+            setSeedLabel={setSeedLabel}
+            setObservatoryOpen={setObsOpen}
+            setRunsOpen={setRunsOpen}
+            focusGo={focusGo}
+            focusPromotion={focusPromotion}
+            focusPanel={focusPanel}
+          />
+        </Suspense>
+      )}
 
       {!terminalPhase && (hypotheses.length > 0 || genome) && (
         <footer className="board-footer">
@@ -360,6 +511,13 @@ function TopBar({
   terminal,
   runsOpen,
   onRunsToggle,
+  copilotStatus,
+  copilotOpen,
+  onCopilotToggle,
+  viewedStep,
+  stageAvailable,
+  onStageSelect,
+  goRef,
 }: {
   mode: ConnectionMode;
   phase: Phase;
@@ -384,6 +542,13 @@ function TopBar({
   terminal: boolean;
   runsOpen: boolean;
   onRunsToggle: () => void;
+  copilotStatus: 'disabled' | 'loading' | 'ready' | 'unavailable';
+  copilotOpen: boolean;
+  onCopilotToggle: () => void;
+  viewedStep: number;
+  stageAvailable: readonly [boolean, boolean, boolean];
+  onStageSelect: (step: StageIndex) => void;
+  goRef: RefObject<HTMLButtonElement>;
 }) {
   const activeIndex = PHASE_STEP[phase];
   return (
@@ -403,16 +568,29 @@ function TopBar({
 
         <nav className="stepper" aria-label="Tournament progress">
           {STEPS.map((label, i) => (
-            <div
+            <button
+              type="button"
               key={label}
-              className={`step ${i === activeIndex ? 'active' : ''} ${
+              className={`step ${i === viewedStep ? 'active' : ''} ${
+                i === activeIndex ? 'current' : ''
+              } ${
                 i < activeIndex ? 'done' : ''
               }`}
               aria-current={i === activeIndex ? 'step' : undefined}
+              aria-pressed={i === viewedStep}
+              disabled={!stageAvailable[i]}
+              onClick={() => onStageSelect(i as StageIndex)}
+              title={
+                stageAvailable[i]
+                  ? i === activeIndex
+                    ? `${label} — current live phase`
+                    : `Review ${label.toLowerCase()} evidence`
+                  : `${label} evidence is not available yet`
+              }
             >
               <span className="step-index mono">0{i + 1}</span>
               <span className="step-label">{label}</span>
-            </div>
+            </button>
           ))}
         </nav>
 
@@ -448,6 +626,7 @@ function TopBar({
             onGo={onGo}
             disabled={goDisabled}
             posting={posting}
+            goRef={goRef}
           />
           {showViewToggle && (
             <ViewToggle view={view} onViewChange={onViewChange} locked={viewLocked} />
@@ -482,6 +661,31 @@ function TopBar({
         >
           <History aria-hidden="true" /> Runs
         </Button>
+        {copilotStatus === 'ready' && (
+          <Button
+            variant={copilotOpen ? 'secondary' : 'outline'}
+            size="sm"
+            className="mobile-touch-target h-8 gap-1.5"
+            onClick={onCopilotToggle}
+            title="Evidence Navigator — explain this board and prepare safe UI actions"
+            aria-expanded={copilotOpen}
+            aria-controls="retrial-copilot"
+            data-copilot-trigger
+          >
+            <Bot aria-hidden="true" /> Ask
+          </Button>
+        )}
+        {copilotStatus === 'unavailable' && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 opacity-60"
+            disabled
+            title="Evidence Navigator runtime is unavailable; the board remains fully operational"
+          >
+            <Bot aria-hidden="true" /> Copilot offline
+          </Button>
+        )}
         {mode === 'disconnected' && (
           <span className="stale-note">stream paused · reconnecting</span>
         )}
@@ -548,16 +752,15 @@ function GoControl({
   onGo,
   disabled,
   posting,
+  goRef,
 }: {
   seedLabel: string;
   onSeedChange: (label: string) => void;
   onGo: () => void;
   disabled: boolean;
   posting: boolean;
+  goRef: RefObject<HTMLButtonElement>;
 }) {
-  // Gentle: GO is the one control that must be hit first time on stage, so the
-  // lean is an acknowledgement of the pointer, not a moving target.
-  const goRef = useMagnetic<HTMLButtonElement>(4);
   return (
     <div className="go-control flex items-center gap-0 rounded-[calc(var(--radius)+2px)] border border-border bg-secondary p-[3px] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.03)]">
       <select

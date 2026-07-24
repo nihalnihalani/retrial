@@ -260,6 +260,19 @@ body {
   transition: color 0.25s var(--ease), background-color 0.25s var(--ease);
 }
 
+.step:not(:disabled) {
+  cursor: pointer;
+}
+
+.step:not(:disabled):hover {
+  color: var(--ink-dim);
+  background: hsl(0 0% 100% / 0.025);
+}
+
+.step:disabled {
+  cursor: default;
+}
+
 .step + .step::before {
   content: "";
   position: absolute;
@@ -300,6 +313,15 @@ body {
 }
 
 .step.active .step-index {
+  color: var(--gold);
+  opacity: 1;
+}
+
+.step.current:not(.active) {
+  color: var(--ink-dim);
+}
+
+.step.current:not(.active) .step-index {
   color: var(--gold);
   opacity: 1;
 }
@@ -1364,5 +1386,149 @@ body {
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
     transition-duration: 0.01ms;
+  }
+}
+
+/* ---------- Copilot evidence navigator ---------- */
+
+@media (min-width: 901px) {
+  .board.copilot-open {
+    width: calc(100% - 420px);
+    max-width: 1440px;
+    margin-left: 0;
+    margin-right: auto;
+  }
+}
+
+.retrial-copilot {
+  position: fixed;
+  z-index: 60;
+  inset: 16px 16px 16px auto;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(390px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 18px;
+  background: rgba(12, 15, 24, 0.99);
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.52),
+    inset 0 1px rgba(255, 255, 255, 0.045);
+  animation: copilot-enter 240ms var(--ease);
+}
+
+.retrial-copilot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 15px 14px 13px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.retrial-copilot-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.retrial-copilot-title > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.retrial-copilot-title strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retrial-copilot-title small {
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.retrial-copilot-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid rgba(110, 168, 255, 0.28);
+  border-radius: 9px;
+  background: rgba(110, 168, 255, 0.09);
+  color: var(--accent);
+}
+
+.retrial-copilot-icon svg,
+.retrial-copilot-trust svg {
+  width: 15px;
+  height: 15px;
+}
+
+.retrial-copilot-close {
+  width: 34px;
+  height: 34px;
+  color: var(--ink-dim);
+}
+
+.retrial-copilot-trust {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line-3);
+  color: var(--pass);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.retrial-copilot-error {
+  margin: 12px 12px 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(242, 193, 78, 0.3);
+  border-radius: 8px;
+  background: rgba(242, 193, 78, 0.08);
+  color: var(--gold-2);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.retrial-copilot-chat {
+  min-height: 0;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+/* Rules that restyle CopilotKit's own markup live in
+   copilot/vendor-overrides.css, not here. The vendor stylesheet puts its
+   [data-copilotkit] rules in the `utilities` layer, which outranks the
+   `components` layer this file is imported into, so overrides written here
+   would silently lose. */
+
+@keyframes copilot-enter {
+  from {
+    opacity: 0;
+    transform: translateX(14px) scale(0.99);
+  }
+}
+
+@media (max-width: 900px) {
+  .retrial-copilot {
+    inset: 0;
+    width: 100vw;
+    border: 0;
+    border-radius: 0;
   }
 }
