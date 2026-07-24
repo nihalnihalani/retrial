@@ -5,6 +5,7 @@ import type { BoardState, ConnectionMode, RetrialEvent } from './types';
 
 const WS_URL = 'ws://localhost:8000/ws';
 const CONNECT_TIMEOUT_MS = 1500;
+const RECONNECT_DELAY_MS = 2000;
 
 interface Stream {
   state: BoardState;
@@ -26,8 +27,10 @@ export function useEventStream(): Stream {
     let disposed = false;
     let ws: WebSocket | null = null;
     let timeoutId: number | undefined;
+    let reconnectTimer: number | undefined;
     let mockCancel: (() => void) | null = null;
-    let wentLive = false;
+    let wentLive = false; // have we ever successfully opened the socket?
+    let reconnectTried = false; // we attempt exactly one reconnect after a drop
 
     const startMock = () => {
       if (disposed || mockCancel) return;
@@ -44,17 +47,30 @@ export function useEventStream(): Stream {
       };
     }
 
-    try {
-      ws = new WebSocket(WS_URL);
-      timeoutId = window.setTimeout(() => {
-        if (disposed || wentLive) return;
-        try {
-          ws?.close();
-        } catch {
-          /* ignore */
-        }
-        startMock();
-      }, CONNECT_TIMEOUT_MS);
+    const connect = (isReconnect: boolean) => {
+      try {
+        ws = new WebSocket(WS_URL);
+      } catch {
+        // Only the very first attempt may fall back to replay; a reconnect that
+        // can't even construct stays honestly DISCONNECTED.
+        if (!isReconnect) startMock();
+        else setMode('disconnected');
+        return;
+      }
+
+      // The connect-timeout → replay fallback applies to the FIRST attempt only.
+      // We never silently swap real (then dropped) data for a scripted replay.
+      if (!isReconnect) {
+        timeoutId = window.setTimeout(() => {
+          if (disposed || wentLive) return;
+          try {
+            ws?.close();
+          } catch {
+            /* ignore */
+          }
+          startMock();
+        }, CONNECT_TIMEOUT_MS);
+      }
 
       ws.onopen = () => {
         if (disposed) return;
@@ -70,17 +86,30 @@ export function useEventStream(): Stream {
         }
       };
       ws.onclose = () => {
-        if (disposed || wentLive) return;
+        if (disposed) return;
         window.clearTimeout(timeoutId);
-        startMock();
+        if (!wentLive) {
+          // Never established on the first attempt — fall back to replay.
+          startMock();
+          return;
+        }
+        // Opened, then the connection dropped. Be honest: the data may be stale.
+        setMode('disconnected');
+        if (!reconnectTried) {
+          reconnectTried = true;
+          reconnectTimer = window.setTimeout(() => {
+            if (!disposed) connect(true);
+          }, RECONNECT_DELAY_MS);
+        }
       };
-    } catch {
-      startMock();
-    }
+    };
+
+    connect(false);
 
     return () => {
       disposed = true;
       window.clearTimeout(timeoutId);
+      window.clearTimeout(reconnectTimer);
       mockCancel?.();
       try {
         ws?.close();

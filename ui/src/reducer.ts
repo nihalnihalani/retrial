@@ -6,6 +6,7 @@ export const initialState: BoardState = {
   diagnoseModels: null,
   diagnoseModelNames: null,
   plannedTrials: null,
+  threshold: null,
   detect: {
     trials: [],
     flakeRate: null,
@@ -17,10 +18,28 @@ export const initialState: BoardState = {
   hypotheses: [],
   winner: null,
   quarantine: null,
+  alwaysFailing: null,
   genome: null,
   prUrl: null,
   tournamentDone: false,
 };
+
+// Clears everything that belongs to a single run so a second live run can't
+// inherit the first run's board, while PRESERVING the cumulative genome (and
+// the diagnosing pre-phase's model list / test name, which the caller re-sets).
+function resetPerRun(state: BoardState): BoardState {
+  return {
+    ...state,
+    phase: 'detect',
+    detect: { ...initialState.detect, trials: [] },
+    hypotheses: [],
+    winner: null,
+    quarantine: null,
+    alwaysFailing: null,
+    prUrl: null,
+    tournamentDone: false,
+  };
+}
 
 function liveFlakeRate(trials: TrialCell[]): number | null {
   if (trials.length === 0) return null;
@@ -32,7 +51,7 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
   switch (event.type) {
     case 'diagnosing': {
       return {
-        ...state,
+        ...resetPerRun(state),
         phase: 'diagnosing',
         testName: event.test_name,
         diagnoseModels: event.n,
@@ -42,11 +61,12 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
 
     case 'run_started': {
       return {
-        ...state,
+        ...resetPerRun(state),
         // leave the diagnosing pre-phase; the live run begins
         phase: 'detect',
         testName: event.test_name,
         plannedTrials: event.planned_trials,
+        threshold: event.threshold ?? state.threshold,
       };
     }
 
@@ -82,17 +102,30 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
     }
 
     case 'detect_done': {
-      return {
-        ...state,
-        detect: {
-          ...state.detect,
-          flakeRate: event.flake_rate,
-          wilsonCi: event.wilson_ci,
-          totalTrials: event.trials,
-          fails: event.fails,
-          done: true,
-        },
+      const detect = {
+        ...state.detect,
+        flakeRate: event.flake_rate,
+        wilsonCi: event.wilson_ci,
+        totalTrials: event.trials,
+        fails: event.fails,
+        done: true,
       };
+      // A regression, not a flake: the detect pass tags it ALWAYS_FAILING, so we
+      // short-circuit straight to the red verdict (no tournament to run).
+      if (event.verdict === 'ALWAYS_FAILING') {
+        return {
+          ...state,
+          detect,
+          phase: 'always_failing',
+          alwaysFailing: {
+            flakeRate: event.flake_rate,
+            wilsonCi: event.wilson_ci,
+            trials: event.trials,
+            fails: event.fails,
+          },
+        };
+      }
+      return { ...state, detect };
     }
 
     case 'hypothesis_created': {
@@ -137,6 +170,23 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       return { ...state, hypotheses };
     }
 
+    case 'hypothesis_inconclusive': {
+      // The CI straddles the threshold: not verified, not eliminated, and not
+      // winner-eligible. A winner event later can still promote it if it wins.
+      const hypotheses = state.hypotheses.map((h) =>
+        h.id === event.id
+          ? {
+              ...h,
+              status: h.status === 'winner' ? h.status : ('inconclusive' as const),
+              flakeRate: event.flake_rate ?? h.flakeRate,
+              wilsonCi: event.wilson_ci ?? h.wilsonCi,
+              eliminatedReason: event.reason ?? h.eliminatedReason,
+            }
+          : h,
+      );
+      return { ...state, hypotheses };
+    }
+
     case 'winner_confirmed': {
       const hypotheses = state.hypotheses.map((h) =>
         h.id === event.id ? { ...h, status: 'winner' as const, flakeRate: event.flake_rate } : h,
@@ -153,6 +203,21 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
           wilsonCi: event.wilson_ci ?? null,
           origFlakeRate: event.orig_flake_rate ?? null,
           braintrustUrl: event.braintrust_url ?? null,
+          model: event.model ?? null,
+        },
+      };
+    }
+
+    case 'always_failing': {
+      // Not flaky — a regression. Terminal red verdict, its own phase.
+      return {
+        ...state,
+        phase: 'always_failing',
+        alwaysFailing: {
+          flakeRate: event.flake_rate ?? state.detect.flakeRate,
+          wilsonCi: event.wilson_ci ?? state.detect.wilsonCi,
+          trials: event.trials ?? state.detect.totalTrials,
+          fails: event.fails ?? state.detect.fails,
         },
       };
     }
