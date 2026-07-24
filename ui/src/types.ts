@@ -85,6 +85,11 @@ export interface WinnerConfirmed {
   wilson_ci?: WilsonCI; // CI of the confirmed winner
   orig_flake_rate?: number; // baseline flake before the fix
   braintrust_url?: string; // real Braintrust experiment permalink (the receipt)
+  // Receipt for the CONFIRMATION round specifically — the fresh, independent
+  // rerun that guards selection bias, and the round the headline "0/50" comes
+  // from. Previously unlogged, so the only permalink shown pointed at the
+  // tournament lane instead.
+  confirm_braintrust_url?: string | null;
   model?: string; // real model slug credited with the winning fix — prefer over index-mapping
 }
 
@@ -241,7 +246,10 @@ export interface PromotionPending {
   verdict: string; // 'FIXED' | 'QUARANTINE'
   winner_id?: string | null;
   flake_rate?: number | null; // original (pre-fix) flake rate
+  wilson_ci?: WilsonCI | null; // interval for the original rate
   confirm_flake_rate?: number | null; // winner's confirmation-round rate
+  confirm_wilson_ci?: WilsonCI | null; // interval for the confirmation round
+  confirm_trials?: number | null; // how many reruns backed the confirmation
   braintrust_url?: string | null;
 }
 
@@ -490,7 +498,13 @@ export interface PromotionState {
   verdict: string;
   winnerId: string | null;
   flakeRate: number | null;
+  // The intervals are carried all the way to the approval modal on purpose: it
+  // is the one screen where a human authorises a real PR, and it must not show
+  // a bare rate. "0%" with no interval is the claim this product refuses.
+  wilsonCi: WilsonCI | null;
   confirmFlakeRate: number | null;
+  confirmWilsonCi: WilsonCI | null;
+  confirmTrials: number | null;
   braintrustUrl: string | null;
   open: boolean;
   approved: boolean | null; // null until promotion_closed lands

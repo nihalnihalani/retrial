@@ -81,18 +81,28 @@ export function PromoteGate({
           <div className="promote-evidence">
             <FlakeMeter
               rate={promotion.flakeRate}
-              ci={null}
+              ci={promotion.wilsonCi}
               label="original flake rate"
             />
             <FlakeMeter
               rate={promotion.confirmFlakeRate}
-              ci={null}
+              ci={promotion.confirmWilsonCi}
               label="confirmation round"
             />
           </div>
+          {/* The claim on this line is the strongest one the product makes, on
+              the screen where a human authorises a real PR — so it states the
+              upper bound, never a bare "0%". A rate without its interval is the
+              lie this tool exists to detect. */}
           {promotion.flakeRate != null && promotion.confirmFlakeRate != null && (
             <p className="promote-delta mono">
-              {pct(promotion.flakeRate)} → {pct(promotion.confirmFlakeRate)}, measured — not vibes.
+              {pct(promotion.flakeRate)} → {promotion.confirmWilsonCi != null ? (
+                <>≤{Math.round(promotion.confirmWilsonCi[1] * 1000) / 10}%
+                {promotion.confirmTrials != null && <> across {promotion.confirmTrials} reruns</>}
+                , 95% confidence</>
+              ) : (
+                <>{pct(promotion.confirmFlakeRate)}</>
+              )} — measured, not vibes.
             </p>
           )}
 
