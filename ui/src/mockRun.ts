@@ -1,8 +1,11 @@
 import type { RetrialEvent } from './types';
+import realRun from './realRun.json';
+import realRunQuarantine from './realRunQuarantine.json';
 
-// A scripted, realistic replay of a full Retrial run so the board is fully
-// demoable with no engine attached. Numbers mirror calibration-results.json:
-// the seeded race condition lands ~40-55% flake, the winning fix drives it to 0.
+// Playback of REAL captured event streams (recorded from live runs 2026-07-23),
+// not synthetic data. Each recorded frame carries a `_t` seconds timestamp; we
+// schedule frames by their inter-frame gaps, compressed for a tight demo and
+// with the long live-diagnosis window capped so the board isn't waiting ~25s.
 //
 // Shape: an ordered list of { after, event } — `after` is ms to wait BEFORE
 // emitting the event (relative to the previous one). The player just walks it.
@@ -12,235 +15,64 @@ export interface ScriptedEvent {
   event: RetrialEvent;
 }
 
-// 'winner' = the winning-fix path; 'quarantine' = no fix stabilizes (no dead end).
+// 'winner' = the winning-fix recording; 'quarantine' = the no-fix recording.
 export type MockOutcome = 'winner' | 'quarantine';
 
-const TEST_NAME = 'tests/test_event_intake.py::test_first_event_processed';
+// A recorded frame: a real event plus capture metadata the reducer ignores.
+type RawFrame = RetrialEvent & { _t?: number; seq?: number; ts?: number };
 
-// deterministic PRNG so the replay looks the same every rehearsal
-function mulberry32(seed: number) {
-  let a = seed;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+const COMPRESS = 1.7; // 1.5-2x faster than wall-clock
+const MIN_GAP_MS = 30;
+const MAX_GAP_MS = 4000; // caps the ~25s live-diagnosis window for replay
+const STITCH_MS = 250; // gap inserted where two segments are joined (_t resets)
+const FIRST_MS = 300;
+
+// Turn a contiguous, time-ordered list of recorded frames into a schedule.
+function buildSchedule(frames: RawFrame[]): ScriptedEvent[] {
+  const out: ScriptedEvent[] = [];
+  let prevT: number | null = null;
+
+  for (const frame of frames) {
+    const frameT: number = typeof frame._t === 'number' ? frame._t : prevT ?? 0;
+    let after: number;
+    if (prevT === null) {
+      after = FIRST_MS;
+    } else {
+      const dt = frameT - prevT;
+      // a non-positive delta means we crossed a stitch boundary (per-run _t reset)
+      after = dt <= 0 ? STITCH_MS : Math.min(MAX_GAP_MS, (dt * 1000) / COMPRESS);
+    }
+    out.push({ after: Math.max(MIN_GAP_MS, Math.round(after)), event: frame as RetrialEvent });
+    prevT = frameT;
+  }
+  return out;
 }
 
-const rand = mulberry32(42);
+// The quarantine capture is a ring buffer: the tail (from the LAST run_started)
+// is the real quarantine run; earlier frames replay the prior run. We take that
+// tail, and re-attach the real diagnosing + genome frames captured just before
+// it so the replay still opens on the diagnosis window and has genome data.
+function sliceQuarantine(frames: RawFrame[]): RawFrame[] {
+  let lastRun = -1;
+  frames.forEach((f, i) => {
+    if (f.type === 'run_started') lastRun = i;
+  });
+  if (lastRun < 0) return frames;
 
-const DETECT_TRIALS = 40;
-const DETECT_FAIL_RATE = 0.48;
-const DETECT_STEP_MS = 360; // ~14.4s of detect, matches the ~15s brief
+  const head = frames.slice(0, lastRun);
+  const diagnosing = [...head].reverse().find((f) => f.type === 'diagnosing');
+  const genome = [...head].reverse().find((f) => f.type === 'genome_updated');
 
-const HYPOTHESES: { id: string; cause_class: string; explanation: string }[] = [
-  {
-    id: 'h1',
-    cause_class: 'race_condition',
-    explanation:
-      'Unsynchronized counter increments across 8 threads — read-modify-write is not atomic across bytecode boundaries. Fix: guard with a lock.',
-  },
-  {
-    id: 'h2',
-    cause_class: 'shared_state',
-    explanation:
-      'Module-level `counter` global leaks between test runs; a stale value survives into the next case. Fix: reset in a fixture.',
-  },
-  {
-    id: 'h3',
-    cause_class: 'order_dependency',
-    explanation:
-      'Passes only when it runs after the fixture seeder; alphabetical collection order changes the outcome. Fix: make the test self-seed.',
-  },
-  {
-    id: 'h4',
-    cause_class: 'timing',
-    explanation:
-      'GIL scheduling jitter under load changes thread interleaving. Fix: pin thread count / add a barrier.',
-  },
-];
-
-interface Plan {
-  trials: number;
-  failRate: number;
-  stabilizes: boolean; // true => drives flake to ~0 and wins
-  reason?: string; // shown on the lane when it's knocked out
+  const opening: RawFrame[] = [];
+  if (diagnosing) opening.push(diagnosing);
+  if (genome) opening.push(genome);
+  return [...opening, ...frames.slice(lastRun)];
 }
-
-// Winner path: h1 (the real fix) converges to 0; the rest keep flaking.
-const WINNER_PLANS: Record<string, Plan> = {
-  h1: { trials: 50, failRate: 0.0, stabilizes: true },
-  h2: { trials: 22, failRate: 0.32, stabilizes: false, reason: 'still 30%+ flaky — CI excludes 0' },
-  h3: { trials: 18, failRate: 0.55, stabilizes: false, reason: 'no improvement over baseline' },
-  h4: { trials: 24, failRate: 0.21, stabilizes: false, reason: 'CI still spans the threshold' },
-};
-
-// Quarantine path: nothing stabilizes. h1 is the least-bad (best effort) and
-// becomes the dossier's best_id, but it still flakes — so we quarantine.
-const QUARANTINE_PLANS: Record<string, Plan> = {
-  h1: { trials: 30, failRate: 0.13, stabilizes: false, reason: 'lock narrowed the race but did not close it' },
-  h2: { trials: 22, failRate: 0.34, stabilizes: false, reason: 'still 30%+ flaky — CI excludes 0' },
-  h3: { trials: 18, failRate: 0.52, stabilizes: false, reason: 'no improvement over baseline' },
-  h4: { trials: 24, failRate: 0.25, stabilizes: false, reason: 'CI still spans the threshold' },
-};
-
-const BEST_EFFORT_ID = 'h1'; // least-bad when quarantining
-
-const TRIAL_STEP_MS = 150; // cadence of interleaved tournament reruns
-
-function wilson(p: number, n: number): [number, number] {
-  if (n === 0) return [0, 1];
-  const z = 1.96;
-  const denom = 1 + (z * z) / n;
-  const center = p + (z * z) / (2 * n);
-  const margin = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
-  const lo = Math.max(0, (center - margin) / denom);
-  const hi = Math.min(1, (center + margin) / denom);
-  return [round3(lo), round3(hi)];
-}
-
-const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 export function buildMockScript(outcome: MockOutcome = 'winner'): ScriptedEvent[] {
-  const script: ScriptedEvent[] = [];
-  const plans = outcome === 'quarantine' ? QUARANTINE_PLANS : WINNER_PLANS;
-
-  // ---- DIAGNOSING: models draft competing theories (compressed ~3s) ----
-  script.push({
-    after: 300,
-    event: { type: 'diagnosing', test_name: TEST_NAME, n: 4 },
-  });
-
-  // ---- HANDSHAKE: engine announces the test + planned rerun budget ----
-  script.push({
-    after: 3000,
-    event: { type: 'run_started', test_name: TEST_NAME, planned_trials: DETECT_TRIALS },
-  });
-
-  // ---- DETECT: rerun the unmodified test, ~48% fail ----
-  let detectFails = 0;
-  for (let i = 0; i < DETECT_TRIALS; i++) {
-    const passed = rand() >= DETECT_FAIL_RATE;
-    if (!passed) detectFails++;
-    script.push({
-      after: i === 0 ? 700 : DETECT_STEP_MS,
-      event: {
-        type: 'trial_done',
-        hypothesis_id: null,
-        trial_index: i,
-        passed,
-        duration_s: round3(0.28 + rand() * 0.5),
-      },
-    });
-  }
-  const detectRate = detectFails / DETECT_TRIALS;
-  script.push({
-    after: 500,
-    event: {
-      type: 'detect_done',
-      flake_rate: round3(detectRate),
-      wilson_ci: wilson(detectRate, DETECT_TRIALS),
-      trials: DETECT_TRIALS,
-      fails: detectFails,
-    },
-  });
-
-  // ---- DIAGNOSE: hypotheses appear as Fireworks models return ----
-  for (let i = 0; i < HYPOTHESES.length; i++) {
-    script.push({
-      after: i === 0 ? 900 : 550,
-      event: { type: 'hypothesis_created', ...HYPOTHESES[i] },
-    });
-  }
-
-  // ---- TOURNAMENT: interleave reruns across all racing hypotheses ----
-  const cursors: Record<string, { i: number; fails: number }> = {};
-  const finalRate: Record<string, number> = {};
-  HYPOTHESES.forEach((h) => (cursors[h.id] = { i: 0, fails: 0 }));
-
-  const remaining = new Set(HYPOTHESES.map((h) => h.id));
-  let first = true;
-
-  while (remaining.size > 0) {
-    for (const id of Array.from(remaining)) {
-      const plan = plans[id];
-      const cur = cursors[id];
-      const passed = rand() >= plan.failRate;
-      if (!passed) cur.fails++;
-      script.push({
-        after: first ? 700 : TRIAL_STEP_MS,
-        event: {
-          type: 'trial_done',
-          hypothesis_id: id,
-          trial_index: cur.i,
-          passed,
-          duration_s: round3(0.24 + rand() * 0.5),
-        },
-      });
-      first = false;
-      cur.i++;
-
-      // When a hypothesis reaches its trial budget, verify it, then knock it
-      // out unless it stabilized (or it's the best-effort lane we quarantine on).
-      if (cur.i >= plan.trials) {
-        const rate = cur.fails / plan.trials;
-        finalRate[id] = rate;
-        script.push({
-          after: 120,
-          event: {
-            type: 'hypothesis_verified',
-            id,
-            flake_rate: round3(rate),
-            wilson_ci: wilson(rate, plan.trials),
-            trials: plan.trials,
-          },
-        });
-        const keepAlive = plan.stabilizes || (outcome === 'quarantine' && id === BEST_EFFORT_ID);
-        if (!keepAlive) {
-          script.push({
-            after: 250,
-            event: { type: 'hypothesis_eliminated', id, reason: plan.reason },
-          });
-        }
-        remaining.delete(id);
-      }
-    }
-  }
-
   if (outcome === 'quarantine') {
-    // ---- QUARANTINE: nothing hit zero — quarantine WITH the evidence ----
-    const best = BEST_EFFORT_ID;
-    const rate = finalRate[best] ?? plans[best].failRate;
-    script.push({
-      after: 900,
-      event: {
-        type: 'quarantine_confirmed',
-        best_id: best,
-        dossier: {
-          flake_rate: round3(rate),
-          wilson_ci: wilson(rate, plans[best].trials),
-          trials: plans[best].trials,
-          reason:
-            'No candidate drove the flake rate to zero across the tournament. Quarantined with the full autopsy so CI stays green while a human takes it.',
-        },
-      },
-    });
-  } else {
-    // ---- CONFIRM: winner survives a dedicated confirmation round ----
-    const winnerId = HYPOTHESES.find((h) => plans[h.id].stabilizes)?.id ?? 'h1';
-    script.push({
-      after: 900,
-      event: {
-        type: 'winner_confirmed',
-        id: winnerId,
-        flake_rate: 0.0,
-        confirm_flake_rate: 0.0,
-      },
-    });
+    return buildSchedule(sliceQuarantine(realRunQuarantine as unknown as RawFrame[]));
   }
-  script.push({ after: 400, event: { type: 'tournament_done' } });
-
-  return script;
+  // The winning capture is a single clean run — play it as recorded.
+  return buildSchedule(realRun as unknown as RawFrame[]);
 }

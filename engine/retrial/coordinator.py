@@ -6,9 +6,10 @@ the original's rate) -> confirm the winner with a fresh run -> emit typed events
 at every transition. If no hypothesis statistically beats the original, the
 verdict is QUARANTINE (no dead-end: the evidence dossier is still produced).
 """
+import os
 import threading
 
-from .verifier import verify, confirm
+from .verifier import verify, confirm, verify_hermetic
 from .ledger import EvidenceLedger
 from .genome import Genome
 
@@ -18,7 +19,7 @@ class TournamentCoordinator:
 
     def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.05,
                  min_trials=8, timeout=60, isolation="process", ledger=None,
-                 tournament_conc=None, genome=None):
+                 tournament_conc=None, genome=None, hermetic=None, hermetic_pool=None):
         self.pool = pool
         self.bus = bus
         self.max_trials = max_trials
@@ -37,6 +38,12 @@ class TournamentCoordinator:
         self.ledger = ledger if ledger is not None else EvidenceLedger.from_env()
         # Flake-genome store (the compounding flywheel), appended each run.
         self.genome = genome if genome is not None else Genome.from_env()
+        # Hermetic mode: a second, network-blocked detect pass to diagnose
+        # external-dependency flakes by infrastructure. Off by default; a
+        # hermetic_pool (created with network_block_all) must be supplied to run.
+        self.hermetic = hermetic if hermetic is not None else (
+            os.environ.get("HERMETIC", "0") != "0")
+        self.hermetic_pool = hermetic_pool
 
     def _emit(self, event_type, payload):
         if self.bus is not None:
@@ -64,6 +71,32 @@ class TournamentCoordinator:
                       conc if conc is not None else self.conc,
                       self.threshold, self.min_trials, self.bus, label,
                       self.timeout, isolation, hypothesis_id, emit_trials)
+
+    def _hermetic_detect(self, test_code, detect, isolation):
+        """Second detect pass in network-blocked sandboxes. If the hermetic flake
+        rate's CI does not overlap the networked one, the flake is external-dep;
+        otherwise it's env-independent (which itself eliminates the external_dep
+        class). Emits hermetic_diagnosis and returns the finding dict (or None)."""
+        if not (self.hermetic and self.hermetic_pool is not None):
+            return None
+        try:
+            h = verify_hermetic(self.hermetic_pool, test_code, self.max_trials,
+                                self.conc, self.threshold, self.min_trials, self.bus,
+                                self.timeout, isolation)
+            net_ci, herm_ci = detect["wilson_ci"], h["wilson_ci"]
+            overlap = not (net_ci[1] < herm_ci[0] or herm_ci[1] < net_ci[0])
+            verdict = "env_independent" if overlap else "external_dep"
+            finding = {
+                "verdict": verdict,
+                "networked_rate": detect["flake_rate"],
+                "hermetic_rate": h["flake_rate"],
+                "networked_ci": net_ci,
+                "hermetic_ci": herm_ci,
+            }
+            self._emit("hermetic_diagnosis", finding)
+            return finding
+        except Exception:
+            return None  # hermetic diagnosis is a bonus; never break the run
 
     def _elim_reason(self, r, orig_rate):
         """Why the evidence knocked this hypothesis out of contention."""
@@ -103,6 +136,9 @@ class TournamentCoordinator:
             "fails": detect["fails"],
             "verdict": detect["verdict"],
         })
+
+        # Optional hermetic (network-blocked) detect pass — diagnose external-dep by infra.
+        hermetic_finding = self._hermetic_detect(test_code, detect, isolation)
 
         # --- VERIFY each hypothesis in parallel (one thread per lane) ---
         results = {}
@@ -225,6 +261,7 @@ class TournamentCoordinator:
             "hypotheses": list(results.values()),
             "winner": winner,
             "confirmation": confirmation if verdict == "FIXED" else None,
+            "hermetic": hermetic_finding,
             "braintrust": {
                 "detect": ledger_run.permalink("detect"),
                 **{r["id"]: ledger_run.permalink(r["id"]) for r in results.values()},
