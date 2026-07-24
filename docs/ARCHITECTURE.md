@@ -93,7 +93,7 @@ A thread-safe `SandboxRegistry` (process-default `REGISTRY`, attached to the bus
 **Day 2 (pre-event):** ⑤ TournamentBoard UI + EventBus stream. ⑥ PRSmith. ⑦ Record the 2-min Devpost video off a clean run. ⑧ Tray/Electron only if everything above is done. On-site 5.5h: polish, live-CI trigger, rehearse trap opening, re-record video if better.
 
 ## Why this architecture wins (rubric mapping)
-- **Impact 25%:** real recurring pain (Google: ~16% of tests flaky, 3.7 eng-hrs each; Microsoft: ~25% of CI failures) + real workflow outputs (PRs, CI trigger) — not a demo toy.
+- **Impact 25%:** real recurring pain (Google: ~16% of its 4.2M tests carry some flakiness, 1.5% of test executions flaky, 2-16% of compute spent re-running; Microsoft: 27.4% of builds affected — see WINNING-IDEA.md §7 for the primaries, and for the retracted figures that must not come back) + real workflow outputs (PRs, CI trigger) — not a demo toy.
 - **Technical 25%:** verified sandbox swarm, real statistics (Wilson, confirmation, adaptive stop), event-driven DAG, works end-to-end headless before any UI exists.
 - **Creativity 25%:** verification-asymmetry thesis + differential-diagnosis tournament + empirical selection — the unclaimed niche 5 adversarial agents couldn't break.
 - **Presentation 25%:** trap opening, split-screen lie, fully-live demo, genome close — beats designed in, not bolted on. (An earlier draft listed a "voice autopsy" beat; there is no voice/audio code path in this repo — see [SPONSORS.md](SPONSORS.md) for the retraction.)
