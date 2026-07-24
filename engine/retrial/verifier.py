@@ -36,8 +36,13 @@ def _verdict(p, lo, hi, threshold):
 
 
 def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
-           min_trials=8, bus=None, label=None, timeout=60, isolation="process"):
+           min_trials=8, bus=None, label=None, timeout=60, isolation="process",
+           hypothesis_id=None, emit_trials=True):
     """Rerun test_code up to max_trials times (conc at a time) and classify it.
+
+    Emits a `trial_done` per valid trial (when emit_trials) carrying the UI
+    contract: hypothesis_id (None for the detect series), a per-context 0-based
+    trial_index, passed, duration_s.
 
     Returns {"trials", "fails", "errors", "flake_rate", "wilson_ci":[lo,hi],
              "verdict": "STABLE"|"FLAKY", "stopped_early": bool, "history": [...]}.
@@ -48,6 +53,7 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
     errors = 0
     done = 0
     stopped_early = False
+    trial_index = 0  # per-context 0-based index over valid trials (for the UI grid)
 
     while done < max_trials:
         batch = min(conc, max_trials - done)
@@ -69,19 +75,18 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
             history.append(res)
             if res["error"] is not None:
                 errors += 1
-            else:
-                n += 1
-                if not res["passed"]:
-                    fails += 1
-            if bus is not None:
+                continue  # infra errors are not real pass/fail — keep the grid honest
+            n += 1
+            if not res["passed"]:
+                fails += 1
+            if bus is not None and emit_trials:
                 bus.emit("trial_done", {
-                    "label": label,
+                    "hypothesis_id": hypothesis_id,
+                    "trial_index": trial_index,
                     "passed": res["passed"],
-                    "error": res["error"],
                     "duration_s": res["duration_s"],
-                    "trials": n,
-                    "fails": fails,
                 })
+            trial_index += 1
 
         # Adaptive early-stop: the CI provably excludes the threshold either way.
         p, lo, hi = wilson(fails, n)
@@ -104,11 +109,18 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
 
 
 def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.05,
-            min_trials=8, bus=None, label=None, timeout=60, isolation="process"):
-    """A fresh, independent verify run to confirm a tournament winner."""
+            min_trials=8, bus=None, label=None, timeout=60, isolation="process",
+            emit_trials=False):
+    """A fresh, independent verify run to confirm a tournament winner.
+
+    Per-trial events are suppressed by default: the confirmation round reports a
+    single summary number (confirm_flake_rate on winner_confirmed) rather than
+    re-flooding the winner's grid.
+    """
     return verify(pool, test_code, max_trials=max_trials, conc=conc,
                   threshold=threshold, min_trials=min_trials, bus=bus,
-                  label=label or "confirm", timeout=timeout, isolation=isolation)
+                  label=label or "confirm", timeout=timeout, isolation=isolation,
+                  emit_trials=emit_trials)
 
 
 class Verifier:
