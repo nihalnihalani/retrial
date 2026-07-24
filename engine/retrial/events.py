@@ -71,6 +71,19 @@ class EventBus:
                 pass
         return ev
 
+    def reset(self):
+        """Clear the replay buffer so the next run starts with a clean backlog.
+
+        The buffer is shared and long-lived (one bus per server process). Without
+        this, a late WS subscriber replays a PRIOR run's surviving tail — and
+        because the buffer is capped, an earlier event (e.g. that run's
+        detect_done) may already be evicted while its tournament_done survives,
+        so the board shows a stale verdict with no matching detect. Call at the
+        start of every run. `seq` stays monotonic (never rewound) so any
+        already-connected client's event ordering is undisturbed."""
+        with self._lock:
+            self._buffer.clear()
+
     def history(self):
         """Return a snapshot of the buffered events (oldest first)."""
         with self._lock:
