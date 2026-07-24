@@ -21,7 +21,7 @@ export type MockOutcome = 'winner' | 'quarantine';
 // A recorded frame: a real event plus capture metadata the reducer ignores.
 type RawFrame = RetrialEvent & { _t?: number; seq?: number; ts?: number };
 
-const COMPRESS = 0.5; // 1.5-2x faster than wall-clock
+const COMPRESS = 1.7; // 1.5-2x faster than wall-clock
 const MIN_GAP_MS = 30;
 const MAX_GAP_MS = 4000; // caps the ~25s live-diagnosis window for replay
 const STITCH_MS = 250; // gap inserted where two segments are joined (_t resets)
@@ -74,10 +74,5 @@ export function buildMockScript(outcome: MockOutcome = 'winner'): ScriptedEvent[
     return buildSchedule(sliceQuarantine(realRunQuarantine as unknown as RawFrame[]));
   }
   // The winning capture is a single clean run — play it as recorded.
-  const frames = (realRun as unknown as RawFrame[]).map((f) =>
-    f.type === 'diagnosing'
-      ? { ...f, models: ['accounts/fireworks/models/glm-5p2', 'glm-5p1', 'kimi-k2p6', 'deepseek-v4-pro'] }
-      : f,
-  );
-  return buildSchedule(frames);
+  return buildSchedule(realRun as unknown as RawFrame[]);
 }
