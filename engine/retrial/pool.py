@@ -29,20 +29,32 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 class SandboxPool:
     """Thread-safe pool of fresh Daytona sandboxes for trial execution."""
 
-    def __init__(self, client=None, target=None, labels=None):
+    def __init__(self, client=None, target=None, labels=None, hermetic=False,
+                 auto_delete_min=None):
         self._client = client or Daytona(
             DaytonaConfig(target=target or os.environ.get("DAYTONA_TARGET", "us"))
         )
         self._labels = labels or {"retrial": "pool"}
+        # Hermetic pools create every sandbox with egress blocked AT CREATE TIME
+        # (never toggled at runtime — that kills the control channel). Used to
+        # diagnose external-dependency flakes by infrastructure.
+        self._hermetic = hermetic
+        # Belt-and-braces credit protection: sandboxes auto-delete after this many
+        # minutes, so a crashed run can't leave orphans burning credit.
+        self._auto_delete_min = (auto_delete_min if auto_delete_min is not None
+                                 else int(os.environ.get("AUTO_DELETE_MIN", "60")))
         self._available = []          # clean, ready-to-lease sandbox objects
         self._live = {}               # id -> sandbox, every sandbox we created and own
         self._lock = threading.Lock()
 
     # -- internals -------------------------------------------------------
     def _create_one(self):
-        sb = self._client.create(
-            CreateSandboxFromSnapshotParams(labels=self._labels), timeout=120
-        )
+        kwargs = {"labels": self._labels}
+        if self._auto_delete_min and self._auto_delete_min > 0:
+            kwargs["auto_delete_interval"] = self._auto_delete_min
+        if self._hermetic:
+            kwargs["network_block_all"] = True
+        sb = self._client.create(CreateSandboxFromSnapshotParams(**kwargs), timeout=120)
         with self._lock:
             self._live[sb.id] = sb
         return sb

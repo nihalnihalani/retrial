@@ -30,8 +30,18 @@ interface Props {
 export function TournamentBoard({ onRestart }: Props) {
   const { state, mode } = useEventStream();
   const health = useDaytonaHealth(mode);
-  const { phase, detect, hypotheses, winner, quarantine, testName, plannedTrials, diagnoseModels } =
-    state;
+  const {
+    phase,
+    detect,
+    hypotheses,
+    winner,
+    quarantine,
+    testName,
+    plannedTrials,
+    diagnoseModels,
+    genome,
+    prUrl,
+  } = state;
   const winnerHyp = winner ? hypotheses.find((h) => h.id === winner.id) : undefined;
   const bestHyp = quarantine ? hypotheses.find((h) => h.id === quarantine.bestId) : undefined;
 
@@ -54,16 +64,21 @@ export function TournamentBoard({ onRestart }: Props) {
         )}
         {phase === 'tournament' && <TournamentPhase hypotheses={hypotheses} />}
         {phase === 'winner' && winner && (
-          <WinnerCard winner={winner} hypothesis={winnerHyp} detect={detect} />
+          <WinnerCard winner={winner} hypothesis={winnerHyp} detect={detect} prUrl={prUrl} />
         )}
         {phase === 'quarantine' && quarantine && (
-          <QuarantineCard quarantine={quarantine} bestHypothesis={bestHyp} detect={detect} />
+          <QuarantineCard
+            quarantine={quarantine}
+            bestHypothesis={bestHyp}
+            detect={detect}
+            prUrl={prUrl}
+          />
         )}
       </main>
 
-      {hypotheses.length > 0 && (
+      {(hypotheses.length > 0 || genome) && (
         <footer className="board-footer">
-          <GenomeCard hypotheses={hypotheses} />
+          <GenomeCard hypotheses={hypotheses} genome={genome} />
           <p className="tagline">
             Every flaky test deserves a retrial. <strong>Fifty of them, actually.</strong>
           </p>
@@ -132,10 +147,13 @@ function SandboxTicker({ mode, health }: { mode: ConnectionMode; health: PoolHea
 
   if (mode === 'replay') {
     return (
-      <span className="sandbox-ticker replay" title="Daytona sandbox pool (scripted replay)">
+      <span
+        className="sandbox-ticker replay"
+        title="Daytona sandbox pool — recorded from a live run, 2026-07-23"
+      >
         <span className="hex">⬢</span>
         <span className="sandbox-text">16 sandboxes</span>
-        <span className="sandbox-dim">(replay)</span>
+        <span className="sandbox-dim">(recorded)</span>
       </span>
     );
   }
@@ -169,14 +187,18 @@ function shortTestName(name: string): string {
 }
 
 function ModeBadge({ mode }: { mode: ConnectionMode }) {
-  const map: Record<ConnectionMode, { text: string; cls: string }> = {
-    live: { text: 'LIVE', cls: 'live' },
-    replay: { text: 'REPLAY', cls: 'replay' },
-    connecting: { text: 'CONNECTING…', cls: 'connecting' },
+  const map: Record<ConnectionMode, { text: string; cls: string; title: string }> = {
+    live: { text: 'LIVE', cls: 'live', title: 'Live engine over WebSocket' },
+    replay: {
+      text: 'RECORDED RUN',
+      cls: 'replay',
+      title: 'Replay of a real captured run — recorded from a live run, 2026-07-23',
+    },
+    connecting: { text: 'CONNECTING…', cls: 'connecting', title: 'Connecting to the engine' },
   };
-  const { text, cls } = map[mode];
+  const { text, cls, title } = map[mode];
   return (
-    <span className={`mode-badge ${cls}`}>
+    <span className={`mode-badge ${cls}`} title={title}>
       <span className="mode-dot" />
       {text}
     </span>

@@ -54,12 +54,17 @@ THRESHOLD = float(os.environ.get("THRESHOLD", "0.05"))
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
 PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
+# Hermetic mode (default OFF): a second network-blocked detect pass to diagnose
+# external-dependency flakes by infrastructure. Uses its own small sub-pool.
+HERMETIC = os.environ.get("HERMETIC", "0") != "0"
+HERMETIC_PREWARM = int(os.environ.get("HERMETIC_PREWARM", "8"))
 
 # One process-wide bus: the tournament emits here, every /ws subscriber streams it.
 BUS = EventBus()
 
 # One shared, pre-warmed pool reused across runs (see module docstring).
 _POOL = None
+_HPOOL = None  # hermetic (network-blocked) sub-pool, only when HERMETIC
 _POOL_LOCK = threading.Lock()
 _pool_status = {"prewarming": False}
 
@@ -72,21 +77,32 @@ def _get_pool():
         return _POOL
 
 
+def _get_hpool():
+    global _HPOOL
+    with _POOL_LOCK:
+        if _HPOOL is None:
+            _HPOOL = SandboxPool(hermetic=True)
+        return _HPOOL
+
+
 @asynccontextmanager
 async def lifespan(app):
-    # Pre-warm the shared pool at boot so the first run is instant.
+    # Pre-warm the shared pool(s) at boot so the first run is instant.
     if PREWARM > 0:
         def prewarm():
             _pool_status["prewarming"] = True
             try:
                 _get_pool().resize_to(PREWARM)
+                if HERMETIC and HERMETIC_PREWARM > 0:
+                    _get_hpool().resize_to(HERMETIC_PREWARM)
             finally:
                 _pool_status["prewarming"] = False
         threading.Thread(target=prewarm, daemon=True).start()
     yield
-    # Tear down every sandbox the shared pool owns on shutdown.
-    if _POOL is not None:
-        _POOL.destroy_all()
+    # Tear down every sandbox both pools own on shutdown.
+    for p in (_POOL, _HPOOL):
+        if p is not None:
+            p.destroy_all()
 
 
 app = FastAPI(title="Retrial", lifespan=lifespan)
@@ -204,10 +220,15 @@ def start_tournament(req: TournamentRequest):
             # Top up (never trims) so the run starts demo-ready even if boot
             # pre-warm was disabled or hasn't finished yet.
             pool.ensure_warm(min(CONC, MAX_TRIALS))
+            hpool = None
+            if HERMETIC:
+                hpool = _get_hpool()
+                hpool.ensure_warm(min(CONC, MAX_TRIALS))
             coord = TournamentCoordinator(
                 pool, bus=BUS, max_trials=MAX_TRIALS, conc=CONC,
                 tournament_conc=TOURNAMENT_CONC,
-                threshold=THRESHOLD, isolation=isolation)
+                threshold=THRESHOLD, isolation=isolation,
+                hermetic=HERMETIC, hermetic_pool=hpool)
             result = coord.run_tournament(test_code, hypotheses, test_name=path.name,
                                           isolation=isolation)
             # After the verdict, optionally open a fix/quarantine PR (emits pr_opened).

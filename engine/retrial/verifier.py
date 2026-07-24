@@ -123,6 +123,19 @@ def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.05,
                   emit_trials=emit_trials)
 
 
+def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=0.05,
+                    min_trials=8, bus=None, timeout=60, isolation="process"):
+    """Measure a test's flake rate in NETWORK-BLOCKED sandboxes (a hermetic pool
+    created with network_block_all=True). Compared against the networked detect
+    rate, this diagnoses external-dependency flakes by infrastructure: if the two
+    rates' CIs don't overlap, the flake is network/external-dependent. Per-trial
+    events are suppressed (this is a diagnostic pass, not the main board)."""
+    return verify(hermetic_pool, test_code, max_trials=max_trials, conc=conc,
+                  threshold=threshold, min_trials=min_trials, bus=bus,
+                  label="hermetic", timeout=timeout, isolation=isolation,
+                  emit_trials=False)
+
+
 class Verifier:
     """Object wrapper bundling default verify/confirm parameters."""
 
