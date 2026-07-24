@@ -23,6 +23,7 @@ in front. Set HOST=0.0.0.0 explicitly only behind a trusted network boundary.
 """
 import asyncio
 import atexit
+import re
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -34,6 +35,7 @@ _SEEDS_DIR = (_REPO_ROOT / "seeds").resolve()      # seed files MUST resolve ins
 import braintrust
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .bisect import FlakeBisector
@@ -46,6 +48,7 @@ from .preflight import run_preflight
 from .prsmith import PRSmith
 from .genome import Genome
 from .history import HISTORY
+from .narrator import Narrator, narration_dir
 from .registry import REGISTRY
 from .settings import get_settings
 
@@ -82,6 +85,10 @@ PROMOTE_GATE = _S.promote_gate_on
 # external-dependency flakes by infrastructure. Uses its own small sub-pool.
 HERMETIC = _S.hermetic_on
 HERMETIC_PREWARM = _S.hermetic_prewarm
+# Verdict narration (default OFF): after tournament_done, the dossier is spoken
+# by ElevenLabs and announced as narration_ready. Output only — the engine never
+# accepts voice input. Off => the demo path is byte-identical.
+NARRATE = _S.narrate_on
 
 # One process-wide bus: the tournament emits here, every /ws subscriber streams it.
 # Buffer bumped to 2000: sandbox_exec adds ~1 event per trial (~200/run) plus
@@ -305,7 +312,7 @@ def _auth_guard(authorization: str | None = Header(default=None)):
 
 # Serialize runs: interleaving two runs on one bus would scramble the board.
 _run_lock = threading.Lock()
-_running = {"active": False, "test_name": None}
+_running = {"active": False, "test_name": None, "run_id": None}
 # The pending human-approval promotion (guarded by _run_lock; per-run state).
 # It intentionally SURVIVES _running clearing — approval happens after the run
 # ends — but is wiped at the NEXT run acceptance inside _accept_run().
@@ -348,6 +355,11 @@ def _accept_run(test_name):
     _pending["promotion"] = None
     _running["active"] = True
     _running["test_name"] = test_name
+    # Per-run identity, minted here so it is stable for the whole run and unique
+    # across runs (the narration mp3 is keyed by it). Deliberately opaque and
+    # charset-restricted: it becomes a PATH SEGMENT in GET /narration/{run_id},
+    # so anything that isn't [a-z0-9-] would widen that route's attack surface.
+    _running["run_id"] = f"run-{int(time.time() * 1000):x}"
     # The registry is NOT reset (total_ever/live span runs — the pool is
     # shared); instead re-seed the fresh buffer so a WS that connects now sees
     # the current sandbox world instead of nothing (or a stale, half-evicted
@@ -390,6 +402,7 @@ def health():
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
                    "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH,
                    "promote_gate": PROMOTE_GATE, "hermetic": HERMETIC,
+                   "narrate": NARRATE,
                    "pool_backend": get_settings().retrial_pool_backend,
                    # One honest boolean for the live poller; the loud banner
                    # itself is event-driven (preflight_done).
@@ -405,6 +418,28 @@ def preflight():
     if last is None:
         return {"status": "pending"}
     return {**last, "pool_degraded_seen": _STICKY["pool_degraded"]}
+
+
+_RUN_ID_RE = re.compile(r"^run-[0-9a-f]{1,20}$")
+
+
+@app.get("/narration/{run_id}")
+def narration(run_id: str):
+    """Serve a run's verdict autopsy mp3.
+
+    The path segment is matched against a strict whitelist rather than sanitized:
+    a run id is a minted `run-<hex>` token, so anything else is a probe, not a
+    typo. That closes traversal (`../../.env`) by construction — the same
+    posture as /tournament's seeds-dir containment check, which exists because
+    a path taken from a request is attacker-controlled until proven otherwise.
+    """
+    if not _RUN_ID_RE.match(run_id):
+        raise HTTPException(status_code=400, detail="malformed run_id")
+    path = narration_dir() / f"{run_id}.mp3"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="no narration for this run")
+    return FileResponse(path, media_type="audio/mpeg",
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/genome")
@@ -481,6 +516,10 @@ def start_tournament(req: TournamentRequest):
         except RuntimeError as e:
             # Accept/reap TOCTOU sentinel tripped (a reap is tearing pools down).
             raise HTTPException(status_code=409, detail=str(e))
+        # Bind the run id INSIDE the lock: the run thread must narrate under the
+        # id this acceptance minted, not whatever a later run has since written
+        # into the shared dict.
+        run_id = _running["run_id"]
 
     def run():
         pool = _get_pool()
@@ -514,6 +553,13 @@ def start_tournament(req: TournamentRequest):
                 hermetic=HERMETIC, hermetic_pool=hpool)
             result = coord.run_tournament(test_code, hypotheses, test_name=path.name,
                                           isolation=isolation)
+            # Speak the autopsy. Kicked off HERE — the earliest point the verdict
+            # is final — so the several-second TTS round trip overlaps the PR/
+            # promote work instead of trailing it; on stage the audio should be
+            # ready about when the operator finishes reading the verdict card.
+            # narrate_async is a no-op when NARRATE=0 or no key, and swallows its
+            # own failures: narration can never cost a verdict.
+            Narrator(bus=BUS).narrate_async(result, path.name, run_id)
             # After the verdict, optionally ship a fix/quarantine PR. With the
             # promote gate ON (default) the result is parked as a pending
             # promotion and a human approves via POST /promote before PRSmith

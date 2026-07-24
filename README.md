@@ -115,6 +115,10 @@ Every env var is read through one typed [`pydantic-settings`](https://docs.pydan
 | `FIREWORKS_API_KEY` | *(none)* | diagnosis | Fireworks key; absent = detect-only (no hypotheses) |
 | `FIREWORKS_MODELS` | *(empty)* | diagnosis | comma-separated model slugs (round-robined) |
 | `BRAINTRUST_API_KEY` | *(none)* | ledger / tracing | absent = evidence ledger disabled |
+| `NARRATE` | `0` | narrator / server | `1` = speak the verdict autopsy after `tournament_done` (needs `ELEVENLABS_API_KEY`) |
+| `ELEVENLABS_API_KEY` | *(none)* | narrator | absent = narration silently skipped (preflight warns if `NARRATE=1`) |
+| `ELEVENLABS_VOICE_ID` | Matilda | narrator | override the narration voice |
+| `ELEVENLABS_MODEL_ID` | `eleven_v3` | narrator | v3 is the model with emotional audio-tag support |
 | `RETRIAL_REPO` | *(gh detect)* | prsmith | `owner/repo` target for opened PRs |
 | `GENOME_PATH` | `genome.json` | genome | flake-genome store path |
 | `RETRIAL_EXEC_HISTORY` | `20` | registry | per-sandbox ring size of recent execs kept for the Observatory |
