@@ -1,3 +1,4 @@
+import { DecryptText } from './fx/DecryptText';
 import { ciText, pct } from '../format';
 import { ReceiptTiles } from './ReceiptTiles';
 import type { DetectState, Hypothesis, QuarantineState } from '../types';
@@ -30,7 +31,7 @@ export function QuarantineCard({ quarantine, bestHypothesis, detect, prUrl, mode
       <div className="quarantine-card">
         <div className="quarantine-badge">VERDICT · QUARANTINED WITH EVIDENCE</div>
 
-        <h2 className="quarantine-headline">No fix survived the tournament.</h2>
+        <h2 className="quarantine-headline"><DecryptText text="No fix survived the tournament." /></h2>
         <p className="quarantine-lead">
           Every candidate still flaked. We quarantined the test so CI goes green — and attached
           the full autopsy so a human can finish the job.

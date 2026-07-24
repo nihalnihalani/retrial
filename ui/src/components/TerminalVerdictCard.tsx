@@ -1,3 +1,4 @@
+import { DecryptText } from './fx/DecryptText';
 import { ciText, pct } from '../format';
 import type { BaselineVerdictState } from '../types';
 
@@ -64,7 +65,7 @@ export function TerminalVerdictCard({ state }: Props) {
       <div className={`terminal-card tv-${v.tone}`}>
         <div className="terminal-badge">{v.badge}</div>
 
-        <h2 className="terminal-headline">{v.headline}</h2>
+        <h2 className="terminal-headline"><DecryptText text={v.headline} /></h2>
         <p className="terminal-lead">{v.lead}</p>
 
         <div className="terminal-numbers">
