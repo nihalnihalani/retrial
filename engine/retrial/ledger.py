@@ -15,9 +15,10 @@ Design rules:
   experiment state, and our own buffers/permalinks are lock-guarded.
 """
 import itertools
-import os
 import threading
 import uuid
+
+from .settings import get_settings
 
 try:
     import braintrust
@@ -42,8 +43,9 @@ class EvidenceLedger:
     @classmethod
     def from_env(cls, project="retrial"):
         """Enabled when BRAINTRUST_API_KEY is set and LEDGER != '0'."""
-        key = os.environ.get("BRAINTRUST_API_KEY")
-        on = os.environ.get("LEDGER", "1") != "0"
+        s = get_settings()
+        key = s.braintrust_api_key
+        on = s.ledger_on
         return cls(api_key=key if (key and on) else None, project=project)
 
     def run(self, test_name):

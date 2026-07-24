@@ -14,10 +14,11 @@ run.
 """
 import base64
 import json
-import os
 import re
 import subprocess
 import uuid
+
+from .settings import get_settings
 
 _DEFAULT_REPO = "nihalnihalani/retrial"
 
@@ -27,7 +28,7 @@ def _slug(name):
 
 
 def _detect_repo():
-    repo = os.environ.get("RETRIAL_REPO")
+    repo = get_settings().retrial_repo
     if repo:
         return repo
     try:
@@ -47,6 +48,81 @@ def _pct(x):
 
 def _ci(ci):
     return "n/a" if not ci else f"{ci[0]:.0%}-{ci[1]:.0%}"
+
+
+def _receipts(result):
+    """'## Statistical receipts' — every number the verdict rests on, with
+    honest omissions: a line renders ONLY when its datum exists; absent data
+    says nothing (never 'n/a' dressed up as evidence, never a claim without a
+    measurement). Pure and defensive: every access is a `.get` chain over the
+    coordinator result shape, so a sparse or malformed dict yields fewer lines,
+    never a raise."""
+    verdict = result.get("verdict")
+    detect = result.get("detect") or {}
+    lines = ["## Statistical receipts", ""]
+
+    # Before: the lie detector's own measurement on the unmodified test.
+    orig = result.get("orig_flake_rate")
+    if orig is not None:
+        bits = [f"**Before (detect):** empirical flake rate **{_pct(orig)}**"]
+        if detect.get("wilson_ci"):
+            bits.append(f"95% CI {_ci(detect.get('wilson_ci'))}")
+        trials = detect.get("trials")
+        if trials is not None:
+            tail = f"{trials} reruns"
+            if detect.get("fails") is not None:
+                tail += f", {detect.get('fails')} failures"
+            bits.append(tail)
+        lines.append("- " + " · ".join(bits))
+
+    if verdict == "FIXED":
+        w = result.get("winner") or {}
+        conf = result.get("confirmation") or {}
+        if w.get("flake_rate") is not None:
+            bits = [f"**After (winner):** flake rate **{_pct(w.get('flake_rate'))}**"]
+            if w.get("wilson_ci"):
+                bits.append(f"95% CI {_ci(w.get('wilson_ci'))}")
+            if w.get("trials") is not None:
+                bits.append(f"{w.get('trials')} reruns")
+            lines.append("- " + " · ".join(bits))
+        if conf.get("flake_rate") is not None:
+            bits = [f"**Confirmation:** flake rate **{_pct(conf.get('flake_rate'))}**"]
+            if conf.get("wilson_ci"):
+                bits.append(f"95% CI {_ci(conf.get('wilson_ci'))}")
+            if conf.get("trials") is not None:
+                bits.append(f"{conf.get('trials')} reruns")
+            lines.append("- " + " · ".join(bits))
+            lines.append("- Confirmation was an independent re-verify; the winner "
+                         "stands only because it read STABLE.")
+    elif verdict == "QUARANTINE":
+        hyps = result.get("hypotheses") or []
+        best = (min(hyps, key=lambda r: r.get("flake_rate", 1.0))
+                if hyps else None)
+        if best and best.get("flake_rate") is not None:
+            bits = [f"**Best candidate:** flake rate **{_pct(best.get('flake_rate'))}**"]
+            if best.get("wilson_ci"):
+                bits.append(f"95% CI {_ci(best.get('wilson_ci'))}")
+            if best.get("trials") is not None:
+                bits.append(f"{best.get('trials')} reruns")
+            lines.append("- " + " · ".join(bits))
+        lines.append("- No candidate's CI cleared the threshold — quarantine "
+                     "recommended.")
+
+    # Braintrust permalinks WHEN present; an honest single line when absent.
+    bt = result.get("braintrust") or {}
+    bt_links = [(k, v) for k, v in bt.items() if v]
+    if bt_links:
+        lines.append("- Braintrust experiments: "
+                     + " · ".join(f"[{k}]({v})" for k, v in bt_links))
+    else:
+        lines.append("- Braintrust ledger: not recorded for this run "
+                     "(no BRAINTRUST_API_KEY).")
+
+    lines += ["",
+              "*Method: Wilson 95% score intervals over independent sandbox "
+              "reruns; verdicts require the whole CI to clear the threshold, "
+              "not the point estimate.*", ""]
+    return lines
 
 
 class PRSmith:
@@ -111,6 +187,11 @@ class PRSmith:
                 lines.append("No fix hypotheses were generated.")
             lines.append("")
             lines.append("Quarantine this test until a fix stabilizes it below threshold.")
+
+        # Statistical receipts: the table of every number the verdict rests on
+        # (the narrative lines above are the story; this is the evidence). Slight
+        # duplication with the body is deliberate and honest.
+        lines += ["", *_receipts(result)]
 
         # Braintrust receipts
         if bt:

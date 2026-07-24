@@ -171,6 +171,14 @@ function observatoryTrack(): ScriptedEvent[] {
       sandboxes: pool,
       counts: { live: 16, total_ever: 16, destroyed: 0 },
       lineage: {},
+      // Honest fake: small consistent seconds, no rate configured so no $ est.
+      spend: {
+        live_sandbox_seconds: 640,
+        total_sandbox_seconds: 640,
+        est_cost_usd: null,
+        rate_per_sandbox_hour: null,
+        note: 'estimate — measured sandbox lifetime x env-configured rate; not Daytona billing data',
+      },
     },
   });
 

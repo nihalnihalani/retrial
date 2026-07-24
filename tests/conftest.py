@@ -215,6 +215,61 @@ class RaisingRegistry:
     emit_snapshot = snapshot = record = counts = lineage = _boom
 
 
+class _FakeLifespanPool:
+    """Minimal pool for the lifespan_client fixture: enough surface that a boot
+    with pooling stubbed never touches Daytona."""
+
+    def resize_to(self, target):
+        return target
+
+    def stats(self):
+        return {"available": 0, "live": 0}
+
+    def destroy_all(self):
+        return 0
+
+
+@pytest.fixture
+def lifespan_client(monkeypatch):
+    """A server TestClient with the ASGI LIFESPAN actually RUN (the `with`
+    context), so boot preflight populates `_preflight['last']`.
+
+    PROJECT-WIDE GOTCHA, promoted to a rule: every existing server test uses a
+    BARE `TestClient(app)`, which does NOT reliably run the lifespan across
+    starlette/httpx versions — so `_preflight['last']` stays None and
+    preflight/health assertions false-pass or confusingly fail. Every NEW test
+    that touches `/preflight`, `health()['preflight_ok']`, or the sticky re-seed
+    MUST use this fixture (or an explicit `with TestClient(...)`). Pooling is
+    stubbed and PREWARM forced to 0 so the boot never provisions a real
+    sandbox."""
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from retrial import server as server_mod
+
+    fake = _FakeLifespanPool()
+    monkeypatch.setattr(server_mod, "_get_pool", lambda: fake)
+    monkeypatch.setattr(server_mod, "_get_hpool", lambda: fake)
+    monkeypatch.setattr(server_mod, "PREWARM", 0)   # no prewarm thread at boot
+    with server_mod._run_lock:
+        server_mod._running.update(active=False, test_name=None)
+        server_mod._pending["promotion"] = None
+        server_mod._preflight["last"] = None
+        server_mod._STICKY["pool_degraded"] = None
+    with TestClient(server_mod.app) as c:           # context manager => lifespan RUNS
+        yield c
+
+
+@pytest.fixture(autouse=True)
+def _isolate_run_history(monkeypatch, tmp_path):
+    """Keep RunHistory writes hermetic: point RETRIAL_DB at a throwaway tmp db
+    for every test so a driven /tournament or /bisect never touches the real
+    repo-root .retrial/history.db. Tests that need a specific db path just
+    monkeypatch.setenv('RETRIAL_DB', ...) again — theirs wins (later setenv).
+    Tests that assert Settings defaults delenv RETRIAL_DB explicitly, which
+    undoes this on the same monkeypatch instance."""
+    monkeypatch.setenv("RETRIAL_DB", str(tmp_path / "history.db"))
+
+
 @pytest.fixture(autouse=True)
 def _fast_retry(monkeypatch):
     """Zero out _retry's backoff sleeps so induced-failure tests stay fast.

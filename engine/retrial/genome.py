@@ -11,9 +11,10 @@ No wall-clock is stored; each entry carries a monotonically increasing `seq`
 across threads within a process.
 """
 import json
-import os
 import threading
 from pathlib import Path
+
+from .settings import get_settings
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_PATH = _REPO_ROOT / "genome.json"
@@ -28,7 +29,7 @@ class Genome:
 
     @classmethod
     def from_env(cls):
-        return cls(os.environ.get("GENOME_PATH") or _DEFAULT_PATH)
+        return cls(get_settings().genome_path or _DEFAULT_PATH)
 
     def _load(self):
         try:
