@@ -178,5 +178,32 @@
         "won": true
       }
     ]
+  },
+  {
+    "seq": 11,
+    "test_name": "test_always_fails.py",
+    "verdict": "QUARANTINE",
+    "cause_class": "shared_state",
+    "orig_flake_rate": 1.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p1",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p6",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": false
+      }
+    ]
   }
 ]

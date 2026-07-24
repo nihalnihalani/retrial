@@ -141,7 +141,7 @@ export type Phase =
   | 'tournament'
   | 'winner'
   | 'quarantine'
-  | 'always_failing';
+  | 'baseline_verdict';
 
 export interface TrialCell {
   index: number;
@@ -189,8 +189,12 @@ export interface WinnerState {
   model: string | null; // real winning-model slug when the engine credits one
 }
 
-// The test always fails — a regression surfaced by the detect pass, not a flake.
-export interface AlwaysFailingState {
+// A terminal verdict reached at the detect pass, before any tournament runs:
+// the original test is NOT flaky, so there's nothing to race. `verdict` is the
+// engine's detect verdict — "ALWAYS_FAILING" (regression), "STABLE" (already
+// green), "INCONCLUSIVE" (CI straddles the threshold) or "ERROR".
+export interface BaselineVerdictState {
+  verdict: string;
   flakeRate: number | null;
   wilsonCi: WilsonCI | null;
   trials: number | null;
@@ -222,7 +226,7 @@ export interface BoardState {
   hypotheses: Hypothesis[];
   winner: WinnerState | null;
   quarantine: QuarantineState | null;
-  alwaysFailing: AlwaysFailingState | null;
+  baselineVerdict: BaselineVerdictState | null;
   genome: GenomeState | null;
   prUrl: string | null;
   tournamentDone: boolean;
