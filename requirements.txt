@@ -4,6 +4,7 @@ daytona==0.200.1
 fastapi==0.139.2
 httpx==0.28.1
 openai==2.47.0
+pydantic-settings==2.14.2
 python-dotenv==1.2.2
 uvicorn==0.51.0
 websockets==16.1.1

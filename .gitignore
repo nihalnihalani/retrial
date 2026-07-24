@@ -9,6 +9,7 @@ dist/
 .DS_Store
 calibration-results.json
 genome.json
+.retrial/
 # Added by Braintrust Wizard
 .env.braintrust
 .braintrust.json

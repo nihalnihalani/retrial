@@ -35,6 +35,8 @@ EVENT_TYPES = (
     "pr_opened",
     # provisioning
     "pool_degraded",
+    # preflight / doctor
+    "preflight_done",
     # time-travel bisection
     "bisect_started",
     "checkpoint_created",

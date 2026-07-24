@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { reconstructObservatory } from '../observatoryReconstruct';
+import { authAware } from '../authError';
 import type {
   BoardState,
   ConnectionMode,
@@ -7,6 +8,7 @@ import type {
   ObservatoryState,
   SandboxExecEntry,
   SandboxRole,
+  SpendWire,
 } from '../types';
 
 const API = 'http://localhost:8000';
@@ -59,12 +61,55 @@ export function SandboxObservatory({
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Live freshness: while LIVE and this panel is mounted (open), poll
+  // GET /sandboxes every 10s so the header spend chip + counters stay fresh even
+  // between run-acceptance snapshots. Cards stay event-driven. Replay never
+  // fetches (the effect returns early), so the sacred path issues no requests.
+  const [polled, setPolled] = useState<{
+    spend: SpendWire | null;
+    counts: ObservatoryState['counts'];
+  } | null>(null);
 
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 6000);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API}/sandboxes`);
+        if (!res.ok || cancelled) return;
+        const body = await res.json();
+        if (cancelled) return;
+        setPolled({
+          spend: (body.spend ?? null) as SpendWire | null,
+          counts: {
+            live: body.counts.live,
+            totalEver: body.counts.total_ever,
+            destroyed: body.counts.destroyed,
+          },
+        });
+      } catch {
+        /* offline — keep the event-driven header */
+      }
+    };
+    poll();
+    const iv = window.setInterval(poll, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(iv);
+    };
+  }, [live]);
+
+  // Header uses the freshest source: the live poll when present, else the
+  // event-driven state. The spend chip stays hidden unless a snapshot/poll
+  // actually carried spend (default replay / reconstruction => null).
+  const headerCounts = polled?.counts ?? obs.counts;
+  const headerSpend = polled?.spend ?? obs.spend;
 
   const cards = useMemo(() => Object.values(obs.sandboxes), [obs.sandboxes]);
   const selectedCard = selected ? obs.sandboxes[selected] ?? null : null;
@@ -75,7 +120,7 @@ export function SandboxObservatory({
     try {
       const res = await fetch(`${API}/sandboxes/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (res.status === 409) setToast(`${shortId(id)} has live fork-children — destroy leaves first`);
-      else if (!res.ok) setToast(`destroy failed — engine returned ${res.status}`);
+      else if (!res.ok) setToast(authAware(res, `destroy failed — engine returned ${res.status}`));
       // Success streams sandbox_destroyed over the WS; no local state to sync.
     } catch {
       setToast('engine unreachable on :8000');
@@ -86,7 +131,8 @@ export function SandboxObservatory({
     <section className="obs-panel" aria-label="Sandbox Observatory">
       <ObsHeader
         source={source}
-        counts={obs.counts}
+        counts={headerCounts}
+        spend={headerSpend}
         view={view}
         onViewChange={setView}
         live={live}
@@ -132,6 +178,7 @@ export function SandboxObservatory({
 function ObsHeader({
   source,
   counts,
+  spend,
   view,
   onViewChange,
   live,
@@ -140,6 +187,7 @@ function ObsHeader({
 }: {
   source: 'live' | 'scripted feed' | 'replay reconstruction';
   counts: ObservatoryState['counts'];
+  spend: SpendWire | null;
   view: ObsView;
   onViewChange: (v: ObsView) => void;
   live: boolean;
@@ -175,6 +223,8 @@ function ObsHeader({
         </span>
       </div>
 
+      <SpendChip spend={spend} />
+
       <div className="obs-header-right">
         <div className="view-toggle" role="group" aria-label="Observatory view">
           {(['grid', 'tree'] as const).map((v) => (
@@ -205,6 +255,29 @@ function sourceTitle(source: string): string {
   if (source === 'live') return 'live registry over WebSocket';
   if (source === 'scripted feed') return 'scripted ?mock=observatory registry feed';
   return 'derived from recorded trial events — not recorded registry data';
+}
+
+// The always-honest spend chip: measured sandbox-lifetime hours, and — only
+// when a rate is configured — a clearly-labeled "est. $" estimate. Never a bare
+// price, never invented money. Hidden entirely when no spend is available
+// (default replay / reconstruction), so the sacred path shows no chip.
+function SpendChip({ spend }: { spend: SpendWire | null }) {
+  if (spend === null) return null;
+  const hasEst = spend.est_cost_usd !== null;
+  return (
+    <span className="obs-spend mono tabular-nums" title={spend.note}>
+      ⏱ {fmtHours(spend.total_sandbox_seconds)} sandbox-h
+      {hasEst ? (
+        <span className="obs-spend-est"> · est. ${spend.est_cost_usd!.toFixed(2)}</span>
+      ) : (
+        <span className="obs-spend-hint"> · set RETRIAL_EST_RATE_PER_SANDBOX_HOUR for $ est.</span>
+      )}
+    </span>
+  );
+}
+
+function fmtHours(seconds: number): string {
+  return (seconds / 3600).toFixed(2);
 }
 
 // ---------------- grid view ----------------
@@ -616,7 +689,7 @@ function DestroyAllModal({
       if (res.status === 409) {
         onToast('a run is active — check force to cancel it and reap');
       } else if (!res.ok) {
-        onToast(`reap failed — engine returned ${res.status}`);
+        onToast(authAware(res, `reap failed — engine returned ${res.status}`));
       } else {
         onClose();
       }

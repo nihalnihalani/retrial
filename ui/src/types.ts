@@ -141,6 +141,24 @@ export interface PoolDegraded {
   reason: string;
 }
 
+// ---- Preflight / doctor (boot-time config + optional live deep check) ----
+export interface PreflightCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  detail: string;
+}
+
+// Emitted at server boot (config-level) and, when RETRIAL_PREFLIGHT_LIVE=1, a
+// second time after the live fork smoke. Re-seeded by _accept_run so it survives
+// BUS.reset(). Field names mirror the engine's run_preflight payload EXACTLY.
+export interface PreflightDone {
+  type: 'preflight_done';
+  ok: boolean;
+  live_checked: boolean;
+  checks: PreflightCheck[];
+  timings: Record<string, number> | null;
+}
+
 // ---- Time-travel bisection (fork backend only) ----
 
 export interface BisectStarted {
@@ -289,11 +307,25 @@ export interface SandboxDestroyed {
   role: SandboxRole;
 }
 
+// The spend meter riding on every registry_snapshot (and GET /sandboxes). These
+// are OUR monotonic sandbox-lifetime seconds (created->destroyed), NOT Daytona
+// billing data; est_cost_usd is a clearly-labeled estimate and is null unless a
+// rate is configured (RETRIAL_EST_RATE_PER_SANDBOX_HOUR). Required — the engine
+// always sends it after B1, so tsc catches any payload drift.
+export interface SpendWire {
+  live_sandbox_seconds: number;
+  total_sandbox_seconds: number;
+  est_cost_usd: number | null;
+  rate_per_sandbox_hour: number | null;
+  note: string;
+}
+
 export interface RegistrySnapshot {
   type: 'registry_snapshot';
   sandboxes: SandboxRecordWire[];
   counts: { live: number; total_ever: number; destroyed: number };
   lineage: Record<string, string[]>;
+  spend: SpendWire;
 }
 
 export type RetrialEvent =
@@ -311,6 +343,7 @@ export type RetrialEvent =
   | TournamentDone
   | HermeticDiagnosis
   | PoolDegraded
+  | PreflightDone
   | BisectStarted
   | CheckpointCreated
   | CheckpointProbed
@@ -468,6 +501,10 @@ export interface ObservatoryState {
   sandboxes: Record<string, ObservatorySandbox>;
   counts: { live: number; totalEver: number; destroyed: number };
   seen: boolean; // any real registry event arrived (live or ?mock=observatory)
+  // The spend meter from the latest registry_snapshot. null until a snapshot
+  // carrying it arrives (default replay / reconstruction never set it — no
+  // recorded lifetimes, so the chip stays hidden and no money is invented).
+  spend: SpendWire | null;
 }
 
 export interface BoardState {
@@ -488,6 +525,10 @@ export interface BoardState {
   bisect: BisectState | null;
   promotion: PromotionState | null;
   poolDegraded: { reason: string } | null; // honest badge, not an error
+  // Boot preflight result (config-level, + optional live deep check). Like
+  // poolDegraded it OUTLIVES a single run (a pool-level fact), so resetPerRun
+  // leaves it be. Drives the persistent degrade banner (rendered in PKG-B).
+  preflight: { ok: boolean; liveChecked: boolean; checks: PreflightCheck[] } | null;
   hermetic: HermeticState | null;
   // The sandbox observatory feed. Like genome/poolDegraded, it OUTLIVES a
   // single run (the pool is shared across runs), so resetPerRun leaves it be.

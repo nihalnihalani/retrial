@@ -34,9 +34,10 @@ a @_safe-wrapped path that already holds it — cheap insurance, zero cost.
 """
 import collections
 import functools
-import os
 import threading
 import time
+
+from .settings import get_settings
 
 
 def _safe(fn):
@@ -110,9 +111,9 @@ class SandboxRegistry:
         # Per-sandbox recent-exec ring depth and the destroyed-record retention
         # window, both env-overridable and read at construction (retrial style).
         self._exec_history = (exec_history if exec_history is not None
-                              else int(os.environ.get("RETRIAL_EXEC_HISTORY", "20")))
+                              else get_settings().retrial_exec_history)
         self._destroyed_retain = (destroyed_retain if destroyed_retain is not None
-                                  else int(os.environ.get("RETRIAL_DESTROYED_RETAIN", "50")))
+                                  else get_settings().retrial_destroyed_retain)
         # See the module docstring for lock discipline. Never held across a call
         # into pool/bisector code (only destroy() calls out, lock released first).
         self._lock = threading.RLock()
@@ -127,6 +128,12 @@ class SandboxRegistry:
         # honest across a multi-hour demo day even as destroyed records age out.
         self._total_ever = 0
         self._destroyed = 0
+        # Exact-FOREVER accumulated sandbox-lifetime seconds for destroyed
+        # sandboxes (created->destroyed on OUR monotonic clock). Like the int
+        # counters it is bumped once at mark_destroyed and NEVER recomputed from
+        # the (pruned) record map — pruning a destroyed record cannot lose its
+        # billed seconds. Live seconds are summed on demand in spend().
+        self._destroyed_seconds = 0.0
         self._t0 = time.monotonic()
 
     # -- internals -------------------------------------------------------
@@ -236,6 +243,7 @@ class SandboxRegistry:
                 "exec_count": 0,
                 "recent_execs": collections.deque(maxlen=self._exec_history),
                 "preview_url": None,
+                "destroyed_ts": None,
             }
             self._records[sid] = rec
             self._handles[sid] = sb
@@ -332,11 +340,18 @@ class SandboxRegistry:
             rec = self._records.get(sid)
             if rec is None or rec["state"] == "destroyed":
                 return None
+            now = self._now()
             rec["state"] = "destroyed"
             rec["current_cmd"] = None
-            rec["updated_ts"] = self._now()
+            rec["updated_ts"] = now
+            rec["destroyed_ts"] = now
             role = rec["role"]
             self._destroyed += 1
+            # Bill this sandbox's full lifetime into the exact-forever meter
+            # BEFORE pruning can evict its record. Inside the idempotence guard
+            # (rec was not already "destroyed"), so a double-destroy never
+            # double-bills. Same monotonic clock as created_ts.
+            self._destroyed_seconds += now - rec["created_ts"]
             self._handles.pop(sid, None)
             self._destroyers.pop(sid, None)
             self._destroyed_order.append(sid)
@@ -382,7 +397,7 @@ class SandboxRegistry:
         if handle is None:
             return None                            # destroyed / no handle
         if port is None:
-            port = int(os.environ.get("RETRIAL_PREVIEW_PORT", "8080"))
+            port = get_settings().retrial_preview_port
         try:
             link = handle.get_preview_link(port)
         except Exception:
@@ -464,7 +479,30 @@ class SandboxRegistry:
                 "total_ever": self._total_ever,
                 "destroyed": self._destroyed,
             }
-        return {"sandboxes": sandboxes, "counts": counts, "lineage": lineage}
+        return {"sandboxes": sandboxes, "counts": counts, "lineage": lineage,
+                "spend": self.spend(get_settings().retrial_est_rate_per_sandbox_hour)}
+
+    def spend(self, rate_per_hour=None):
+        """Sandbox-time meter. HONESTY CONTRACT: these are wall-clock
+        sandbox-lifetime seconds measured on OUR monotonic clock
+        (created->destroyed), not Daytona billing data; est_cost_usd is a
+        clearly-labeled estimate computed from an env-supplied rate and is None
+        when no rate is configured — we never invent a price. Live seconds are
+        summed on demand from the live records; destroyed seconds come from the
+        exact-forever accumulator (pruning cannot lose them)."""
+        with self._lock:
+            now = self._now()
+            live_s = sum(now - r["created_ts"] for r in self._records.values()
+                         if r["state"] != "destroyed")
+            total_s = self._destroyed_seconds + live_s
+        rate = rate_per_hour
+        est = round(total_s / 3600.0 * rate, 2) if rate else None
+        return {"live_sandbox_seconds": int(live_s),
+                "total_sandbox_seconds": int(total_s),
+                "est_cost_usd": est,
+                "rate_per_sandbox_hour": rate,
+                "note": "estimate — measured sandbox lifetime x env-configured "
+                        "rate; not Daytona billing data"}
 
     def record(self, sid):
         """The FULL record for one sandbox incl. recent_execs (list-ified), or
