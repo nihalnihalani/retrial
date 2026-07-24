@@ -1,0 +1,13 @@
+{
+  "trials": 40,
+  "fails": 35,
+  "flake_rate": 0.875,
+  "wilson_95": [
+    0.739,
+    0.945
+  ],
+  "errors": 0,
+  "wallclock_s": 10.9,
+  "pool": 8,
+  "per_sandbox": 5
+}
