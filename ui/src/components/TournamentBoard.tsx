@@ -24,6 +24,8 @@ const TOURNAMENT_URL = 'http://localhost:8000/tournament';
 const SEEDS: { label: string; paths: string[] }[] = [
   { label: 'test_dict_order.py', paths: ['seeds/test_dict_order.py', '../seeds/test_dict_order.py'] },
   { label: 'test_first_key.py', paths: ['seeds/test_first_key.py', '../seeds/test_first_key.py'] },
+  // Deterministic exit-1 regression seed — drives the ALWAYS_FAILING verdict.
+  { label: 'test_always_fails.py', paths: ['seeds/test_always_fails.py', '../seeds/test_always_fails.py'] },
 ];
 
 // Which stepper index each phase lights up. Diagnosing is a pre-phase (nothing
