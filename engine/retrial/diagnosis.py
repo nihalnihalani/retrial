@@ -129,8 +129,10 @@ def diagnose(test_code, test_name, log_tail="", n=4, models=None,
             content = None
             # Leave a diagnostic breadcrumb in the explanation via fallback below.
             _ = e
-        results[i] = _parse_hypothesis(content, hid, fallback_cause=cause_hint,
-                                       fallback_code=test_code)
+        h = _parse_hypothesis(content, hid, fallback_cause=cause_hint,
+                              fallback_code=test_code)
+        h["model"] = model  # which model generated this hypothesis (for the genome)
+        results[i] = h
 
     threads = [threading.Thread(target=ask, args=(i,)) for i in range(n)]
     for t in threads:
