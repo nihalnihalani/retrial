@@ -1,6 +1,6 @@
 # Winning Playbook — Gary-Yau Chan principles mapped to Daytona HackSprint #5
 
-Source: growthwithgary.com "How to win a hackathon" (26x winner). Mapped to OUR event: 5.5h build, 3-min demo, panel = 2 Daytona + 2 CodeRabbit + 2 CopilotKit + 1 Braintrust + 1 Fireworks engineers + TikTok eng + Lyzr AI founder.
+Source: growthwithgary.com "How to win a hackathon" (26x winner). Mapped to OUR event: 5.5h build, 3-min demo, panel = engineers from the sponsor companies (Daytona, Braintrust, Fireworks, and others) + TikTok eng + Lyzr AI founder.
 
 ## Judge-type analysis of OUR panel
 - **8/10 are API-Evangelist/engineer judges** (sponsor staff). Gary: "Integrate their API in the most unique way. Optimize for UNUSED/UNPOPULAR functions — gamify them. They love creativity on non-core functions. Don't over-brief them beforehand; they prefer to be WOWed at the demo... but DO befriend them during the day to validate approach + get tagged as using their API."
