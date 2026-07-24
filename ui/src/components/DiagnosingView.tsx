@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { prettyModel } from '../models';
 
 interface Props {
   testName: string | null;
@@ -7,32 +8,6 @@ interface Props {
   // showing models we may not run is a checkable false claim to the Fireworks
   // judge. Absent => generic "Model 1…n".
   modelNames?: string[] | null;
-}
-
-// Prettify a real Fireworks slug for display: strip any path prefix and turn
-// the "p" version separator back into a dot ("glm-5p2" -> "GLM 5.2"). Applied
-// ONLY to slugs that actually came from the engine.
-function prettyModel(slug: string): string {
-  const known: Record<string, string> = {
-    glm: 'GLM',
-    deepseek: 'DeepSeek',
-    kimi: 'Kimi',
-    minimax: 'MiniMax',
-    qwen: 'Qwen',
-    llama: 'Llama',
-  };
-  const base = slug.split('/').pop() ?? slug;
-  return base
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((tok) => {
-      const dotted = tok.replace(/(\d)p(\d)/g, '$1.$2');
-      const lower = dotted.toLowerCase();
-      if (known[lower]) return known[lower];
-      if (/^[a-z]+$/.test(dotted)) return dotted.charAt(0).toUpperCase() + dotted.slice(1);
-      return dotted.toUpperCase(); // tokens with digits: v4 -> V4, k2.6 -> K2.6
-    })
-    .join(' ');
 }
 
 // The cause-classes the models flicker through while they think. Purely
