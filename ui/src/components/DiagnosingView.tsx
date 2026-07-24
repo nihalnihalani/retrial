@@ -13,17 +13,16 @@ interface Props {
 // The cause-classes the models flicker through while they think. Purely
 // cosmetic — the real hypotheses arrive later as hypothesis_created events.
 const GUESSES = [
-  'race condition?',
+  'order dependency?',
   'shared state?',
-  'test-order dependency?',
-  'timing / scheduling?',
   'unseeded randomness?',
   'resource contention?',
-  'clock skew?',
+  'test isolation?',
+  'hash seed?',
 ];
 
 // The DIAGNOSING pre-phase: shown from the `diagnosing` event until run_started.
-// Deliberately alive (not a spinner) — this window is narrated in the pitch.
+// Calm and precise — evidence will do the eliminating; this is only the wait.
 export function DiagnosingView({ testName, n, modelNames }: Props) {
   const real = modelNames && modelNames.length > 0 ? modelNames.map(prettyModel) : null;
   const count = Math.max(1, real ? real.length : n);
@@ -34,9 +33,15 @@ export function DiagnosingView({ testName, n, modelNames }: Props) {
       <div className="diag-scan" aria-hidden="true" />
 
       <div className="diag-hero">
-        <div className="diag-glyph">🔬</div>
+        <div className="diag-mark" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <p className="diag-eyebrow mono">BASELINE CHECK</p>
         <h2 className="diag-title">
-          <span className="diag-n">{count}</span> models proposing competing root-cause theories
+          Checking the test —{' '}
+          <span className="diag-n">{count}</span> models drafting causes
           <span className="diag-ellipsis">
             <i>.</i>
             <i>.</i>
@@ -48,7 +53,9 @@ export function DiagnosingView({ testName, n, modelNames }: Props) {
             {testName}
           </p>
         )}
-        <p className="diag-sub">Differential diagnosis — evidence will eliminate all but one.</p>
+        <p className="diag-sub">
+          Theories are provisional. The tournament keeps only what the evidence supports.
+        </p>
       </div>
 
       <div className="diag-models">
@@ -64,9 +71,8 @@ function ModelChip({ name, seed }: { name: string; seed: number }) {
   const [guess, setGuess] = useState(GUESSES[seed % GUESSES.length]);
 
   useEffect(() => {
-    // each chip rotates its current guess on its own staggered cadence
     let i = seed;
-    const period = 620 + seed * 90;
+    const period = 720 + seed * 110;
     const id = window.setInterval(() => {
       i = (i + 1) % GUESSES.length;
       setGuess(GUESSES[i]);
@@ -75,7 +81,7 @@ function ModelChip({ name, seed }: { name: string; seed: number }) {
   }, [seed]);
 
   return (
-    <div className="diag-chip" style={{ animationDelay: `${seed * 0.18}s` }}>
+    <div className="diag-chip" style={{ animationDelay: `${seed * 0.14}s` }}>
       <span className="diag-chip-dot" />
       <span className="diag-chip-name">{name}</span>
       <span className="diag-chip-guess mono" key={guess}>
