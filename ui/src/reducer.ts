@@ -3,9 +3,13 @@ import type {
   BisectState,
   BoardState,
   Hypothesis,
+  ObservatorySandbox,
   RetrialEvent,
+  SandboxRecordWire,
   TrialCell,
 } from './types';
+
+const EXEC_FEED_CAP = 20; // client-side ring cap, mirrors RETRIAL_EXEC_HISTORY
 
 export const initialState: BoardState = {
   phase: 'detect',
@@ -33,12 +37,19 @@ export const initialState: BoardState = {
   promotion: null,
   poolDegraded: null,
   hermetic: null,
+  observatory: {
+    sandboxes: {},
+    counts: { live: 0, totalEver: 0, destroyed: 0 },
+    seen: false,
+  },
 };
 
 // Clears everything that belongs to a single run so a second live run can't
-// inherit the first run's board, while PRESERVING the cumulative genome and
-// the sticky poolDegraded badge (pool state outlives runs) — and the
-// diagnosing pre-phase's model list / test name, which the caller re-sets.
+// inherit the first run's board, while PRESERVING the cumulative genome, the
+// sticky poolDegraded badge, and the sandbox `observatory` — all of which
+// outlive a single run (the pool is shared and pre-warmed across runs, exactly
+// like the server's REGISTRY, which _accept_run re-seeds but never wipes) — and
+// the diagnosing pre-phase's model list / test name, which the caller re-sets.
 // A stale pending promotion is also dropped, mirroring the server's
 // _accept_run wipe: a new run of ANY type dismisses an unclicked gate.
 function resetPerRun(state: BoardState): BoardState {
@@ -84,7 +95,14 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       event.type === 'promotion_pending' ||
       event.type === 'promotion_closed' ||
       event.type === 'pool_degraded' ||
-      event.type === 'hermetic_diagnosis';
+      event.type === 'hermetic_diagnosis' ||
+      // Sandbox registry traffic is pool-level and honest post-terminal (the
+      // pool keeps living after a verdict), same rationale as pool_degraded.
+      event.type === 'sandbox_registered' ||
+      event.type === 'sandbox_state' ||
+      event.type === 'sandbox_exec' ||
+      event.type === 'sandbox_destroyed' ||
+      event.type === 'registry_snapshot';
     if (!passthrough) return state;
   }
 
@@ -446,9 +464,205 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       };
     }
 
+    // ---- Sandbox Observatory ----
+    // All arms are pure upserts, out-of-order safe. The default replay emits
+    // NONE of these types, so every existing transition above is untouched and
+    // default behavior stays byte-for-byte identical by construction.
+
+    case 'sandbox_registered': {
+      const obs = state.observatory;
+      const existed = obs.sandboxes[event.id] !== undefined;
+      const prev = obs.sandboxes[event.id];
+      const rec: ObservatorySandbox = {
+        id: event.id,
+        role: event.role,
+        backend: event.backend,
+        state: event.state,
+        parent_id: event.parent_id,
+        created_ts: event.created_ts,
+        labels: event.labels,
+        isolation: event.isolation,
+        exec_count: event.exec_count,
+        preview_url: event.preview_url,
+        currentCmd: null,
+        recentExecs: prev?.recentExecs ?? [],
+        lastExecSeq: prev?.lastExecSeq ?? 0,
+      };
+      return {
+        ...state,
+        observatory: {
+          seen: true,
+          sandboxes: { ...obs.sandboxes, [event.id]: rec },
+          counts: existed
+            ? obs.counts
+            : {
+                ...obs.counts,
+                live: obs.counts.live + 1,
+                totalEver: obs.counts.totalEver + 1,
+              },
+        },
+      };
+    }
+
+    case 'sandbox_state': {
+      const obs = state.observatory;
+      const prev = obs.sandboxes[event.id];
+      // Unknown id ⇒ synthesize a stub (lossy-replay rule, same spirit as
+      // ensureBisect) so a state event that outran its registration isn't lost.
+      const base = prev ?? stubSandbox(event.id);
+      const wasDestroyed = base.state === 'destroyed';
+      const nowDestroyed = event.state === 'destroyed';
+      return {
+        ...state,
+        observatory: {
+          ...obs,
+          seen: true,
+          sandboxes: {
+            ...obs.sandboxes,
+            [event.id]: {
+              ...base,
+              state: event.state,
+              currentCmd: event.current_cmd,
+            },
+          },
+          // sandbox_state can carry a 'degraded'/'destroyed' transition; only
+          // adjust counts on the destroyed edge (guard double-count by state).
+          counts:
+            !wasDestroyed && nowDestroyed
+              ? {
+                  ...obs.counts,
+                  live: Math.max(0, obs.counts.live - 1),
+                  destroyed: obs.counts.destroyed + 1,
+                }
+              : obs.counts,
+        },
+      };
+    }
+
+    case 'sandbox_exec': {
+      const obs = state.observatory;
+      const prev = obs.sandboxes[event.id] ?? stubSandbox(event.id);
+      const entry = {
+        cmd: event.cmd,
+        exit_code: event.exit_code,
+        output_tail: event.output_tail,
+        duration_s: event.duration_s,
+        ts: 0,
+      };
+      const recentExecs = [...prev.recentExecs, entry].slice(-EXEC_FEED_CAP);
+      return {
+        ...state,
+        observatory: {
+          ...obs,
+          seen: true,
+          sandboxes: {
+            ...obs.sandboxes,
+            [event.id]: {
+              ...prev,
+              recentExecs,
+              exec_count: event.exec_count,
+              lastExecSeq: prev.lastExecSeq + 1,
+              // The exec event IS the running-cmd -> warm transition (engine
+              // volume discipline: no paired sandbox_state per exec).
+              state: prev.state === 'destroyed' ? prev.state : 'warm',
+              currentCmd: null,
+            },
+          },
+        },
+      };
+    }
+
+    case 'sandbox_destroyed': {
+      const obs = state.observatory;
+      const prev = obs.sandboxes[event.id];
+      const base = prev ?? { ...stubSandbox(event.id), role: event.role };
+      const wasDestroyed = base.state === 'destroyed';
+      return {
+        ...state,
+        observatory: {
+          ...obs,
+          seen: true,
+          sandboxes: {
+            ...obs.sandboxes,
+            [event.id]: { ...base, state: 'destroyed', currentCmd: null },
+          },
+          counts: wasDestroyed
+            ? obs.counts
+            : {
+                ...obs.counts,
+                live: Math.max(0, obs.counts.live - 1),
+                destroyed: obs.counts.destroyed + 1,
+              },
+        },
+      };
+    }
+
+    case 'registry_snapshot': {
+      // The authoritative re-seed (emitted at every run acceptance, and on
+      // demand): REPLACE the map wholesale from event.sandboxes + event.counts.
+      // Preserve each existing record's client-grown recentExecs/lastExecSeq by
+      // id so the drawer's exec feed and the card pulse don't blank on re-seed.
+      // Safe for memory: the server bounds `sandboxes` to live + last-50
+      // destroyed (B1 retention window); the header counters stay exact from
+      // event.counts regardless.
+      const prevMap = state.observatory.sandboxes;
+      const sandboxes: Record<string, ObservatorySandbox> = {};
+      for (const wire of event.sandboxes) {
+        const prev = prevMap[wire.id];
+        sandboxes[wire.id] = mergeWire(wire, prev);
+      }
+      return {
+        ...state,
+        observatory: {
+          seen: true,
+          sandboxes,
+          counts: {
+            live: event.counts.live,
+            totalEver: event.counts.total_ever,
+            destroyed: event.counts.destroyed,
+          },
+        },
+      };
+    }
+
     default:
       return state;
   }
+}
+
+// A placeholder sandbox for a state/exec/destroyed event that outran its
+// registration on a lossy replay — the drawer stays populated rather than
+// dropping the event. Real data overwrites every field on the next snapshot.
+function stubSandbox(id: string): ObservatorySandbox {
+  return {
+    id,
+    role: 'snapshot-pool',
+    backend: 'snapshot',
+    state: 'creating',
+    parent_id: null,
+    created_ts: 0,
+    labels: {},
+    isolation: null,
+    exec_count: 0,
+    preview_url: null,
+    currentCmd: null,
+    recentExecs: [],
+    lastExecSeq: 0,
+  };
+}
+
+// Fold a wire record into an ObservatorySandbox, carrying over the client-grown
+// exec feed / pulse counter from any prior record with the same id.
+function mergeWire(
+  wire: SandboxRecordWire,
+  prev: ObservatorySandbox | undefined,
+): ObservatorySandbox {
+  return {
+    ...wire,
+    currentCmd: prev?.currentCmd ?? null,
+    recentExecs: prev?.recentExecs ?? [],
+    lastExecSeq: prev?.lastExecSeq ?? 0,
+  };
 }
 
 // A checkpoint event can land before bisect_started on a lossy replay; start
