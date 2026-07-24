@@ -1,0 +1,937 @@
+{
+  "experiment": "penman test_rearrange \u2014 SANITIZED rerun (no cause hints in repro)",
+  "started_at_utc": "2026-07-23T05:51:58Z",
+  "repro_file": "seeds/real/penman_repro_sanitized.py",
+  "test_name": "tests/test_layout.py::test_rearrange",
+  "models": [
+    "accounts/fireworks/models/glm-5p2",
+    "accounts/fireworks/models/glm-5p1",
+    "accounts/fireworks/models/kimi-k2p6",
+    "accounts/fireworks/models/deepseek-v4-pro"
+  ],
+  "note": "Repro fed to the models contains NO root-cause hints (neutral docstring, no seed/random commentary). Corrects the original run, whose repro header named the cause. Winner selection = lowest flake rate whose Wilson CI upper bound < the re-measured baseline rate, then a fresh confirmation round.",
+  "hypotheses": [
+    {
+      "id": "h1",
+      "model": "accounts/fireworks/models/glm-5p2",
+      "cause_hint_given": "order_dependency",
+      "cause_class": "order_dependency",
+      "explanation": "The test calls rearrange with model.random_order, which uses Python's random module to produce a non-deterministic ordering of roles. The expected string captures only one possible random permutation, so the test fails whenever a different permutation is produced.",
+      "adds_random_seed": false,
+      "patch_len": 816,
+      "prompt_messages": [
+        {
+          "role": "system",
+          "content": "You are a flaky-test root-cause analyst. A flaky test passes sometimes and fails sometimes on identical code. Diagnose ONE root cause and return a corrected version of the file. Respond with a strict JSON object only."
+        },
+        {
+          "role": "user",
+          "content": "Flaky test file `tests/test_layout.py::test_rearrange`:\n```python\n\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)\n\n```\n\nSample run log (may be empty):\n```\n=== test_rearrange FAILED ===\nassert codec.format(t) == expected\nGOT:\n(a / alpha\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta))\n   :ARG0-of d\n   :ARG1 (e / epsilon))\n\nEXPECTED:\n(a / alpha\n   :ARG0-of d\n   :ARG1 (e / epsilon)\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta)))\n\n```\n\nPropose ONE competing root-cause hypothesis. Consider especially the\n`order_dependency` angle, but choose whichever cause the evidence best supports.\n\nReturn a JSON object with EXACTLY these keys:\n{\n  \"cause_class\": one of [\"order_dependency\",\"shared_state\",\"timing\",\"race_condition\",\"external_dep\"],\n  \"explanation\": \"1-2 sentences on the root cause\",\n  \"patched_code\": \"the FULL corrected replacement file as a single string\"\n}"
+        }
+      ],
+      "raw_response": "{\n\"cause_class\":\"order_dependency\",\n\"explanation\":\"The test calls rearrange with model.random_order, which uses Python's random module to produce a non-deterministic ordering of roles. The expected string captures only one possible random permutation, so the test fails whenever a different permutation is produced.\",\n\"patched_code\":\"\\\"\\\"\\\"Reproduction of a flaky penman test, extracted at v1.2.1.\\n\\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\\n\\\"\\\"\\\"\\nimport sys\\nfrom penman.model import Model\\nfrom penman.codec import PENMANCodec\\nfrom penman.layout import rearrange\\n\\ncodec = PENMANCodec()\\nmodel = Model()\\n\\nt = codec.parse('''\\n    (a / alpha\\n       :ARG0 (b / beta\\n                :ARG0 (g / gamma)\\n                :ARG1 (d / delta))\\n       :ARG0-of d\\n       :ARG1 (e / epsilon))''')\\n\\nrearrange(t, model.original_order)\\nexpected = (\\n    '(a / alpha\\\\n'\\n    '   :ARG0 (b / beta\\\\n'\\n    '            :ARG0 (g / gamma)\\\\n'\\n    '            :ARG1 (d / delta))\\\\n'\\n    '   :ARG0-of d\\\\n'\\n    '   :ARG1 (e / epsilon))')\\nsys.exit(0 if codec.format(t) == expected else 1)\\n\"\n}",
+      "extracted_patch": "\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.original_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta))\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon))')\nsys.exit(0 if codec.format(t) == expected else 1)",
+      "trials": 16,
+      "fails": 0,
+      "errors": 0,
+      "sandboxes_requested": 4,
+      "per_sandbox": 4,
+      "trials_phrasing": "16 fresh-process trials across 4 sandboxes",
+      "flake_rate": 0.0,
+      "wilson_ci": [
+        0.0,
+        0.194
+      ],
+      "err_samples": [],
+      "sample": "EXIT:0\n",
+      "per_trial": [
+        {
+          "sandbox": 0,
+          "sandbox_id": "03e6cdd9-f062-4d8d-8993-0b00265afdb5",
+          "trial": 0,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "03e6cdd9-f062-4d8d-8993-0b00265afdb5",
+          "trial": 1,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "03e6cdd9-f062-4d8d-8993-0b00265afdb5",
+          "trial": 2,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "03e6cdd9-f062-4d8d-8993-0b00265afdb5",
+          "trial": 3,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "5402a090-58dd-48cc-be4d-4a69484173d0",
+          "trial": 0,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "5402a090-58dd-48cc-be4d-4a69484173d0",
+          "trial": 1,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "5402a090-58dd-48cc-be4d-4a69484173d0",
+          "trial": 2,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "5402a090-58dd-48cc-be4d-4a69484173d0",
+          "trial": 3,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "e25f236e-6568-462d-bb47-73f64208177c",
+          "trial": 0,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "e25f236e-6568-462d-bb47-73f64208177c",
+          "trial": 1,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "e25f236e-6568-462d-bb47-73f64208177c",
+          "trial": 2,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "e25f236e-6568-462d-bb47-73f64208177c",
+          "trial": 3,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "d4be0e4e-d9b8-4cbc-acf3-247164c18f31",
+          "trial": 0,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "d4be0e4e-d9b8-4cbc-acf3-247164c18f31",
+          "trial": 1,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "d4be0e4e-d9b8-4cbc-acf3-247164c18f31",
+          "trial": 2,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "d4be0e4e-d9b8-4cbc-acf3-247164c18f31",
+          "trial": 3,
+          "verdict": "pass",
+          "exit_seen": "0"
+        }
+      ]
+    },
+    {
+      "id": "h2",
+      "model": "accounts/fireworks/models/glm-5p1",
+      "cause_hint_given": "shared_state",
+      "cause_class": "shared_state",
+      "explanation": "",
+      "adds_random_seed": false,
+      "patch_len": 814,
+      "prompt_messages": [
+        {
+          "role": "system",
+          "content": "You are a flaky-test root-cause analyst. A flaky test passes sometimes and fails sometimes on identical code. Diagnose ONE root cause and return a corrected version of the file. Respond with a strict JSON object only."
+        },
+        {
+          "role": "user",
+          "content": "Flaky test file `tests/test_layout.py::test_rearrange`:\n```python\n\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)\n\n```\n\nSample run log (may be empty):\n```\n=== test_rearrange FAILED ===\nassert codec.format(t) == expected\nGOT:\n(a / alpha\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta))\n   :ARG0-of d\n   :ARG1 (e / epsilon))\n\nEXPECTED:\n(a / alpha\n   :ARG0-of d\n   :ARG1 (e / epsilon)\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta)))\n\n```\n\nPropose ONE competing root-cause hypothesis. Consider especially the\n`shared_state` angle, but choose whichever cause the evidence best supports.\n\nReturn a JSON object with EXACTLY these keys:\n{\n  \"cause_class\": one of [\"order_dependency\",\"shared_state\",\"timing\",\"race_condition\",\"external_dep\"],\n  \"explanation\": \"1-2 sentences on the root cause\",\n  \"patched_code\": \"the FULL corrected replacement file as a single string\"\n}"
+        }
+      ],
+      "raw_response": "The test is flaky because it depends on `model.random_order` which presumably randomizes the order of edges/roles in the graph. The expected output assumes a specific ordering, but since `random_order` is used, the actual output order varies between runs, making the test pass sometimes and fail other times.\n\nLooking at the log, the GOT output has `:ARG0` before `:ARG0-of` and `:ARG1`, while the EXPECTED has `:ARG0-of` before `:ARG1` before `:ARG0`. This confirms that the order is non-deterministic due to `random_order`.\n\nThe fix would be to use a deterministic ordering instead of `model.random_order`. Looking at penman's API, the alternative would be to not pass `model.random_order` (which would use default ordering) or to use a specific deterministic order.\n\nActually, let me reconsider. The `rearrange` function takes a `key` argument that determines the ordering. `model.random_order` is a method that returns a random key, causing non-deterministic output. To fix this, we should use a deterministic key function.\n\nThe simplest fix is to not use `model.random_order` and instead use the default ordering, or use a specific deterministic key. Looking at penman's source, if we don't pass a key, it uses the default order. Or we could use `model.original_order` which maintains the original order.\n\nActually, looking more carefully at the penman library, `Model.random_order` is a method that returns a random float for sorting, causing non-deterministic ordering. The fix should be to use a deterministic key function or remove the `random_order` argument.\n\nThe simplest fix: remove `model.random_order` from the rearrange call, or replace it with a deterministic alternative.\n\nLet me write the patched code:\n\n```python\n\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.original_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)\n```\n\nWait, I need to verify that `model.original_order` exists and produces the expected output. Looking at the penman source code for Model class, it has `original_order` and `random_order` as class methods. `original_order` returns the role itself as the key (preserving original order), while `random_order` returns a random float.\n\nActually, the expected output in the test has `:ARG0-of` first, then `:ARG1`, then `:ARG0`. The original parsed tree has `:ARG0`, then `:ARG0-of`, then `:ARG1`. So `original_order` would preserve that original order, which wouldn't match the expected output either.\n\nHmm, let me think about this differently. The test was written assuming `random_order` would produce a specific order, but since it's random, it doesn't always match. The real fix is to either:\n\n1. Not use random ordering and adjust the expected output accordingly\n2. Sort the output deterministically before comparing\n\nLooking at the penman Model class, there's also a `canonical_order` method that sorts roles in a canonical way. Let me check what that would produce.\n\nActually, looking at the penman source more carefully, `Model.canonical_order` sorts roles with inversions (`-of`) before regular roles, which would put `:ARG0-of` first. Then among regular roles, it sorts alphabetically, so `:ARG1` before `:ARG0`.\n\nWait no, canonical order in penman typically puts inversions first, then sorts by role name. So `:ARG0-of` would come first (inversion), then `:ARG0` and `:ARG1` sorted... but the expected has `:ARG1` before `:ARG0`.\n\nLet me look at the expected output again:\n```\n:ARG0-of d\n:ARG1 (e / epsilon)\n:ARG0 (b / beta ...)\n```\n\nSo the order is: inversion first, then ARG1, then ARG0. This doesn't seem like a simple alphabetical sort of the non-inversion roles.\n\nActually, looking at penman's Model.canonical_order, it sorts by the role name. The canonical order for AMR-style models puts `:ARG0-of` first (because inversions come first), then the remaining roles sorted by their \"target\" priority. In AMR models, ARG1 typically comes before ARG0 in some ordering schemes... \n\nActually, I think the simplest and most correct fix is to just not pass any key function to `rearrange`, which would use the default behavior. But that might not match the expected output either.\n\nLet me reconsider. The fundamental issue is that `model.random_order` produces non-deterministic results. The test should either:\n1. Use a deterministic ordering and have matching expected output\n2. Not compare exact string output when using random ordering\n\nThe cleanest fix: use `model.canonical_order` instead of `model.random_order`, and update the expected output to match what canonical_order produces.\n\nBut I don't have a running penman instance to verify. Let me look at what canonical_order does in penman 1.2.1.\n\nFrom the penman source:\n- `original_order`: returns the role unchanged (preserves original order)\n- `random_order`: returns a random float\n- `canonical_order`: sorts inversions first, then by role name alphabetically\n\nWith canonical_order for the top-level node:\n- `:ARG0-of` (inversion) \u2192 comes first\n- `:ARG0` and `:ARG1` sorted alphabetically \u2192 `:ARG0` before `:ARG1`\n\nBut the expected output has `:ARG1` before `:ARG0`. So canonical_order wouldn't match either.\n\nHmm, let me look at this more carefully. In penman's model.py, the `canonical_order` function:\n\n```python\n@staticmethod\ndef canonical_order(role):\n    priority = 0\n    if role.endswith('-of'):\n        priority = 1\n    return (priority, role)\n```\n\nWait, that would put non-inversions first (priority 0) and inversions second (priority 1). But the expected output has inversions first...\n\nActually, I need to check the actual source. Let me think about what the penman library actually does.\n\nLooking at the penman 1.2.1 source code on GitHub:\n\nIn `model.py`:\n```python\nclass Model:\n    @staticmethod\n    def original_order(role):\n        return role\n    \n    @staticmethod\n    def random_order(role):\n        return random.random()\n    \n    @staticmethod\n    def canonical_order(role):\n        # ...\n```\n\nThe `canonical_order` in penman sorts roles such that:\n- Inversions (roles ending in `-of`) come first\n- Then other roles sorted by name\n\nWait, I think I need to look at this differently. The expected output in the test was clearly written for a specific random seed. The fix should make the test deterministic.\n\nThe simplest approach: seed the random number generator before calling rearrange with random_order, OR change to a deterministic ordering.\n\nI think the best fix is to change `model.random_order` to `model.canonical_order` and update the expected output accordingly. But since I can't verify the exact output of canonical_order, let me try a different approach.\n\nActually, the simplest and most robust fix is to seed the random module:\n\n```python\nimport random\nrandom.seed(0)  # or some fixed seed\n```\n\nBut this is fragile if the internal implementation changes.\n\nThe cleanest fix is to not use random_order at all. Let me look at what the test is actually testing. The test is called `test_rearrange` and it's testing the `rearrange` function. The `random_order` was probably used to test that rearrange works with arbitrary orderings. But for a deterministic test, we should use a deterministic ordering.\n\nLet me try using `model.canonical_order` and figure out the expected output.\n\nWith canonical_order, for the top-level node `a`:\n- Roles: `:ARG0`, `:ARG0-of`, `:ARG1`\n- canonical_order sorts: inversions first, then by role name\n- `:ARG0-of` is an inversion \u2192 priority 1 (or maybe priority -1 to come first)\n- `:ARG0` and `:ARG1` are not inversions \u2192 priority 0\n\nIf inversions get priority 1 (higher), they'd sort AFTER non-inversions. If inversions get priority -1 or 0 with a special marker, they'd sort BEFORE.\n\nLooking at the actual penman 1.2.1 source code:\n\n```python\n@staticmethod\ndef canonical_order",
+      "extracted_patch": "\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)",
+      "trials": 16,
+      "fails": 11,
+      "errors": 0,
+      "sandboxes_requested": 4,
+      "per_sandbox": 4,
+      "trials_phrasing": "16 fresh-process trials across 4 sandboxes",
+      "flake_rate": 0.688,
+      "wilson_ci": [
+        0.444,
+        0.858
+      ],
+      "err_samples": [],
+      "sample": "EXIT:1\n",
+      "per_trial": [
+        {
+          "sandbox": 0,
+          "sandbox_id": "b832d987-4450-4081-ba02-531669462658",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "b832d987-4450-4081-ba02-531669462658",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "b832d987-4450-4081-ba02-531669462658",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "b832d987-4450-4081-ba02-531669462658",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "58059ecb-2934-4834-95a3-6225caa6d5ae",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "58059ecb-2934-4834-95a3-6225caa6d5ae",
+          "trial": 1,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "58059ecb-2934-4834-95a3-6225caa6d5ae",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "58059ecb-2934-4834-95a3-6225caa6d5ae",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "36c763b3-0067-4c05-9177-0426308d6cbb",
+          "trial": 0,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "36c763b3-0067-4c05-9177-0426308d6cbb",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "36c763b3-0067-4c05-9177-0426308d6cbb",
+          "trial": 2,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "36c763b3-0067-4c05-9177-0426308d6cbb",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "fdf84a59-1014-4095-a743-ea5b61bdee1d",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "fdf84a59-1014-4095-a743-ea5b61bdee1d",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "fdf84a59-1014-4095-a743-ea5b61bdee1d",
+          "trial": 2,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "fdf84a59-1014-4095-a743-ea5b61bdee1d",
+          "trial": 3,
+          "verdict": "pass",
+          "exit_seen": "0"
+        }
+      ]
+    },
+    {
+      "id": "h3",
+      "model": "accounts/fireworks/models/kimi-k2p6",
+      "cause_hint_given": "timing",
+      "cause_class": "timing",
+      "explanation": "",
+      "adds_random_seed": false,
+      "patch_len": 814,
+      "prompt_messages": [
+        {
+          "role": "system",
+          "content": "You are a flaky-test root-cause analyst. A flaky test passes sometimes and fails sometimes on identical code. Diagnose ONE root cause and return a corrected version of the file. Respond with a strict JSON object only."
+        },
+        {
+          "role": "user",
+          "content": "Flaky test file `tests/test_layout.py::test_rearrange`:\n```python\n\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)\n\n```\n\nSample run log (may be empty):\n```\n=== test_rearrange FAILED ===\nassert codec.format(t) == expected\nGOT:\n(a / alpha\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta))\n   :ARG0-of d\n   :ARG1 (e / epsilon))\n\nEXPECTED:\n(a / alpha\n   :ARG0-of d\n   :ARG1 (e / epsilon)\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta)))\n\n```\n\nPropose ONE competing root-cause hypothesis. Consider especially the\n`timing` angle, but choose whichever cause the evidence best supports.\n\nReturn a JSON object with EXACTLY these keys:\n{\n  \"cause_class\": one of [\"order_dependency\",\"shared_state\",\"timing\",\"race_condition\",\"external_dep\"],\n  \"explanation\": \"1-2 sentences on the root cause\",\n  \"patched_code\": \"the FULL corrected replacement file as a single string\"\n}"
+        }
+      ],
+      "raw_response": "The user wants me to diagnose a flaky test in a Python file related to the `penman` library. The test is `tests/test_layout.py::test_rearrange`.\n\nLooking at the code:\n1. It parses a PENMAN string into a tree `t`.\n2. It calls `rearrange(t, model.random_order)`.\n3. It checks if `codec.format(t)` matches a specific expected string.\n\nThe issue is that sometimes the output order differs. The sample log shows:\n- GOT: `:ARG0`, `:ARG0-of`, `:ARG1`\n- EXPECTED: `:ARG0-of`, `:ARG1`, `:ARG0`\n\nThe `rearrange` function is called with `model.random_order`. The name `random_order` strongly suggests it uses randomness. If it's random, the order will vary across runs, making the test flaky.\n\nHowever, looking at the expected output, it seems like the test expects a specific deterministic order. The `random_order` method might be using Python's `random` module without a fixed seed, or it might be shuffling based on some hash that changes between runs (like dict ordering in older Python versions, though Python 3.7+ preserves insertion order).\n\nWait, let me think about the `penman` library specifically. In penman v1.2.1, `Model.random_order` is indeed a method that returns a random ordering of edges. But why would it be flaky?\n\nActually, looking at the penman source code for v1.2.1, `random_order` might not be truly random in the sense of `random.shuffle`, but it could depend on the hash randomization of Python (PYTHONHASHSEED). Or it could be that `random_order` uses `random.random()` which produces different results unless seeded.\n\nBut wait, the sample log shows two different orders. If `random_order` is truly random, then any order is possible and the test would almost never pass with a fixed expected string unless the expected string happens to be the most common result or something.\n\nLet me reconsider. The `rearrange` function in penman might be using `model.random_order()` to determine the order. If `random_order` uses Python's `random` module, then without seeding, the order is non-deterministic.\n\nBut looking at the expected output, it seems the test expects a specific order. Maybe the test was written assuming `random_order` would produce a specific order due to some implementation detail, but in practice it's non-deterministic.\n\nActually, looking at the penman library source code (from memory or inference), `Model.random_order` might be implemented using `random.shuffle` or sorting by a random key. If it uses `random.shuffle`, it's definitely non-deterministic.\n\nWait, could it be `order_dependency`? The order of edges in the tree might depend on the order of iteration over a dictionary or set. In older Python versions, dict iteration order was not guaranteed (though in 3.7+ it is). But `random_order` explicitly suggests randomness.\n\nHowever, the user says \"Consider especially the `timing` angle\". Timing usually refers to time-based randomness or race conditions. But here, `random_order` is the culprit.\n\nLet me check the penman v1.2.1 source code mentally. In `penman/model.py`, `Model` has methods like `canonical_order`, `random_order`. `random_order` probably returns a key function that uses `random.random()`.\n\nActually, I recall that in some versions of penman, `random_order` used `random.random` which is not seeded, causing flaky tests. The fix would be to seed the random generator or use a deterministic order.\n\nBut wait, the test is calling `model.random_order`. If this is a method that returns a random ordering, the test is inherently flaky because it expects a specific output from a random process.\n\nHowever, looking at the sample output, the GOT vs EXPECTED shows two different permutations. If it were truly uniformly random, the chance of getting exactly the expected order is 1/6 (since there are 3 edges: ARG0, ARG0-of, ARG1). So the test would fail 5/6 of the time. That seems too flaky to be a \"flaky test\" that passes sometimes and fails sometimes. It would almost always fail.\n\nUnless... `random_order` isn't purely random. Maybe it's based on `id()` or memory address or hash, which can vary between runs but often stays the same in a given process. Or maybe it's based on `random.random()` but the random state is sometimes seeded by previous tests.\n\nActually, looking at the penman library, `random_order` might be intended for testing or for something else, but the implementation might use `random.random()`. Let me think about the specific version 1.2.1.\n\nWait, I think I know what this is. In penman, `Model.random_order` might be a property or method that returns a function. The function might be:\n\n```python\ndef random_order(self, triples):\n    triples = list(triples)\n    random.shuffle(triples)\n    return triples\n```\n\nOr something similar. But if it shuffles, it's non-deterministic.\n\nAlternatively, maybe the issue is that `rearrange` modifies the tree in place, and the order of the tree's edges depends on the iteration order of a dictionary inside the `Tree` object. In Python 3.7+, dict order is insertion order, but if the tree is built from a set or if there's some internal reshuffling, it could vary.\n\nBut the test explicitly passes `model.random_order`. The name itself is the smoking gun. The test expects a specific output from a function called `random_order`. That's the root cause.\n\nHowever, the user mentions \"Consider especially the `timing` angle\". Could this be related to timing? For example, if `random_order` uses `time.time()` as a seed? Or if the randomness comes from the system clock? That would make it timing-dependent.\n\nActually, looking at the Python `random` module, if no seed is set, it uses system time or OS-specific randomness. So in a sense, it depends on timing (when the process started, etc.). But the classification options include \"order_dependency\", \"shared_state\", \"timing\", \"race_condition\", \"external_dep\".\n\nIf `random_order` uses the global `random` state, and another test or thread modifies that state, that would be \"shared_state\". But if it's just that `random_order` is inherently random due to using unseeded randomness, that's more like \"order_dependency\" or \"timing\" (since random seeds often derive from time).\n\nWait, looking at the penman source code for `random_order` in v1.2.1:\nI found a clue. In penman, `Model.random_order` might actually be:\n\n```python\ndef random_order(self, triples):\n    return sorted(triples, key=lambda t: random.random())\n```\n\nThis uses the global `random` module. Without a fixed seed, the order is non-deterministic and depends on the state of the random number generator, which is seeded from the system time at interpreter startup. So different runs (different processes) give different orders. This is effectively a timing issue because the random seed is derived from the system time.\n\nBut is it \"timing\" or \"order_dependency\"? The options are limited. \"order_dependency\" usually means the test outcome depends on the order in which tests are executed (e.g., test A leaves state that affects test B). \"timing\" means the outcome depends on the timing of execution (e.g., sleep, timeouts, time-based random seeds). \"race_condition\" is concurrent access. \"shared_state\" is mutable global state. \"external_dep\" is external services.\n\nHere, the randomness is seeded from time, so it's timing-dependent. Also, the order of edges is random. But the best fit might be \"timing\" because the random seed is based on time, causing different runs to have different outputs. Or it could be \"shared_state\" if the random generator state is shared across tests. But the primary issue is that `random_order` produces different results each run.\n\nActually, looking at the penman library more carefully, I recall that `random_order` was indeed problematic. The fix in the actual penman repository might have been to change the test to use a deterministic order or to seed the random generator.\n\nWait, I can check the actual test file history. In goodmami/penman, the test `test_rearrange` originally used `model.random_order`. It was later changed. Let me think about what it was changed to.\n\nActually, I think the root cause is that `model.random_order` is non-deterministic. The test should use a deterministic ordering function or seed the RNG. But the user asks for a corrected version of the file.\n\nThe corrected file should make the test deterministic. How?\n\nOption 1: Replace `model.random_order` with a deterministic order function, like `model.canonical_order` or a custom function that returns a fixed order. But the test is specifically testing `rearrange` with `random_order`. If we change it to canonical, we're testing a different thing.\n\nOption 2: Seed the random number generator before calling `rearrange`. In Python, `random.seed(0)` before `rearrange(t, model.random_order)` would make it deterministic. But does `model.random_order` use the global `random`? It likely does.\n\nOption 3: Monkey-patch or modify `model.random_order` to be deterministic. But that's invasive.\n\nActually, looking at the penman source, `Model.random_order` might be a method that takes `triples` and returns them in random order. If it uses `random.shuffle`, we can seed.\n\nBut",
+      "extracted_patch": "\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)",
+      "trials": 16,
+      "fails": 14,
+      "errors": 0,
+      "sandboxes_requested": 4,
+      "per_sandbox": 4,
+      "trials_phrasing": "16 fresh-process trials across 4 sandboxes",
+      "flake_rate": 0.875,
+      "wilson_ci": [
+        0.64,
+        0.965
+      ],
+      "err_samples": [],
+      "sample": "EXIT:1\n",
+      "per_trial": [
+        {
+          "sandbox": 0,
+          "sandbox_id": "d4cfee6c-4f13-44b5-b0a8-e31c5a1f5c9e",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "d4cfee6c-4f13-44b5-b0a8-e31c5a1f5c9e",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "d4cfee6c-4f13-44b5-b0a8-e31c5a1f5c9e",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "d4cfee6c-4f13-44b5-b0a8-e31c5a1f5c9e",
+          "trial": 3,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "ca32fae8-c86c-4bea-9188-166ac1647eea",
+          "trial": 0,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "ca32fae8-c86c-4bea-9188-166ac1647eea",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "ca32fae8-c86c-4bea-9188-166ac1647eea",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "ca32fae8-c86c-4bea-9188-166ac1647eea",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "24a94e64-8e93-4286-a8f8-47d91edb4cf6",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "24a94e64-8e93-4286-a8f8-47d91edb4cf6",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "24a94e64-8e93-4286-a8f8-47d91edb4cf6",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "24a94e64-8e93-4286-a8f8-47d91edb4cf6",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "cce947dd-e79f-4c6b-a29a-1c8d1882fc35",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "cce947dd-e79f-4c6b-a29a-1c8d1882fc35",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "cce947dd-e79f-4c6b-a29a-1c8d1882fc35",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "cce947dd-e79f-4c6b-a29a-1c8d1882fc35",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        }
+      ]
+    },
+    {
+      "id": "h4",
+      "model": "accounts/fireworks/models/deepseek-v4-pro",
+      "cause_hint_given": "race_condition",
+      "cause_class": "race_condition",
+      "explanation": "",
+      "adds_random_seed": false,
+      "patch_len": 814,
+      "prompt_messages": [
+        {
+          "role": "system",
+          "content": "You are a flaky-test root-cause analyst. A flaky test passes sometimes and fails sometimes on identical code. Diagnose ONE root cause and return a corrected version of the file. Respond with a strict JSON object only."
+        },
+        {
+          "role": "user",
+          "content": "Flaky test file `tests/test_layout.py::test_rearrange`:\n```python\n\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)\n\n```\n\nSample run log (may be empty):\n```\n=== test_rearrange FAILED ===\nassert codec.format(t) == expected\nGOT:\n(a / alpha\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta))\n   :ARG0-of d\n   :ARG1 (e / epsilon))\n\nEXPECTED:\n(a / alpha\n   :ARG0-of d\n   :ARG1 (e / epsilon)\n   :ARG0 (b / beta\n            :ARG0 (g / gamma)\n            :ARG1 (d / delta)))\n\n```\n\nPropose ONE competing root-cause hypothesis. Consider especially the\n`race_condition` angle, but choose whichever cause the evidence best supports.\n\nReturn a JSON object with EXACTLY these keys:\n{\n  \"cause_class\": one of [\"order_dependency\",\"shared_state\",\"timing\",\"race_condition\",\"external_dep\"],\n  \"explanation\": \"1-2 sentences on the root cause\",\n  \"patched_code\": \"the FULL corrected replacement file as a single string\"\n}"
+        }
+      ],
+      "raw_response": "{\n\"cause_class\": \"order_dependency\",\n\"explanation\": \"The test uses model.random_order to rearrange arguments, which randomizes the",
+      "extracted_patch": "\"\"\"Reproduction of a flaky penman test, extracted at v1.2.1.\n\nStandalone extract of goodmami/penman tests/test_layout.py::test_rearrange.\nRequires `pip install penman==1.2.1`. Exit 0 = pass, exit 1 = fail.\n\"\"\"\nimport sys\nfrom penman.model import Model\nfrom penman.codec import PENMANCodec\nfrom penman.layout import rearrange\n\ncodec = PENMANCodec()\nmodel = Model()\n\nt = codec.parse('''\n    (a / alpha\n       :ARG0 (b / beta\n                :ARG0 (g / gamma)\n                :ARG1 (d / delta))\n       :ARG0-of d\n       :ARG1 (e / epsilon))''')\n\nrearrange(t, model.random_order)\nexpected = (\n    '(a / alpha\\n'\n    '   :ARG0-of d\\n'\n    '   :ARG1 (e / epsilon)\\n'\n    '   :ARG0 (b / beta\\n'\n    '            :ARG0 (g / gamma)\\n'\n    '            :ARG1 (d / delta)))')\nsys.exit(0 if codec.format(t) == expected else 1)",
+      "trials": 16,
+      "fails": 15,
+      "errors": 0,
+      "sandboxes_requested": 4,
+      "per_sandbox": 4,
+      "trials_phrasing": "16 fresh-process trials across 4 sandboxes",
+      "flake_rate": 0.938,
+      "wilson_ci": [
+        0.717,
+        0.989
+      ],
+      "err_samples": [],
+      "sample": "EXIT:1\n",
+      "per_trial": [
+        {
+          "sandbox": 0,
+          "sandbox_id": "4a4009f3-cfbe-4a05-aa2c-87ac589e3cd2",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "4a4009f3-cfbe-4a05-aa2c-87ac589e3cd2",
+          "trial": 1,
+          "verdict": "pass",
+          "exit_seen": "0"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "4a4009f3-cfbe-4a05-aa2c-87ac589e3cd2",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 0,
+          "sandbox_id": "4a4009f3-cfbe-4a05-aa2c-87ac589e3cd2",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "f2fe2f60-db98-4c74-aa04-81d3374c4441",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "f2fe2f60-db98-4c74-aa04-81d3374c4441",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "f2fe2f60-db98-4c74-aa04-81d3374c4441",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 1,
+          "sandbox_id": "f2fe2f60-db98-4c74-aa04-81d3374c4441",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "f3eb43f1-d4b7-4c8c-8782-34c39426e420",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "f3eb43f1-d4b7-4c8c-8782-34c39426e420",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "f3eb43f1-d4b7-4c8c-8782-34c39426e420",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 2,
+          "sandbox_id": "f3eb43f1-d4b7-4c8c-8782-34c39426e420",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "76eebf20-8fcc-458d-b284-7c8159beed91",
+          "trial": 0,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "76eebf20-8fcc-458d-b284-7c8159beed91",
+          "trial": 1,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "76eebf20-8fcc-458d-b284-7c8159beed91",
+          "trial": 2,
+          "verdict": "fail",
+          "exit_seen": "1"
+        },
+        {
+          "sandbox": 3,
+          "sandbox_id": "76eebf20-8fcc-458d-b284-7c8159beed91",
+          "trial": 3,
+          "verdict": "fail",
+          "exit_seen": "1"
+        }
+      ]
+    }
+  ],
+  "baseline": {
+    "trials": 16,
+    "fails": 16,
+    "errors": 0,
+    "sandboxes_requested": 4,
+    "per_sandbox": 4,
+    "trials_phrasing": "16 fresh-process trials across 4 sandboxes",
+    "flake_rate": 1.0,
+    "wilson_ci": [
+      0.806,
+      1.0
+    ],
+    "err_samples": [],
+    "sample": "",
+    "per_trial": [
+      {
+        "sandbox": 0,
+        "sandbox_id": "85a7e47d-0da6-4fb4-8b3c-9218c53acd83",
+        "trial": 0,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "85a7e47d-0da6-4fb4-8b3c-9218c53acd83",
+        "trial": 1,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "85a7e47d-0da6-4fb4-8b3c-9218c53acd83",
+        "trial": 2,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "85a7e47d-0da6-4fb4-8b3c-9218c53acd83",
+        "trial": 3,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "22af6ac6-1f58-4828-8790-2a3edb832329",
+        "trial": 0,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "22af6ac6-1f58-4828-8790-2a3edb832329",
+        "trial": 1,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "22af6ac6-1f58-4828-8790-2a3edb832329",
+        "trial": 2,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "22af6ac6-1f58-4828-8790-2a3edb832329",
+        "trial": 3,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "963522e1-7ef6-4744-ae62-d52a8eefe38a",
+        "trial": 0,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "963522e1-7ef6-4744-ae62-d52a8eefe38a",
+        "trial": 1,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "963522e1-7ef6-4744-ae62-d52a8eefe38a",
+        "trial": 2,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "963522e1-7ef6-4744-ae62-d52a8eefe38a",
+        "trial": 3,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "12d6c6f1-2662-4ef8-a0bc-3556df2a2141",
+        "trial": 0,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "12d6c6f1-2662-4ef8-a0bc-3556df2a2141",
+        "trial": 1,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "12d6c6f1-2662-4ef8-a0bc-3556df2a2141",
+        "trial": 2,
+        "verdict": "fail",
+        "exit_seen": "1"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "12d6c6f1-2662-4ef8-a0bc-3556df2a2141",
+        "trial": 3,
+        "verdict": "fail",
+        "exit_seen": "1"
+      }
+    ]
+  },
+  "winner_id": "h1",
+  "confirmation": {
+    "trials": 25,
+    "fails": 0,
+    "errors": 0,
+    "sandboxes_requested": 5,
+    "per_sandbox": 5,
+    "trials_phrasing": "25 fresh-process trials across 5 sandboxes",
+    "flake_rate": 0.0,
+    "wilson_ci": [
+      0.0,
+      0.133
+    ],
+    "err_samples": [],
+    "sample": "EXIT:0\n",
+    "per_trial": [
+      {
+        "sandbox": 0,
+        "sandbox_id": "771063b2-b0cb-4a40-8590-54e2acac4c93",
+        "trial": 0,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "771063b2-b0cb-4a40-8590-54e2acac4c93",
+        "trial": 1,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "771063b2-b0cb-4a40-8590-54e2acac4c93",
+        "trial": 2,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "771063b2-b0cb-4a40-8590-54e2acac4c93",
+        "trial": 3,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 0,
+        "sandbox_id": "771063b2-b0cb-4a40-8590-54e2acac4c93",
+        "trial": 4,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "c676c8b9-f14c-4c7c-9875-963aa8a462b2",
+        "trial": 0,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "c676c8b9-f14c-4c7c-9875-963aa8a462b2",
+        "trial": 1,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "c676c8b9-f14c-4c7c-9875-963aa8a462b2",
+        "trial": 2,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "c676c8b9-f14c-4c7c-9875-963aa8a462b2",
+        "trial": 3,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 1,
+        "sandbox_id": "c676c8b9-f14c-4c7c-9875-963aa8a462b2",
+        "trial": 4,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "a35e5686-dc78-49b8-ba51-8068e599befc",
+        "trial": 0,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "a35e5686-dc78-49b8-ba51-8068e599befc",
+        "trial": 1,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "a35e5686-dc78-49b8-ba51-8068e599befc",
+        "trial": 2,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "a35e5686-dc78-49b8-ba51-8068e599befc",
+        "trial": 3,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 2,
+        "sandbox_id": "a35e5686-dc78-49b8-ba51-8068e599befc",
+        "trial": 4,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "172aaa8b-2a60-4c96-8e69-76901402f06b",
+        "trial": 0,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "172aaa8b-2a60-4c96-8e69-76901402f06b",
+        "trial": 1,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "172aaa8b-2a60-4c96-8e69-76901402f06b",
+        "trial": 2,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "172aaa8b-2a60-4c96-8e69-76901402f06b",
+        "trial": 3,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 3,
+        "sandbox_id": "172aaa8b-2a60-4c96-8e69-76901402f06b",
+        "trial": 4,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 4,
+        "sandbox_id": "b0e24c2e-96fe-40c2-8410-d389ab1963ed",
+        "trial": 0,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 4,
+        "sandbox_id": "b0e24c2e-96fe-40c2-8410-d389ab1963ed",
+        "trial": 1,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 4,
+        "sandbox_id": "b0e24c2e-96fe-40c2-8410-d389ab1963ed",
+        "trial": 2,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 4,
+        "sandbox_id": "b0e24c2e-96fe-40c2-8410-d389ab1963ed",
+        "trial": 3,
+        "verdict": "pass",
+        "exit_seen": "0"
+      },
+      {
+        "sandbox": 4,
+        "sandbox_id": "b0e24c2e-96fe-40c2-8410-d389ab1963ed",
+        "trial": 4,
+        "verdict": "pass",
+        "exit_seen": "0"
+      }
+    ]
+  },
+  "convergence": {
+    "n_hypotheses": 4,
+    "n_add_random_seed": 0,
+    "n_seed_and_verified_fix": 0,
+    "seed_and_verified_ids": []
+  },
+  "wallclock_s": 85.5,
+  "finished_at_utc": "2026-07-23T05:53:23Z"
+}
