@@ -1,164 +1,96 @@
 import { useEffect, useReducer, useState } from 'react';
-import { buildMockScript, MOCK_OUTCOMES, type MockOutcome } from './mockRun';
 import { initialState, reduce } from './reducer';
 import type { BoardState, ConnectionMode, RetrialEvent } from './types';
 
 const WS_URL = 'ws://localhost:8000/ws';
-const CONNECT_TIMEOUT_MS = 1500;
+const CONNECT_TIMEOUT_MS = 4000;
 const RECONNECT_DELAY_MS = 2000;
 
 interface Stream {
   state: BoardState;
   mode: ConnectionMode;
+  connectionMessage: string | null;
 }
 
-// Live wiring is opt-in via `?live=1` so the default (replay) demo keeps a
-// spotless console — no failed WebSocket attempts on projector. With `?live=1`
-// we try the engine, show LIVE only once connected, and fall back to the
-// bundled scripted replay if it never opens.
-// `?mock=quarantine` replays the no-winner path instead of the winning one;
-// `?mock=promote` adds the human promote gate after the winner beat;
-// `?mock=bisect` replays a scripted time-travel bisection on the checkpoint
-// rail. With NO params the behavior is byte-identical to the classic
-// realRun.json replay — the demo-day default is untouched.
-// A full reset is done by remounting the consumer (App keys it by run id).
+// The board is live-only. A frame is either streamed by the engine or it is an
+// explicit connection state; there is no recorded or scripted fallback.
 export function useEventStream(): Stream {
   const [state, dispatch] = useReducer(reduce, initialState);
-  const params = readParams();
-  const [mode, setMode] = useState<ConnectionMode>(params.live ? 'connecting' : 'replay');
+  const [mode, setMode] = useState<ConnectionMode>('connecting');
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let ws: WebSocket | null = null;
     let timeoutId: number | undefined;
     let reconnectTimer: number | undefined;
-    let mockCancel: (() => void) | null = null;
-    let wentLive = false; // have we ever successfully opened the socket?
-    let reconnectTried = false; // we attempt exactly one reconnect after a drop
 
-    const startMock = () => {
-      if (disposed || mockCancel) return;
-      setMode('replay');
-      mockCancel = playScript(params.mock, (ev) => dispatch(ev));
-    };
+    const connect = () => {
+      if (disposed) return;
+      setMode('connecting');
+      setConnectionMessage(null);
 
-    // Default mode: straight to replay, never touch the network.
-    if (!params.live) {
-      startMock();
-      return () => {
-        disposed = true;
-        mockCancel?.();
-      };
-    }
-
-    const connect = (isReconnect: boolean) => {
       try {
         ws = new WebSocket(WS_URL);
       } catch {
-        // Only the very first attempt may fall back to replay; a reconnect that
-        // can't even construct stays honestly DISCONNECTED.
-        if (!isReconnect) startMock();
-        else setMode('disconnected');
+        setMode('disconnected');
+        setConnectionMessage('The live engine could not be reached on port 8000.');
         return;
       }
 
-      // The connect-timeout → replay fallback applies to the FIRST attempt only.
-      // We never silently swap real (then dropped) data for a scripted replay.
-      if (!isReconnect) {
-        timeoutId = window.setTimeout(() => {
-          if (disposed || wentLive) return;
-          try {
-            ws?.close();
-          } catch {
-            /* ignore */
-          }
-          startMock();
-        }, CONNECT_TIMEOUT_MS);
-      }
+      timeoutId = window.setTimeout(() => {
+        if (disposed || ws?.readyState === WebSocket.OPEN) return;
+        setMode('disconnected');
+        setConnectionMessage('The live engine did not respond. Start the backend, then reconnect.');
+        try {
+          ws?.close();
+        } catch {
+          /* no-op */
+        }
+      }, CONNECT_TIMEOUT_MS);
 
       ws.onopen = () => {
         if (disposed) return;
-        wentLive = true;
         window.clearTimeout(timeoutId);
         setMode('live');
+        setConnectionMessage(null);
       };
-      ws.onmessage = (msg) => {
+
+      ws.onmessage = (message) => {
         try {
-          dispatch(JSON.parse(msg.data) as RetrialEvent);
+          dispatch(JSON.parse(message.data) as RetrialEvent);
         } catch {
-          /* ignore malformed frames */
+          // Ignore malformed frames. The typed reducer remains the only state path.
         }
       };
+
+      ws.onerror = () => {
+        if (disposed) return;
+        setConnectionMessage('The live event stream encountered a connection error.');
+      };
+
       ws.onclose = () => {
         if (disposed) return;
         window.clearTimeout(timeoutId);
-        if (!wentLive) {
-          // Never established on the first attempt — fall back to replay.
-          startMock();
-          return;
-        }
-        // Opened, then the connection dropped. Be honest: the data may be stale.
         setMode('disconnected');
-        if (!reconnectTried) {
-          reconnectTried = true;
-          reconnectTimer = window.setTimeout(() => {
-            if (!disposed) connect(true);
-          }, RECONNECT_DELAY_MS);
-        }
+        setConnectionMessage('Live engine disconnected. Retrying automatically every two seconds.');
+        reconnectTimer = window.setTimeout(connect, RECONNECT_DELAY_MS);
       };
     };
 
-    connect(false);
+    connect();
 
     return () => {
       disposed = true;
       window.clearTimeout(timeoutId);
       window.clearTimeout(reconnectTimer);
-      mockCancel?.();
       try {
         ws?.close();
       } catch {
-        /* ignore */
+        /* no-op */
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { state, mode };
-}
-
-function readParams(): { live: boolean; mock: MockOutcome } {
-  if (typeof window === 'undefined') return { live: false, mock: 'winner' };
-  const q = new URLSearchParams(window.location.search);
-  // Look the ?mock value up against the known outcomes; anything unknown (or
-  // absent — the sacred default judge path) falls back to 'winner'.
-  const raw = q.get('mock');
-  const mock = MOCK_OUTCOMES.includes(raw as MockOutcome) ? (raw as MockOutcome) : 'winner';
-  return { live: q.get('live') === '1', mock };
-}
-
-// Walks the scripted replay, emitting each event after its delay. Returns a
-// cancel function that stops any pending timer.
-function playScript(outcome: MockOutcome, emit: (ev: RetrialEvent) => void): () => void {
-  const script = buildMockScript(outcome);
-  let i = 0;
-  let timer: number | undefined;
-  let cancelled = false;
-
-  const step = () => {
-    if (cancelled || i >= script.length) return;
-    const { after, event } = script[i];
-    timer = window.setTimeout(() => {
-      if (cancelled) return;
-      emit(event);
-      i++;
-      step();
-    }, after);
-  };
-  step();
-
-  return () => {
-    cancelled = true;
-    window.clearTimeout(timer);
-  };
+  return { state, mode, connectionMessage };
 }

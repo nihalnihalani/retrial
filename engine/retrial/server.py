@@ -91,7 +91,7 @@ REGISTRY.attach_bus(BUS)
 _POOL = None
 _HPOOL = None  # hermetic (network-blocked) sub-pool, only when HERMETIC
 _POOL_LOCK = threading.Lock()
-_pool_status = {"prewarming": False}
+_pool_status = {"prewarming": False, "error": None}
 
 
 def _get_pool():
@@ -191,10 +191,17 @@ async def lifespan(app):
     if PREWARM > 0:
         def prewarm():
             _pool_status["prewarming"] = True
+            _pool_status["error"] = None
             try:
                 _get_pool().resize_to(PREWARM)
                 if HERMETIC and HERMETIC_PREWARM > 0:
                     _get_hpool().resize_to(HERMETIC_PREWARM)
+            except Exception as exc:
+                # Replay/development mode is useful without paid credentials.
+                # Keep the API alive and expose the reason through /health;
+                # a live tournament will still fail explicitly when it needs
+                # the unavailable sandbox provider.
+                _pool_status["error"] = str(exc)[:200]
             finally:
                 _pool_status["prewarming"] = False
         threading.Thread(target=prewarm, daemon=True).start()
@@ -286,7 +293,8 @@ def health():
         "running": _running["active"],
         "test_name": _running["test_name"],
         "pool": {"available": stats["available"], "live": stats["live"],
-                 "prewarming": _pool_status["prewarming"]},
+                 "prewarming": _pool_status["prewarming"],
+                 "error": _pool_status["error"]},
         "config": {"max_trials": MAX_TRIALS, "conc": CONC,
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
                    "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH,
