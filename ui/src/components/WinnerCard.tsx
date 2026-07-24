@@ -24,7 +24,11 @@ const causeLabel = (c: string) =>
 export function WinnerCard({ winner, hypothesis, detect, prUrl, model }: Props) {
   // prefer the confirmed winner's own numbers; fall back to detect/hypothesis
   const before = winner.origFlakeRate ?? detect.flakeRate ?? 0.48;
-  const trials = hypothesis?.trials.length ?? 50;
+  // The CI shown is the confirmation round's, so it must be paired with the
+  // confirmation trial count — not the tournament trial count (a different, larger
+  // series). Pairing confirm CI with tournament trials was a statistically
+  // inconsistent statement; keep the confirm round's own N with its own CI.
+  const trials = winner.confirmTrials ?? hypothesis?.trials.length ?? 0;
   const ci = winner.wilsonCi ?? hypothesis?.wilsonCi ?? null;
   const confirmChip =
     winner.confirmTrials != null

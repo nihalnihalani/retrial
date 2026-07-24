@@ -33,6 +33,7 @@ _SEEDS_DIR = (_REPO_ROOT / "seeds").resolve()      # seed files MUST resolve ins
 import braintrust
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .config import DEFAULT_THRESHOLD
@@ -42,6 +43,7 @@ from .coordinator import TournamentCoordinator
 from .diagnosis import DiagnosisEngine
 from .prsmith import PRSmith
 from .genome import Genome
+from .voice import narrate as narrate_voice, VOICE_DIR
 
 # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
 # Degrades to a no-op when no key is configured — logging must never break the server.
@@ -62,6 +64,9 @@ THRESHOLD = float(os.environ.get("THRESHOLD", str(DEFAULT_THRESHOLD)))  # matche
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
 PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
+# ElevenLabs "flake autopsy" narration (OUTPUT only, disclosed). Default OFF so a
+# normal run adds no latency/credit; flip VOICE=1 to synthesize a spoken verdict.
+VOICE = os.environ.get("VOICE", "0") != "0"
 # Hermetic mode (default OFF): a second network-blocked detect pass to diagnose
 # external-dependency flakes by infrastructure. Uses its own small sub-pool.
 HERMETIC = os.environ.get("HERMETIC", "0") != "0"
@@ -151,8 +156,19 @@ def health():
         "config": {"max_trials": MAX_TRIALS, "conc": CONC,
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
                    "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH,
-                   "hermetic": HERMETIC},
+                   "hermetic": HERMETIC, "voice": VOICE},
     }
+
+
+@app.get("/voice/{fname}")
+def voice_file(fname: str):
+    """Serve a generated flake-autopsy mp3. Path-guarded: only files that resolve
+    directly inside VOICE_DIR are served (no traversal)."""
+    root = VOICE_DIR.resolve()
+    safe = (root / fname).resolve()
+    if safe.parent != root or not safe.exists():
+        raise HTTPException(status_code=404, detail="voice clip not found")
+    return FileResponse(safe, media_type="audio/mpeg")
 
 
 @app.get("/genome")
@@ -269,6 +285,10 @@ def start_tournament(req: TournamentRequest):
             # After the verdict, optionally open a fix/quarantine PR (emits pr_opened).
             if open_pr and result.get("verdict") in ("FIXED", "QUARANTINE"):
                 PRSmith(bus=BUS).open_pr(result, path.name)
+            # Optional ElevenLabs "flake autopsy": a spoken, disclosed summary of the
+            # verdict (emits voice_ready). Best-effort — never breaks the run.
+            if VOICE:
+                narrate_voice(result, path.name, bus=BUS)
         except Exception as e:
             BUS.emit("tournament_done", {"verdict": "ERROR", "error": str(e)[:200]})
         finally:

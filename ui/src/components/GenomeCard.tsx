@@ -1,8 +1,24 @@
+import { prettyModel } from '../models';
 import type { GenomeState, Hypothesis } from '../types';
 
 interface Props {
   hypotheses: Hypothesis[];
   genome: GenomeState | null;
+}
+
+// The model win-rate leaderboard, built ONLY from real engine data
+// (genome.byModel). Never synthesized — absent data renders nothing.
+function modelRows(genome: GenomeState | null) {
+  if (!genome?.byModel) return [];
+  return Object.entries(genome.byModel)
+    .filter(([, s]) => s.attempts > 0)
+    .map(([slug, s]) => ({
+      model: prettyModel(slug),
+      wins: s.wins,
+      attempts: s.attempts,
+      rate: s.wins / s.attempts,
+    }))
+    .sort((a, b) => b.rate - a.rate || b.attempts - a.attempts);
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -31,6 +47,7 @@ export function GenomeCard({ hypotheses, genome }: Props) {
     for (const h of hypotheses) counts.set(h.causeClass, (counts.get(h.causeClass) ?? 0) + 1);
   }
   const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  const leaders = modelRows(genome);
 
   return (
     <aside className="genome-card">
@@ -49,13 +66,31 @@ export function GenomeCard({ hypotheses, genome }: Props) {
           </li>
         ))}
       </ul>
+      {leaders.length > 0 && (
+        <div className="genome-leaderboard">
+          <p className="genome-leaderboard-head">Model win rate</p>
+          <ul className="genome-leaderboard-list">
+            {leaders.map((m) => (
+              <li key={m.model}>
+                <span className="glb-model">{m.model}</span>
+                <span className="glb-record mono">
+                  {m.wins}/{m.attempts}
+                </span>
+                <span className="glb-rate mono">{Math.round(m.rate * 100)}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p className="genome-foot">
         {rows.length > 0
           ? `${rows.map(([c, n]) => plural(n, label(c))).join(', ')} ${
               cumulative ? 'on record' : 'diagnosed'
             }.`
           : 'diagnosing…'}{' '}
-        Compounds into a repo leaderboard over time.
+        {leaders.length > 0
+          ? 'Model win rates compound as the repo logs more runs.'
+          : 'Compounds into a repo leaderboard over time.'}
       </p>
     </aside>
   );

@@ -128,33 +128,6 @@
   {
     "seq": 9,
     "test_name": "test_always_fails.py",
-    "verdict": "QUARANTINE",
-    "cause_class": "race_condition",
-    "orig_flake_rate": 1.0,
-    "final_flake_rate": 0.0,
-    "winner_model": null,
-    "attempts": [
-      {
-        "model": "accounts/fireworks/models/kimi-k2p6",
-        "won": false
-      },
-      {
-        "model": "accounts/fireworks/models/glm-5p1",
-        "won": false
-      },
-      {
-        "model": "accounts/fireworks/models/deepseek-v4-pro",
-        "won": false
-      },
-      {
-        "model": "accounts/fireworks/models/glm-5p2",
-        "won": false
-      }
-    ]
-  },
-  {
-    "seq": 10,
-    "test_name": "test_always_fails.py",
     "verdict": "FIXED",
     "cause_class": "shared_state",
     "orig_flake_rate": 1.0,
@@ -180,7 +153,7 @@
     ]
   },
   {
-    "seq": 11,
+    "seq": 10,
     "test_name": "test_always_fails.py",
     "verdict": "QUARANTINE",
     "cause_class": "shared_state",
@@ -202,6 +175,33 @@
       },
       {
         "model": "accounts/fireworks/models/glm-5p2",
+        "won": false
+      }
+    ]
+  },
+  {
+    "seq": 11,
+    "test_name": "test_dict_order.py",
+    "verdict": "QUARANTINE",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.5556,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": [
+      {
+        "model": "accounts/fireworks/models/glm-5p2",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/deepseek-v4-pro",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/gpt-oss-120b",
+        "won": false
+      },
+      {
+        "model": "accounts/fireworks/models/kimi-k2p7-code",
         "won": false
       }
     ]

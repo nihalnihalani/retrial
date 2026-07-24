@@ -347,8 +347,13 @@ class TournamentCoordinator:
         else:
             verdict = "QUARANTINE"
             # No fix stabilized the test — quarantine the least-bad candidate WITH evidence.
-            if results:
-                best = min(results.values(), key=lambda r: r["flake_rate"])
+            # Exclude neutered patches: a patch the neutering guard disqualified may
+            # read 0% flake only because it stopped testing the failure condition, so
+            # presenting it as the "best-effort" candidate (with a real Braintrust
+            # permalink) would be exactly the dishonesty this project exists to kill.
+            quarantine_pool = [r for r in results.values() if r["id"] not in neutered]
+            if quarantine_pool:
+                best = min(quarantine_pool, key=lambda r: r["flake_rate"])
                 best_id = best["id"]
                 genome_cause = best["cause_class"]
                 genome_final = best["flake_rate"]
@@ -367,7 +372,9 @@ class TournamentCoordinator:
                     "flake_rate": orig_rate,
                     "wilson_ci": detect["wilson_ci"],
                     "trials": detect["trials"],
-                    "reason": "no fix hypotheses were generated",
+                    "reason": ("all candidate fixes were disqualified by the "
+                               "neutering guard" if results else
+                               "no fix hypotheses were generated"),
                 }
             genome_model = None  # no winning model on a quarantine
             self._emit("quarantine_confirmed", {

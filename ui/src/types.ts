@@ -42,6 +42,19 @@ export interface DetectDone {
   verdict?: string;
 }
 
+// HERMETIC=1 only (default OFF): a second, network-blocked detect pass. The
+// engine compares the networked flake rate against the hermetic one — CIs
+// overlap => "env_independent" (the network isn't the cause; external_dep is
+// eliminated by infrastructure), non-overlap => "external_dep".
+export interface HermeticDiagnosis {
+  type: 'hermetic_diagnosis';
+  verdict: 'env_independent' | 'external_dep';
+  networked_rate: number; // 0..1
+  hermetic_rate: number; // 0..1
+  networked_ci: WilsonCI;
+  hermetic_ci: WilsonCI;
+}
+
 export interface HypothesisCreated {
   type: 'hypothesis_created';
   id: string;
@@ -106,6 +119,10 @@ export interface GenomeUpdated {
   type: 'genome_updated';
   runs: number;
   by_cause_class: Record<string, number>;
+  // Optional cumulative model leaderboard: each model's winning-fix tally across
+  // runs. Present only when the engine tracks it; absent => the card renders no
+  // leaderboard rather than inventing win rates.
+  by_model?: Record<string, { wins: number; attempts: number }>;
 }
 
 // Emitted (after tournament_done) when the fix / quarantine PR is actually opened.
@@ -124,6 +141,7 @@ export type RetrialEvent =
   | RunStarted
   | TrialDone
   | DetectDone
+  | HermeticDiagnosis
   | HypothesisCreated
   | HypothesisVerified
   | HypothesisEliminated
@@ -213,6 +231,17 @@ export interface QuarantineState {
 export interface GenomeState {
   runs: number;
   byCauseClass: Record<string, number>;
+  // Cumulative per-model winning-fix tally, only when the engine reports it.
+  byModel: Record<string, { wins: number; attempts: number }> | null;
+}
+
+// The HERMETIC=1 infrastructure diagnosis, stored for the detect-card chip.
+export interface HermeticState {
+  verdict: string; // 'env_independent' | 'external_dep'
+  networkedRate: number;
+  hermeticRate: number;
+  networkedCi: WilsonCI;
+  hermeticCi: WilsonCI;
 }
 
 export interface BoardState {
@@ -223,6 +252,7 @@ export interface BoardState {
   plannedTrials: number | null;
   threshold: number | null; // flake decision threshold (0..1), from run_started when advertised
   detect: DetectState;
+  hermetic: HermeticState | null; // HERMETIC=1 infrastructure diagnosis, when emitted
   hypotheses: Hypothesis[];
   winner: WinnerState | null;
   quarantine: QuarantineState | null;

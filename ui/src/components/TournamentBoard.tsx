@@ -55,6 +55,7 @@ export function TournamentBoard({ onRestart }: Props) {
   const {
     phase,
     detect,
+    hermetic,
     hypotheses,
     winner,
     quarantine,
@@ -162,6 +163,7 @@ export function TournamentBoard({ onRestart }: Props) {
             testName={testName}
             n={diagnoseModels ?? 4}
             modelNames={diagnoseModelNames}
+            hypotheses={hypotheses}
           />
         )}
         {phase === 'detect' && (
@@ -169,6 +171,7 @@ export function TournamentBoard({ onRestart }: Props) {
             detect={detect}
             expectedTrials={plannedTrials ?? DETECT_EXPECTED}
             threshold={threshold}
+            hermetic={hermetic}
           />
         )}
         {phase === 'tournament' && (

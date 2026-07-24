@@ -1,16 +1,18 @@
 import { FlakeMeter } from './FlakeMeter';
 import { TrialGrid } from './TrialGrid';
-import type { DetectState, TrialCell } from '../types';
+import { ciText } from '../format';
+import type { DetectState, HermeticState, TrialCell } from '../types';
 
 interface Props {
   detect: DetectState;
   expectedTrials: number;
   threshold?: number | null; // run's decision threshold (0..1), for the meter marker
+  hermetic?: HermeticState | null; // HERMETIC=1 infrastructure diagnosis, when emitted
 }
 
 // Act 1 — "the lie detector". Rerun the unmodified test many times; the grid
 // flickers green/red and the meter climbs to the true flake rate.
-export function DetectPhase({ detect, expectedTrials, threshold }: Props) {
+export function DetectPhase({ detect, expectedTrials, threshold, hermetic }: Props) {
   const firstPass = detect.trials.find((t) => t.passed);
   const firstFail = detect.trials.find((t) => !t.passed);
   const caughtInTheAct = Boolean(firstPass && firstFail);
@@ -55,6 +57,7 @@ export function DetectPhase({ detect, expectedTrials, threshold }: Props) {
               </span>
             </div>
           )}
+          {hermetic && <HermeticChip hermetic={hermetic} />}
         </div>
       </div>
 
@@ -62,6 +65,33 @@ export function DetectPhase({ detect, expectedTrials, threshold }: Props) {
         <SplitScreen pass={firstPass!} fail={firstFail!} />
       )}
     </section>
+  );
+}
+
+// HERMETIC=1 infrastructure diagnosis: a second, network-blocked detect pass.
+// Overlapping CIs => the flake is environment-independent (not an external
+// dependency); non-overlap => an external dependency. We show both CIs so the
+// verdict is auditable, never asserted bare.
+function HermeticChip({ hermetic }: { hermetic: HermeticState }) {
+  const envIndependent = hermetic.verdict === 'env_independent';
+  const label = envIndependent ? 'ENVIRONMENT-INDEPENDENT' : 'EXTERNAL DEPENDENCY';
+  const gloss = envIndependent
+    ? 'reproduces network-blocked — the infrastructure is not the cause'
+    : 'network-blocked run diverged — an external dependency is implicated';
+  return (
+    <div className={`hermetic-chip ${envIndependent ? 'env-independent' : 'external-dep'}`}>
+      <div className="hermetic-head">
+        <span className="hermetic-dot" />
+        <span className="hermetic-title">infrastructure diagnosis</span>
+        <span className="hermetic-verdict">{label}</span>
+      </div>
+      <p className="hermetic-gloss">{gloss}</p>
+      <div className="hermetic-cis mono">
+        <span>networked {ciText(hermetic.networkedCi)}</span>
+        <span className="hermetic-vs">vs</span>
+        <span>hermetic {ciText(hermetic.hermeticCi)}</span>
+      </div>
+    </div>
   );
 }
 

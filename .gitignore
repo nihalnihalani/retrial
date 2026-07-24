@@ -12,3 +12,6 @@ genome.json
 # Added by Braintrust Wizard
 .env.braintrust
 .braintrust.json
+
+# generated flake-autopsy audio
+voice_out/

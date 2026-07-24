@@ -42,6 +42,15 @@ export function FlakeMeter({ rate, ci, label = 'flake rate', big = false, thresh
           title={`decision threshold (${pct(thr)})`}
         />
       </div>
+      <div className="flake-meter-scale">
+        <span
+          className="flake-meter-threshold-tick"
+          style={{ left: thrPct }}
+          title={`decision threshold (${pct(thr)})`}
+        >
+          {pct(thr)}
+        </span>
+      </div>
       <div className="flake-meter-ci-text">{ciText(ci)}</div>
     </div>
   );

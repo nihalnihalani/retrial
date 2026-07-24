@@ -15,10 +15,13 @@ Two layers:
    (a patch may not delete assertions to win).
 
 2. DYNAMIC canary: mutate the patched test so its final comparison is inverted
-   (`==`->`!=`, token flip) — this forces the failure branch — and run it ONCE.
-   A genuine test MUST now FAIL (exit != 0). If the mutant still passes, the
-   patch's assertion is dead code (both branches exit 0, the assert is swallowed,
-   etc.): the patch neutered the test and is DISQUALIFIED.
+   (`==`->`!=`, token flip) — this forces the failure branch — and run it several
+   times. A genuine test MUST now FAIL (exit != 0), and a real detector fails the
+   inverted comparison DETERMINISTICALLY, so the mutant failing even once proves
+   the assertion is live. Only when the mutant still passes on EVERY clean
+   (non-infra) attempt is its assertion dead code (both branches exit 0, the
+   assert is swallowed, etc.): the patch neutered the test and is DISQUALIFIED.
+   Infra errors are non-disqualifying and don't count as evidence.
 
 `neutering_check` returns a `NeuteringResult` that is truthy when the patch is a
 legitimate fix and falsy (with a `.reason`) when it is disqualified.
@@ -147,10 +150,11 @@ def neutering_check(original_code, patched_code, pool=None, isolation="process",
     """Decide whether `patched_code` is a legitimate fix or has neutered the test.
 
     Static analysis always runs. The dynamic canary runs only when a `pool` is
-    supplied (it executes one mutated trial in a sandbox); without a pool the
+    supplied (it executes several mutated trials in a sandbox); without a pool the
     check is static-only (used by unit tests). Returns a `NeuteringResult`
     (truthy == legitimate). A patch is disqualified when it drops assertions,
-    reduces to `sys.exit(0)`, or its mutated form still passes.
+    reduces to `sys.exit(0)`, or its mutated form still passes on every clean
+    attempt.
     """
     # --- STATIC ---
     try:
@@ -181,10 +185,26 @@ def neutering_check(original_code, patched_code, pool=None, isolation="process",
     if pool is not None:
         mutated = _mutate_for_canary(patched_code)
         if mutated is not None:
-            res = run_trial(pool, mutated, timeout=timeout, isolation=isolation)
-            # Only a clean (non-infra) run is trustworthy; an infra error never
-            # disqualifies a real fix.
-            if res.get("error") is None and res.get("passed"):
+            # A SINGLE canary run can wrongly disqualify a genuine but
+            # NON-deterministic winning fix that merely happens to pass its
+            # inverted comparison once. A real detector fails the inverted
+            # comparison DETERMINISTICALLY, so run the canary several times: the
+            # mutant failing even once proves the assertion is live and the patch
+            # is legitimate. Only disqualify when EVERY clean (non-infra) attempt
+            # still passes. Infra errors never disqualify and don't count as
+            # evidence (an all-infra run leaves the patch un-disqualified).
+            canary_attempts = 5
+            saw_clean_run = False
+            detector_fired = False
+            for _ in range(canary_attempts):
+                res = run_trial(pool, mutated, timeout=timeout, isolation=isolation)
+                if res.get("error") is not None:
+                    continue  # infra error: not trustworthy evidence, skip
+                saw_clean_run = True
+                if not res.get("passed"):
+                    detector_fired = True  # mutant failed -> detector is live
+                    break
+            if saw_clean_run and not detector_fired:
                 return NeuteringResult(
                     False, "failed neutering guard — patch no longer detects the "
                     "failure condition", "dynamic")

@@ -23,9 +23,14 @@ jobs:
         env:
           DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
           DAYTONA_TARGET: us
+          # Bind dispatch inputs to env vars so they are never interpolated
+          # directly into the shell (script-injection vector). Reference the env
+          # vars in the script instead of inlining ${{ ... }}.
+          TEST_PATH: ${{ github.event.inputs.test_path }}
+          MAX_TRIALS: ${{ github.event.inputs.max_trials }}
         working-directory: engine
         run: |
-          python -m retrial.cli check "../${{ github.event.inputs.test_path }}" \
-            --json --max-trials "${{ github.event.inputs.max_trials }}" | tee ../retrial-report.json
+          python -m retrial.cli check "../$TEST_PATH" \
+            --json --max-trials "$MAX_TRIALS" | tee ../retrial-report.json
       - uses: actions/upload-artifact@v4
         with: { name: retrial-report, path: retrial-report.json }

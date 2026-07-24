@@ -9,10 +9,11 @@ Each fallback hypothesis is checked IN ITS ACTUAL TOURNAMENT ROLE:
   guard and (b) be empirically STABLE. The guard runs ONLY on eligible/STABLE
   candidates in the real flow, so the winner is the one that must be guard-clean
   — an eligible winner the guard rejects is exactly what causes a QUARANTINE.
-- The DECOY (a plausible but WRONG hypothesis) must be empirically FLAKY, so it
+- The DECOY (a plausible but WRONG hypothesis) must be empirically UNSTABLE
+  (FLAKY or ALWAYS_FAILING — its high fail rate can early-stop to either), so it
   is eliminated by EVIDENCE. It is never eligible, so the tournament never
   guard-checks it — guard-checking a flaky patch in isolation is meaningless
-  (its assertion-flipped canary is itself flaky). We verify it stays flaky.
+  (its assertion-flipped canary is itself flaky). We verify it never stabilizes.
 
 Standalone: imports the engine's guard/pool/verifier as a CONSUMER; touches no
 engine internals. Run from repo root or scripts/:
@@ -90,10 +91,14 @@ def main():
         print(f"        empirical: {wv['verdict']} flake={wv['flake_rate']:.0%} "
               f"CI={wv['wilson_ci']} ({wv['trials']} trials)")
 
-        # --- DECOY: must be empirically FLAKY (eliminated by evidence, not guard) ---
+        # --- DECOY: must be empirically UNSTABLE (eliminated by evidence, not guard) ---
         dv = verify(pool, DECOY["patched_code"], max_trials=MAX_TRIALS,
                     conc=8, threshold=THRESHOLD)
-        decoy_ok = dv["verdict"] == "FLAKY"
+        # Accept elimination-by-evidence in ANY form: the decoy's high fail rate
+        # often early-stops to ALWAYS_FAILING rather than FLAKY, so requiring
+        # exactly FLAKY intermittently cries wolf. Both FLAKY and ALWAYS_FAILING
+        # mean the decoy did NOT stabilize — it is eliminated by evidence either way.
+        decoy_ok = dv["verdict"] != "STABLE"
         ok = ok and decoy_ok
         print(f"[{'PASS' if decoy_ok else 'FAIL'}] {DECOY['id']} DECOY ({DECOY['cause_class']})")
         print(f"        empirical: {dv['verdict']} flake={dv['flake_rate']:.0%} "

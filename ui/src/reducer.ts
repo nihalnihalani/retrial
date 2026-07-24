@@ -15,6 +15,7 @@ export const initialState: BoardState = {
     fails: null,
     done: false,
   },
+  hermetic: null,
   hypotheses: [],
   winner: null,
   quarantine: null,
@@ -32,6 +33,7 @@ function resetPerRun(state: BoardState): BoardState {
     ...state,
     phase: 'detect',
     detect: { ...initialState.detect, trials: [] },
+    hermetic: null,
     hypotheses: [],
     winner: null,
     quarantine: null,
@@ -145,6 +147,21 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       return { ...state, detect };
     }
 
+    case 'hermetic_diagnosis': {
+      // HERMETIC=1 only: the network-blocked second pass. Store the finding so
+      // the detect card can show a networked-CI vs hermetic-CI chip.
+      return {
+        ...state,
+        hermetic: {
+          verdict: event.verdict,
+          networkedRate: event.networked_rate,
+          hermeticRate: event.hermetic_rate,
+          networkedCi: event.networked_ci,
+          hermeticCi: event.hermetic_ci,
+        },
+      };
+    }
+
     case 'hypothesis_created': {
       const h: Hypothesis = {
         id: event.id,
@@ -169,15 +186,19 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
     case 'hypothesis_verified': {
       const hypotheses = state.hypotheses.map((h) => {
         if (h.id !== event.id) return h;
-        // INCONCLUSIVE (CI straddles the threshold) is measured but never
-        // winner-eligible — show it as its own grey-amber lane, not "verified".
-        const inconclusive = event.verdict === 'INCONCLUSIVE';
+        // Only a STABLE verdict is a real fix — render it "verified". INCONCLUSIVE
+        // (CI straddles the threshold) is measured but never winner-eligible, so
+        // it gets its own grey-amber lane. A FLAKY/ERROR/unlabelled lane stays in
+        // its measured racing state — claiming "verified" for a still-flaky lane
+        // would be dishonest (elimination lands separately).
         const status =
           h.status === 'winner'
             ? h.status
-            : inconclusive
-              ? ('inconclusive' as const)
-              : ('verified' as const);
+            : event.verdict === 'STABLE'
+              ? ('verified' as const)
+              : event.verdict === 'INCONCLUSIVE'
+                ? ('inconclusive' as const)
+                : h.status;
         return {
           ...h,
           status,
@@ -238,15 +259,13 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
     }
 
     case 'quarantine_confirmed': {
-      // Mark the best-effort hypothesis so the card can label it; leave every
-      // lane's own eliminated/verified status intact.
-      const hypotheses = state.hypotheses.map((h) =>
-        h.id === event.best_id ? { ...h, status: 'verified' as const } : h,
-      );
+      // No fix stabilized the test, so the best-effort lane must NOT read as
+      // "verified" — that would claim a stability it never reached. Leave every
+      // lane's own eliminated/inconclusive status intact; the card finds the
+      // best candidate by id (quarantine.bestId), not by status.
       return {
         ...state,
         phase: 'quarantine',
-        hypotheses,
         quarantine: {
           bestId: event.best_id,
           flakeRate: event.dossier.flake_rate,
@@ -261,7 +280,11 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
     case 'genome_updated': {
       return {
         ...state,
-        genome: { runs: event.runs, byCauseClass: event.by_cause_class },
+        genome: {
+          runs: event.runs,
+          byCauseClass: event.by_cause_class,
+          byModel: event.by_model ?? null,
+        },
       };
     }
 
