@@ -7,6 +7,7 @@ interface Props {
   hypothesis: Hypothesis | undefined;
   detect: DetectState;
   prUrl: string | null;
+  model: string | null; // prettified winning model, when known
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -20,11 +21,15 @@ const causeLabel = (c: string) =>
 
 // The verdict. Clean, no confetti: the before→after number, the CI, and the
 // two governance receipts (Braintrust permalink + the opened PR).
-export function WinnerCard({ winner, hypothesis, detect, prUrl }: Props) {
+export function WinnerCard({ winner, hypothesis, detect, prUrl, model }: Props) {
   // prefer the confirmed winner's own numbers; fall back to detect/hypothesis
   const before = winner.origFlakeRate ?? detect.flakeRate ?? 0.48;
   const trials = hypothesis?.trials.length ?? 50;
   const ci = winner.wilsonCi ?? hypothesis?.wilsonCi ?? null;
+  const confirmChip =
+    winner.confirmTrials != null
+      ? `confirmed ${Math.round(winner.confirmFlakeRate * winner.confirmTrials)}/${winner.confirmTrials} in a fresh round`
+      : `confirmed ${pct(winner.confirmFlakeRate)} in a fresh round`;
 
   return (
     <section className="phase winner-phase">
@@ -36,6 +41,7 @@ export function WinnerCard({ winner, hypothesis, detect, prUrl }: Props) {
             <span className={`cause-tag cause-${hypothesis.causeClass}`}>
               {causeLabel(hypothesis.causeClass)}
             </span>
+            {model && <span className="winner-model">{model}'s fix</span>}
           </div>
         )}
 
@@ -55,6 +61,12 @@ export function WinnerCard({ winner, hypothesis, detect, prUrl }: Props) {
           , held at <strong>{pct(winner.confirmFlakeRate)}</strong> through a dedicated
           confirmation round.
         </p>
+
+        <div className="verdict-chips">
+          <span className="verdict-chip">{confirmChip}</span>
+          <span className="verdict-chip">{trials} trials</span>
+          {ci && <span className="verdict-chip mono">95% CI {ciUpper(ci)}</span>}
+        </div>
 
         {hypothesis && <p className="winner-explanation">{hypothesis.explanation}</p>}
 

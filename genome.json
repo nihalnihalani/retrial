@@ -34,5 +34,14 @@
     "orig_flake_rate": 0.4375,
     "final_flake_rate": 0.0,
     "winner_model": "accounts/fireworks/models/glm-5p1"
+  },
+  {
+    "seq": 5,
+    "test_name": "test_dict_order.py",
+    "verdict": "FIXED",
+    "cause_class": "order_dependency",
+    "orig_flake_rate": 0.375,
+    "final_flake_rate": 0.0,
+    "winner_model": "accounts/fireworks/models/deepseek-v4-pro"
   }
 ]

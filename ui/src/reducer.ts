@@ -149,6 +149,7 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
           id: event.id,
           flakeRate: event.flake_rate,
           confirmFlakeRate: event.confirm_flake_rate,
+          confirmTrials: event.confirm_trials ?? null,
           wilsonCi: event.wilson_ci ?? null,
           origFlakeRate: event.orig_flake_rate ?? null,
           braintrustUrl: event.braintrust_url ?? null,
