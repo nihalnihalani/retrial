@@ -170,7 +170,7 @@ exists — the board is a subscriber, not the system.
 - **Daytona — the swarm.** This is the substrate. Retrial's entire premise
   (measure empirical flake rate) requires many isolated reruns, and disposable
   parallel container sandboxes are the exactly-right tool. Verified on this
-  account: 16 concurrent container creates in ~2.0s, ~0.71s create→started, one
+  account: 16 concurrent container creates in ~2.0s, ~0.60s to first trial (measured; pre-warmed pool)→started, one
   exec round-trip per trial. The pool with its two isolation levels is genuine
   Daytona-flagship usage — not a decorative call.
 
