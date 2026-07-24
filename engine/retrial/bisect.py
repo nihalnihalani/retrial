@@ -47,6 +47,7 @@ from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 
 from .config import DEFAULT_THRESHOLD
 from .forkpool import _retry
+from .registry import as_safe
 from .verifier import verify
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -64,9 +65,10 @@ class _CheckpointProbePool:
     marks them reusable.
     """
 
-    def __init__(self, ckpt, client):
+    def __init__(self, ckpt, client, registry=None):
         self._ckpt = ckpt
         self._client = client
+        self._registry = as_safe(registry)
         # CONCURRENCY RULE (load-bearing — do not "optimize" this lock away):
         # verify() calls lease() from up to `conc` worker threads at once, but
         # the ONLY proven usage of _experimental_fork is strictly sequential
@@ -87,6 +89,12 @@ class _CheckpointProbePool:
                 name=f"retrial-probe-{uuid4().hex[:6]}"))
         with self._lock:
             self._live[fork.id] = fork
+        # Observatory hook OUTSIDE the fork/state locks: a single-use probe
+        # clone, child of the checkpoint being probed. No destroy_fn — probes
+        # die inside this pool's destroy_all, never via DELETE.
+        self._registry.register(fork, role="bisect-probe", backend="fork",
+                                parent_id=getattr(self._ckpt, "id", None),
+                                state="warm", destroy_fn=None)
         return fork
 
     def release(self, sb, reusable=False):
@@ -111,6 +119,8 @@ class _CheckpointProbePool:
             self._client.delete(self._client.get(sb.id))
         except Exception:
             pass
+        # The pop winner owns the deletion — mark destroyed exactly once.
+        self._registry.mark_destroyed(getattr(sb, "id", None))
 
     def destroy_all(self):
         """Delete every leftover probe fork; joins in-flight background
@@ -133,7 +143,7 @@ class FlakeBisector:
 
     def __init__(self, client=None, target=None, bus=None, labels=None,
                  max_trials=30, conc=8, threshold=DEFAULT_THRESHOLD,
-                 min_trials=8, timeout=60, auto_delete_min=None):
+                 min_trials=8, timeout=60, auto_delete_min=None, registry=None):
         # Own root sandbox lifecycle, NOT via the pool: bisection needs direct
         # fork control over one long-lived root (same client construction and
         # create kwargs as SandboxPool._create_one).
@@ -144,6 +154,10 @@ class FlakeBisector:
         self._auto_delete_min = (auto_delete_min if auto_delete_min is not None
                                  else int(os.environ.get("AUTO_DELETE_MIN", "60")))
         self._bus = bus
+        # Sandbox Observatory feed: root/checkpoint/probe lifecycle + root execs
+        # are mirrored into the registry (shared with the probe pools). as_safe
+        # makes even a hostile injected registry unable to break the bisect.
+        self._registry = as_safe(registry)
         self.max_trials = max_trials
         self.conc = conc
         self.threshold = threshold
@@ -154,7 +168,26 @@ class FlakeBisector:
         self._probes = {}       # k -> latest verify() result for checkpoint k
         self._probe_pool = None  # the probe pool currently in flight, if any
         self._suspect_code = None
+        # Real (no longer declared-but-unused): guards every mutation/swap of
+        # _ckpts / _root / _probe_pool against a concurrent reader.
         self._lock = threading.Lock()
+        # Cooperative-cancel channel. A forced destroy_all on the server sets
+        # this via cancel(); _run() checks it at each loop boundary and raises,
+        # so teardown happens in the RUN thread's own finally (leaf-first) —
+        # the server never yanks an active bisector's resources out from under
+        # its unsynchronized probe loop. See OBSERVATORY-PLAN.md B4.
+        self._cancelled = threading.Event()
+
+    # -- cooperative cancel ----------------------------------------------
+    def cancel(self):
+        """Request cooperative cancellation (called by the server on a forced
+        reap). _run() checks this at each loop boundary and raises; teardown
+        then happens in the run thread's own finally — never from the caller."""
+        self._cancelled.set()
+
+    def _raise_if_cancelled(self):
+        if self._cancelled.is_set():
+            raise RuntimeError("bisect cancelled by destroy_all(force)")
 
     # -- internals -------------------------------------------------------
     def _emit(self, event_type, payload):
@@ -169,25 +202,38 @@ class FlakeBisector:
         single-round-trip pattern: b64 -> /tmp/seed.py -> EXIT:$? -> parse.
         Returns the same result dict shape as run_trial."""
         t0 = time.monotonic()
+        sid = getattr(sandbox, "id", None)
+        cmd = None
         try:
             b64 = base64.b64encode(code.encode("utf-8")).decode("ascii")
             cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py && "
                    f"python3 /tmp/seed.py; echo EXIT:$?")
+            # Observatory: the root sandbox is running a suite test (registry
+            # @_safe — never affects the bisect).
+            self._registry.exec_started(sid, cmd)
             r = sandbox.process.exec(cmd, timeout=self.timeout)
             out = r.result or ""  # .result may be None (rewind lesson)
             duration = time.monotonic() - t0
             m = _EXIT_RE.search(out)
             if m is None:
+                log_tail = out.strip()[-500:]
+                self._registry.exec_finished(sid, cmd, None, log_tail,
+                                             round(duration, 3))
                 return {"passed": False, "duration_s": round(duration, 3),
-                        "log_tail": out.strip()[-500:], "exit_code": None,
+                        "log_tail": log_tail, "exit_code": None,
                         "error": "no EXIT marker in output"}
             code_n = int(m.group(1))
+            log_tail = out.strip()[-500:]
+            self._registry.exec_finished(sid, cmd, code_n, log_tail,
+                                         round(duration, 3))
             return {"passed": code_n == 0, "duration_s": round(duration, 3),
-                    "log_tail": out.strip()[-500:], "exit_code": code_n,
+                    "log_tail": log_tail, "exit_code": code_n,
                     "error": None}
         except Exception as e:
+            duration = round(time.monotonic() - t0, 3)
+            self._registry.exec_finished(sid, cmd, None, str(e)[-500:], duration)
             return {"passed": False,
-                    "duration_s": round(time.monotonic() - t0, 3),
+                    "duration_s": duration,
                     "log_tail": str(e)[-500:], "exit_code": None,
                     "error": str(e)[:200]}
 
@@ -195,13 +241,19 @@ class FlakeBisector:
         kwargs = {"labels": self._labels}
         if self._auto_delete_min and self._auto_delete_min > 0:
             kwargs["auto_delete_interval"] = self._auto_delete_min
-        self._root = self._client.create(CreateSandboxFromSnapshotParams(**kwargs),
-                                         timeout=120)
+        root = self._client.create(CreateSandboxFromSnapshotParams(**kwargs),
+                                   timeout=120)
+        with self._lock:
+            self._root = root
+        # Observatory: the bisect root is the trunk of the checkpoint tree.
+        self._registry.register(root, role="root", backend="fork",
+                                labels=self._labels, state="creating")
         # Pay the cold start now so per-test exec timings are honest.
         try:
-            self._root.process.exec("echo warm")
+            root.process.exec("echo warm")
         except Exception:
             pass
+        self._registry.set_state(getattr(root, "id", None), "warm")
 
     def _checkpoint(self, label, test_passed=None):
         """Freeze the current root state as the next checkpoint: fork the live
@@ -209,8 +261,14 @@ class FlakeBisector:
         fork = _retry("bisect.ckpt.fork", lambda: self._root._experimental_fork(
             name=f"retrial-bisect-ckpt-{uuid4().hex[:6]}"))
         _retry("bisect.ckpt.pause", fork.pause)
-        self._ckpts.append(fork)
-        payload = {"k": len(self._ckpts) - 1, "label": label}
+        with self._lock:
+            self._ckpts.append(fork)
+            k = len(self._ckpts) - 1
+        # Observatory: a frozen checkpoint, child of the root.
+        self._registry.register(fork, role="checkpoint", backend="fork",
+                                parent_id=getattr(self._root, "id", None),
+                                labels=self._labels, state="paused")
+        payload = {"k": k, "label": label}
         if test_passed is not None:
             payload["test_passed"] = test_passed  # informational only
         self._emit("checkpoint_created", payload)
@@ -225,12 +283,18 @@ class FlakeBisector:
         rate there with the verify() oracle. Results are cached per checkpoint;
         the confirmation pass bypasses the cache (use_cache=False) and defeats
         early-stop by passing min_trials == max_trials."""
+        self._raise_if_cancelled()   # cooperative-cancel boundary: no new probe
         if use_cache and k in self._probes:
             return self._probes[k]
-        ckpt = self._ckpts[k]
+        with self._lock:
+            ckpt = self._ckpts[k]
         _retry("probe.start", ckpt.start)
-        probe_pool = _CheckpointProbePool(ckpt, self._client)
-        self._probe_pool = probe_pool
+        # Observatory: the checkpoint is awake while probed, back to paused after.
+        self._registry.set_state(getattr(ckpt, "id", None), "warm")
+        probe_pool = _CheckpointProbePool(ckpt, self._client,
+                                          registry=self._registry)
+        with self._lock:
+            self._probe_pool = probe_pool
         try:
             res = verify(probe_pool, self._suspect_code,
                          max_trials=max_trials if max_trials is not None else self.max_trials,
@@ -246,11 +310,13 @@ class FlakeBisector:
                 probe_pool.destroy_all()
             except Exception:
                 pass
-            self._probe_pool = None
+            with self._lock:
+                self._probe_pool = None
             try:
                 ckpt.pause()
             except Exception:
                 pass
+            self._registry.set_state(getattr(ckpt, "id", None), "paused")
         self._probes[k] = res  # confirmation results overwrite: fresher, bigger budget
         self._emit("checkpoint_probed", {
             "k": k,
@@ -307,9 +373,14 @@ class FlakeBisector:
 
         # Forward pass: root runs the prefix, freezing a checkpoint after
         # every test boundary. The root itself never stops.
+        self._raise_if_cancelled()
         self._create_root()
         self._checkpoint("pristine")  # checkpoint 0
         for name, code in prefix:
+            # Cooperative-cancel boundary: a forced reap stops the forward pass
+            # before building the next checkpoint (teardown runs in this thread's
+            # own finally, leaf-first).
+            self._raise_if_cancelled()
             res = self._exec_test(self._root, code)
             # The prefix test's own pass/fail is informational (a polluter is
             # usually green itself) — logged into the event, never a gate.
@@ -382,27 +453,34 @@ class FlakeBisector:
 
     def destroy_all(self):
         """Leaf-first teardown, idempotent: probe leftovers (children of a
-        checkpoint), then every checkpoint (children of root), then root."""
+        checkpoint), then every checkpoint (children of root), then root. Swaps
+        of _probe_pool / _ckpts / _root are done under _lock so a concurrent
+        reader (e.g. a probe still indexing _ckpts) never sees a half-swapped
+        state."""
         count = 0
-        pool = self._probe_pool
+        with self._lock:
+            pool, self._probe_pool = self._probe_pool, None
         if pool is not None:
             try:
                 count += pool.destroy_all()
             except Exception:
                 pass
-            self._probe_pool = None
-        ckpts, self._ckpts = self._ckpts, []
+        with self._lock:
+            ckpts, self._ckpts = self._ckpts, []
         for ck in ckpts:
             try:
                 self._client.delete(self._client.get(ck.id))
             except Exception:
                 pass
+            self._registry.mark_destroyed(getattr(ck, "id", None))
             count += 1
-        if self._root is not None:
+        with self._lock:
+            root, self._root = self._root, None
+        if root is not None:
             try:
-                self._client.delete(self._client.get(self._root.id))
+                self._client.delete(self._client.get(root.id))
             except Exception:
                 pass
-            self._root = None
+            self._registry.mark_destroyed(getattr(root, "id", None))
             count += 1
         return count
