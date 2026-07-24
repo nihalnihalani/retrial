@@ -16,6 +16,7 @@ Public API:
     DiagnosisEngine, diagnose   Fireworks differential-diagnosis hypotheses
     SandboxRegistry     thread-safe ledger of every sandbox — the Observatory feed
 """
+from .settings import Settings, get_settings
 from .pool import SandboxPool, make_pool
 from .forkpool import ForkSandboxPool
 from .trial import run_trial, TrialRunner
@@ -30,6 +31,8 @@ from .prsmith import PRSmith
 from .registry import SandboxRegistry, REGISTRY
 
 __all__ = [
+    "Settings",
+    "get_settings",
     "SandboxPool",
     "ForkSandboxPool",
     "make_pool",
