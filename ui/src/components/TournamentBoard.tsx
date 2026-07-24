@@ -219,7 +219,7 @@ export function TournamentBoard({ onRestart }: Props) {
   });
 
   return (
-    <div className="board">
+    <div className={`board ${terminalPhase ? 'is-terminal' : ''}`}>
       <DegradeBanner poolDegraded={poolDegraded} preflight={preflight} />
       <TopBar
         mode={mode}
@@ -547,7 +547,9 @@ function GoControl({
   disabled: boolean;
   posting: boolean;
 }) {
-  const goRef = useMagnetic<HTMLButtonElement>(8);
+  // Gentle: GO is the one control that must be hit first time on stage, so the
+  // lean is an acknowledgement of the pointer, not a moving target.
+  const goRef = useMagnetic<HTMLButtonElement>(4);
   return (
     <div className="go-control flex items-center gap-0 rounded-[calc(var(--radius)+2px)] border border-border bg-secondary p-[3px] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.03)]">
       <select

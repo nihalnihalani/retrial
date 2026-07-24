@@ -1,7 +1,10 @@
+/* Tailwind first, then the board's own CSS in the components layer so that
+   utility classes (shadcn primitives) can override component styling without
+   `!important` escalation. */
 @import "tailwindcss";
-@import "./styles.css";
+@import "./styles.css" layer(components);
+@import "./design-system.css" layer(components);
 
-/* shadcn / 21st.dev Zinc dark — Tailwind theme bridge */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -21,20 +24,10 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: var(--font-sans);
-  }
 }

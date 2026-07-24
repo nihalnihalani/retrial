@@ -1,0 +1,1368 @@
+/* =====================================================================
+   RETRIAL — DESIGN SYSTEM (authoritative layer)
+   ---------------------------------------------------------------------
+   The only place tokens are defined. Everything before this file is
+   structural component CSS; this layer owns the visual language.
+
+   Principles
+   1. Color carries meaning, never decoration. Neutral chrome, saturated
+      evidence: green passed, red failed, gold won.
+   2. One elevation model — surface + hairline. Glow is reserved for
+      state that is genuinely live.
+   3. A closed type scale (7 steps) and a closed radius scale (3 steps).
+   4. Uppercase tracking is an eyebrow treatment only, never a heading.
+
+   Token convention (do not mix): shadcn tokens are bare HSL triplets
+   consumed as hsl(var(--x)); Retrial tokens are complete colors
+   consumed bare as var(--x).
+   ===================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- shadcn triplets — consumed as hsl(var(--x)) ---- */
+  --background: 240 9% 5%;
+  --foreground: 240 8% 97%;
+  --card: 240 8% 8%;
+  --card-foreground: 240 8% 97%;
+  --popover: 240 8% 10%;
+  --popover-foreground: 240 8% 97%;
+  --primary: 152 60% 50%;
+  --primary-foreground: 152 62% 7%;
+  --secondary: 240 6% 14%;
+  --secondary-foreground: 240 8% 97%;
+  --muted: 240 6% 14%;
+  --muted-foreground: 240 6% 68%;
+  --accent-ui: 240 6% 14%;
+  --accent-shad: 240 6% 14%;
+  --accent-foreground: 240 8% 97%;
+  --accent-shad-foreground: 240 8% 97%;
+  --destructive: 350 78% 58%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 6% 17%;
+  --input: 240 6% 17%;
+  --ring: 217 82% 64%;
+
+  /* ---- hairlines: three weights, nothing else ---- */
+  --line: hsl(0 0% 100% / 0.09);
+  --line-2: hsl(0 0% 100% / 0.16);
+  --line-3: hsl(0 0% 100% / 0.045);
+
+  /* ---- surfaces ---- */
+  --bg: hsl(var(--background));
+  --bg-2: hsl(240 8% 7%);
+  --panel: hsl(var(--card));
+  --panel-2: hsl(var(--secondary));
+
+  /* ---- ink ---- */
+  --ink: hsl(var(--foreground));
+  --ink-dim: hsl(var(--muted-foreground));
+  --ink-faint: hsl(240 5% 52%);
+
+  /* ---- evidence palette (semantic, never decorative) ---- */
+  --pass: hsl(152 62% 52%);
+  --pass-glow: hsl(152 62% 52% / 0.26);
+  --fail: hsl(350 82% 63%);
+  --fail-glow: hsl(350 82% 63% / 0.26);
+  --gold: hsl(42 92% 62%);
+  --gold-2: hsl(45 96% 72%);
+  --accent: hsl(217 88% 68%);
+  --pending: hsl(0 0% 100% / 0.07);
+  --focus-ring: hsl(var(--ring));
+
+  /* ---- type scale (7 steps, closed set) ---- */
+  --t-micro: 10.5px;
+  --t-label: 12px;
+  --t-body: 13.5px;
+  --t-lead: 15px;
+  --t-title: 19px;
+  --t-head: 28px;
+  --t-display: clamp(42px, 4.6vw, 60px);
+
+  /* ---- radius scale (3 steps, closed set) ---- */
+  --r-control: 8px;
+  --r-card: 12px;
+  --r-pill: 999px;
+  --radius: 0.625rem;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ---- rhythm ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 40px;
+
+  --shadow-card: 0 1px 0 hsl(0 0% 100% / 0.04) inset, 0 24px 60px -40px hsl(0 0% 0% / 0.9);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--sans);
+  font-size: var(--t-body);
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- shell ---------- */
+
+.board {
+  max-width: 1440px;
+  padding: 20px clamp(20px, 3vw, 40px) 48px;
+}
+
+.board-main {
+  gap: var(--space-6);
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin-bottom: 36px;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar-primary,
+.topbar-secondary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.topbar-primary {
+  gap: 32px;
+  padding-bottom: 14px;
+}
+
+.topbar-secondary {
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--line-3);
+}
+
+.operator-controls,
+.telemetry-controls,
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar-status {
+  margin-left: auto;
+  flex: none;
+}
+
+/* ---------- brand ---------- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: none;
+}
+
+.brand-mark {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  color: var(--ink);
+  stroke-width: 1.5;
+  opacity: 0.92;
+  filter: none;
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.brand-tag,
+.brand-test {
+  position: relative;
+  padding: 0 0 0 11px;
+  margin-left: 1px;
+  max-width: 240px;
+  border: 0;
+  background: none;
+  font-size: var(--t-label);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-tag::before,
+.brand-test::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 11px;
+  translate: 0 -50%;
+  background: var(--line-2);
+}
+
+.brand-test {
+  color: var(--ink-dim);
+  font-family: var(--mono);
+}
+
+/* ---------- stepper ---------- */
+
+.stepper {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-faint);
+  transition: color 0.25s var(--ease), background-color 0.25s var(--ease);
+}
+
+.step + .step::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--line-2);
+}
+
+.step-index {
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: currentColor;
+  opacity: 0.6;
+}
+
+.step-label {
+  font-size: var(--t-label);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+}
+
+.step.done {
+  color: var(--ink-faint);
+}
+
+.step.done .step-index {
+  color: var(--pass);
+  opacity: 1;
+}
+
+.step.active {
+  color: var(--ink);
+  background: hsl(0 0% 100% / 0.045);
+}
+
+.step.active .step-index {
+  color: var(--gold);
+  opacity: 1;
+}
+
+/* ---------- status chrome ---------- */
+
+.mode-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  flex: none;
+  background: var(--ink-faint);
+}
+
+.mode-dot.live {
+  background: var(--pass);
+  box-shadow: 0 0 0 3px hsl(152 62% 52% / 0.16);
+  animation: pulse-dot 2.4s var(--ease) infinite;
+}
+
+.mode-dot.connecting {
+  background: var(--gold);
+  animation: pulse-dot 1.1s var(--ease) infinite;
+}
+
+.mode-dot.disconnected {
+  background: var(--fail);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.run-clock {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: var(--t-label);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-clock.is-live {
+  color: var(--ink);
+  border-color: var(--line-2);
+}
+
+.run-clock.is-done {
+  color: var(--gold-2);
+  border-color: hsl(42 92% 62% / 0.32);
+}
+
+/* ---------- operator controls ---------- */
+
+.go-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.go-seed {
+  min-width: 196px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: var(--t-label);
+  cursor: pointer;
+}
+
+.go-seed:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.sandbox-ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: var(--t-label);
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.sandbox-ticker .live-hex {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  stroke-width: 1.7;
+  color: var(--ink-faint);
+  text-shadow: none;
+}
+
+.sandbox-ticker.live .live-hex {
+  color: var(--pass);
+}
+
+.sandbox-ticker strong,
+.sandbox-ticker.live strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+}
+
+.sandbox-ticker .sandbox-dim {
+  color: var(--ink-faint);
+}
+
+.sandbox-ticker.degraded strong {
+  color: var(--gold);
+}
+
+.stale-note {
+  font-size: var(--t-label);
+  color: var(--ink-faint);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---------- toast ---------- */
+
+.toast {
+  border-radius: var(--r-control);
+  font-size: var(--t-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.toast-error {
+  border: 1px solid hsl(350 78% 58% / 0.38);
+  background: hsl(350 78% 58% / 0.1);
+  color: hsl(350 85% 82%);
+  box-shadow: none;
+}
+
+/* ---------- empty / connection state ---------- */
+
+.live-empty {
+  display: grid;
+  place-items: center;
+  min-height: 58vh;
+  border-radius: var(--r-card);
+}
+
+.live-empty-orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 22px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-2);
+}
+
+.live-empty-orbit::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--pass);
+  box-shadow: 0 0 0 4px hsl(152 62% 52% / 0.15);
+}
+
+.live-empty.is-error .live-empty-orbit::after {
+  background: var(--fail);
+  box-shadow: 0 0 0 4px hsl(350 82% 63% / 0.15);
+}
+
+.live-empty h1 {
+  font-size: var(--t-head);
+  font-weight: 600;
+  letter-spacing: -0.024em;
+  line-height: 1.15;
+  color: var(--ink);
+  text-transform: none;
+}
+
+.live-empty p {
+  margin-top: 10px;
+  max-width: 44ch;
+  font-size: var(--t-lead);
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.live-empty-proof {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 26px;
+  font-size: var(--t-label);
+  color: var(--ink-faint);
+}
+
+.proof-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-2);
+}
+
+/* ---------- phase heading ---------- */
+
+.phase-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-5);
+}
+
+.phase-title {
+  font-size: var(--t-head);
+  font-weight: 600;
+  letter-spacing: -0.026em;
+  line-height: 1.12;
+  color: var(--ink);
+  text-transform: none;
+}
+
+.phase-sub {
+  font-size: var(--t-lead);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  text-transform: none;
+}
+
+/* the one sanctioned uppercase treatment */
+.eyebrow,
+.diag-eyebrow,
+.detect-counter-label,
+.winner-badge,
+.lane-status,
+.receipt-label {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ---------- evidence surfaces ---------- */
+
+.detect-grid-wrap,
+.flake-meter,
+.lane,
+.genome-card,
+.rail-root,
+.branch-row {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  box-shadow: none;
+}
+
+/* The evidence panel is exactly as wide as the evidence it holds; the meter
+   takes the remainder rather than both columns floating in dead space. */
+.detect-body {
+  grid-template-columns: max-content minmax(320px, 1fr);
+  gap: 28px;
+}
+
+.detect-grid-wrap {
+  padding: 20px;
+}
+
+.detect-counter {
+  margin-bottom: 18px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.detect-counter-sep {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.detect-counter-label {
+  color: var(--ink-faint);
+}
+
+/* ---------- trial grid: the heart of the demo ----------
+   Cells are a fixed size so the matrix reads as data at a constant density,
+   never as buttons stretched to fill their container. */
+
+/* repeat() will not accept a var() for its count, so the column count the
+   component supplies is applied as an exact width instead: auto-fill then
+   lays out precisely that many columns, and max-width lets the matrix reflow
+   on narrow screens instead of pushing the page sideways.
+   Stated per size class to outrank the legacy 1fr templates. */
+.trial-grid,
+.trial-grid.sm,
+.trial-grid.md,
+.trial-grid.lg {
+  display: grid;
+  justify-content: start;
+  gap: var(--cell-gap);
+  grid-template-columns: repeat(auto-fill, var(--cell-size));
+  width: calc(
+    var(--cols, 10) * var(--cell-size) + (var(--cols, 10) - 1) * var(--cell-gap)
+  );
+  max-width: 100%;
+}
+
+/* Grid and flex items default to min-width:auto, which lets a wide matrix
+   push its container past the viewport instead of reflowing. */
+.trial-grid,
+.detect-grid-wrap,
+.detect-body > *,
+.lane > * {
+  min-width: 0;
+}
+
+.trial-grid.lg {
+  --cell-size: 18px;
+  --cell-gap: 5px;
+}
+
+.trial-grid.md {
+  --cell-size: 15px;
+  --cell-gap: 4px;
+}
+
+.trial-grid.sm {
+  --cell-size: 11px;
+  --cell-gap: 3px;
+}
+
+.cell {
+  width: var(--cell-size, 15px);
+  height: var(--cell-size, 15px);
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 2.5px;
+  background: var(--pending);
+  box-shadow: none;
+  transition: background-color 0.18s var(--ease), box-shadow 0.35s var(--ease);
+}
+
+.trial-grid.sm .cell {
+  border-radius: 2px;
+}
+
+.cell.pass,
+.trial-grid .cell.pass {
+  background: var(--pass);
+  box-shadow: none;
+}
+
+.cell.fail,
+.trial-grid .cell.fail {
+  background: var(--fail);
+  box-shadow: none;
+}
+
+.cell.fresh {
+  animation: cell-in 0.4s var(--ease);
+}
+
+.cell.pass.fresh {
+  box-shadow: 0 0 0 2.5px var(--pass-glow);
+}
+
+.cell.fail.fresh {
+  box-shadow: 0 0 0 2.5px var(--fail-glow);
+}
+
+.trial-grid.muted {
+  opacity: 0.55;
+  filter: none;
+}
+
+@keyframes cell-in {
+  from {
+    scale: 0.5;
+    opacity: 0.25;
+  }
+  to {
+    scale: 1;
+    opacity: 1;
+  }
+}
+
+/* ---------- flake meter ---------- */
+
+.flake-meter {
+  --tone: var(--ink-dim);
+  padding: 18px 20px;
+  border-radius: var(--r-card);
+}
+
+.flake-meter.tone-clean {
+  --tone: var(--pass);
+}
+
+.flake-meter.tone-flaky {
+  --tone: var(--fail);
+}
+
+.flake-meter.tone-undecided {
+  --tone: var(--gold);
+}
+
+.flake-meter.big {
+  padding: 22px 24px;
+}
+
+.flake-meter-head {
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.flake-meter-label {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.flake-meter-value {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone);
+  text-shadow: none;
+}
+
+.flake-meter.big .flake-meter-value {
+  font-size: 44px;
+}
+
+.flake-meter-track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: hsl(0 0% 100% / 0.07);
+  overflow: visible;
+}
+
+.flake-meter-fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--tone);
+  box-shadow: none;
+  transition: width 0.5s var(--ease), background-color 0.4s var(--ease);
+}
+
+/* The CI band is a bracket over the fill, not a hatched texture. */
+.flake-meter-ci {
+  position: absolute;
+  top: -3px;
+  height: 12px;
+  border-left: 1px solid var(--line-2);
+  border-right: 1px solid var(--line-2);
+  background: hsl(0 0% 100% / 0.05);
+  border-radius: 1px;
+}
+
+.flake-meter-threshold {
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 14px;
+  background: var(--line-2);
+}
+
+.flake-meter-ci-text {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: var(--t-label);
+  letter-spacing: 0;
+  color: var(--ink-faint);
+}
+
+/* ---------- lanes ---------- */
+
+.lane {
+  transition:
+    border-color 0.3s var(--ease),
+    background-color 0.3s var(--ease),
+    opacity 0.3s var(--ease);
+}
+
+.lane.winner {
+  border-color: hsl(42 92% 62% / 0.4);
+  background: linear-gradient(180deg, hsl(42 92% 62% / 0.05), transparent 60%), var(--panel);
+}
+
+.lane.eliminated {
+  opacity: 0.5;
+  filter: none;
+}
+
+/* Struck-through prose is hard to read and the ELIMINATED tag already says it. */
+.lane.eliminated .lane-explanation,
+.lane.eliminated .lane-head,
+.lane.eliminated .cause-tag {
+  text-decoration: none;
+}
+
+.lane-head {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cause-tag,
+.model-chip {
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--t-micro);
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.lane-explanation,
+.lane-reason {
+  font-size: var(--t-body);
+  line-height: 1.55;
+  letter-spacing: 0;
+  color: var(--ink-dim);
+}
+
+/* ---------- terminal verdict cards ---------- */
+
+.winner-card,
+.quarantine-card,
+.terminal-card {
+  position: relative;
+  overflow: hidden;
+  max-width: 880px;
+  margin-inline: auto;
+  padding: 44px clamp(24px, 4vw, 52px) 40px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+}
+
+/* On a terminal verdict the chrome tightens and the card centres, so the
+   proof fits one projector viewport without scrolling. */
+.board.is-terminal .topbar {
+  margin-bottom: 20px;
+}
+
+.board.is-terminal .board-main {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 200px);
+}
+
+.board.is-terminal .winner-card,
+.board.is-terminal .quarantine-card,
+.board.is-terminal .terminal-card {
+  padding: 36px clamp(24px, 4vw, 48px) 30px;
+}
+
+.winner-card {
+  border-color: hsl(42 92% 62% / 0.3);
+}
+
+.winner-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 22% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(42 92% 62% / 0.8), transparent);
+}
+
+.winner-badge {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--gold-2);
+}
+
+.winner-headline,
+.quarantine-headline,
+.terminal-headline {
+  font-size: var(--t-display);
+  font-weight: 600;
+  letter-spacing: -0.042em;
+  line-height: 1.02;
+  color: var(--ink);
+  text-transform: none;
+  text-shadow: none;
+}
+
+.winner-caption,
+.quarantine-caption,
+.terminal-caption {
+  max-width: 58ch;
+  margin-inline: auto;
+  font-size: var(--t-lead);
+  line-height: 1.58;
+  letter-spacing: 0;
+  color: var(--ink-dim);
+}
+
+.verdict-chips {
+  width: fit-content;
+  max-width: 100%;
+  margin: 26px auto 6px;
+  padding: 12px 0;
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.verdict-chip {
+  position: relative;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.verdict-chip + .verdict-chip::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12%;
+  width: 1px;
+  height: 76%;
+  background: var(--line);
+}
+
+.verdict-chip .num,
+.verdict-chip strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+/* ---------- verdict numbers ----------
+   The before/after pair is the single loudest thing on the board, so it earns
+   its emphasis from size and tracking alone. Glow reads as a screensaver. */
+
+.winner-numbers {
+  flex-wrap: wrap;
+  gap: clamp(12px, 3vw, 28px);
+  margin: 26px 0 8px;
+  font-weight: 600;
+}
+
+.winner-before,
+.winner-after {
+  font-size: clamp(52px, 7vw, 84px);
+  letter-spacing: -0.055em;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.winner-before {
+  color: var(--fail);
+  opacity: 0.75;
+}
+
+.winner-after {
+  color: var(--pass);
+}
+
+.winner-arrow {
+  font-size: 24px;
+  color: var(--ink-faint);
+}
+
+.winner-model {
+  font-size: var(--t-body);
+  color: var(--ink-dim);
+}
+
+.winner-foot {
+  font-style: normal;
+  font-size: var(--t-body);
+  color: var(--ink-faint);
+}
+
+/* ---------- decrypt-on-reveal ----------
+   The animated copy is overlaid on an invisible sizer holding the final
+   text, so resolving out of cipher noise never re-wraps the headline. */
+
+.decrypt {
+  position: relative;
+  display: inline-block;
+}
+
+.decrypt-sizer {
+  visibility: hidden;
+}
+
+.decrypt-live {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---------- receipts ----------
+   A nowrap URL inside a 1fr column forces the column past the card edge.
+   minmax(0, …) lets the ellipsis do its job. */
+
+.winner-receipts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.receipt {
+  min-width: 0;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+
+.receipt:hover {
+  transform: none;
+  border-color: var(--line-2);
+  background: hsl(0 0% 100% / 0.02);
+}
+
+.receipt-icon {
+  font-size: 15px;
+}
+
+.receipt-title {
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+.receipt-sub {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* ---------- split screen ----------
+   Two states of one test. Tinted panels and 54px glyphs shout; a hairline
+   accent and confident type say the same thing once. */
+
+.split-cell {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.split-pass {
+  border-top: 2px solid var(--pass);
+}
+
+.split-fail {
+  border-top: 2px solid var(--fail);
+}
+
+.split-glyph {
+  font-size: 22px;
+  font-weight: 500;
+  text-shadow: none;
+}
+
+.split-pass .split-glyph {
+  color: var(--pass);
+  text-shadow: none;
+}
+
+.split-fail .split-glyph {
+  color: var(--fail);
+  text-shadow: none;
+}
+
+.split-label {
+  font-family: var(--mono);
+  font-size: var(--t-label);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--ink);
+}
+
+.split-meta {
+  font-size: var(--t-label);
+  color: var(--ink-faint);
+}
+
+.split-caption-main {
+  font-size: var(--t-body);
+  font-weight: 500;
+  color: var(--ink-dim);
+}
+
+.split-caption-sub {
+  margin-top: 4px;
+  font-size: var(--t-label);
+  color: var(--ink-faint);
+}
+
+/* A red bar drawn through a paragraph reads as a rendering fault. The
+   ELIMINATED status and the dimmed lane already carry the meaning. */
+.lane-strike {
+  display: none;
+}
+
+/* ---------- diagnosing ---------- */
+
+/* The blue sweep tints the whole surface and breaks the neutral chrome. */
+.diag-scan {
+  display: none;
+}
+
+.diag-glyph {
+  display: none;
+}
+
+.diag-hero {
+  max-width: 720px;
+}
+
+.diag-n {
+  color: var(--gold);
+}
+
+/* A single column never leaves an orphan on the last row, whatever the model
+   count happens to be. */
+.diag-models {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  width: min(440px, 100%);
+  margin-inline: auto;
+}
+
+.diag-chip {
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  box-shadow: none;
+  /* the "breathe" keyframes animate the blue tint back in */
+  animation: chip-rise 0.45s var(--ease) both;
+}
+
+.diag-chip-name {
+  font-size: var(--t-body);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.diag-chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  box-shadow: none;
+  animation: pulse-dot 1.6s var(--ease) infinite;
+}
+
+.diag-chip-guess {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.diag-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.diag-mark span {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-faint);
+  animation: diag-bounce 1.25s var(--ease) infinite;
+}
+
+.diag-mark span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.diag-mark span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes diag-bounce {
+  0%,
+  100% {
+    opacity: 0.28;
+    translate: 0 0;
+  }
+  50% {
+    opacity: 1;
+    translate: 0 -4px;
+  }
+}
+
+.diag-eyebrow {
+  color: var(--ink-faint);
+}
+
+.diag-title {
+  font-size: var(--t-head);
+  font-weight: 600;
+  letter-spacing: -0.026em;
+  line-height: 1.2;
+  color: var(--ink);
+  text-transform: none;
+}
+
+.diag-sub {
+  margin-top: 10px;
+  font-size: var(--t-lead);
+  color: var(--ink-dim);
+}
+
+/* ---------- receipts ---------- */
+
+.receipt-tile {
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: transparent;
+  box-shadow: none;
+}
+
+.receipt-url,
+.receipt-tile a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ---------- promote gate ---------- */
+
+.promote-overlay {
+  background: hsl(240 9% 5% / 0.74);
+  backdrop-filter: blur(14px) saturate(1.1);
+}
+
+.promote-card {
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 40px 90px -50px hsl(0 0% 0% / 0.95);
+}
+
+/* ---------- focus: one ring, everywhere ---------- */
+
+:where(a, button, select, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1180px) {
+  .stepper {
+    display: none;
+  }
+
+  .topbar-primary {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 860px) {
+  .board {
+    padding: 14px 16px 36px;
+  }
+
+  .topbar-secondary {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .operator-controls,
+  .telemetry-controls {
+    flex-wrap: wrap;
+  }
+
+  .go-seed {
+    min-width: 130px;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  .winner-card,
+  .quarantine-card,
+  .terminal-card {
+    padding: 30px 20px 26px;
+  }
+
+  .winner-before,
+  .winner-after,
+  .winner-headline,
+  .quarantine-headline,
+  .terminal-headline {
+    font-size: clamp(30px, 11vw, 44px);
+  }
+
+  .detect-body,
+  .split-screen {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .trial-grid.md,
+  .trial-grid.lg {
+    --cell-size: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .mobile-touch-target {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+  }
+}

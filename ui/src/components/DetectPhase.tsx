@@ -35,7 +35,7 @@ export function DetectPhase({ detect, expectedTrials, threshold }: Props) {
             <span className="mono dim">{total}</span>
             <span className="detect-counter-label">reruns landed</span>
           </div>
-          <TrialGrid trials={detect.trials} total={total} size="md" />
+          <TrialGrid trials={detect.trials} total={total} size="lg" />
         </div>
 
         <div className="detect-side">
