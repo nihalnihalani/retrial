@@ -441,3 +441,86 @@ def test_confirmation_contradiction_reports_inconclusive(monkeypatch):
     done = [e["payload"] for e in bus.history() if e["type"] == "bisect_done"]
     assert len(done) == 1
     assert done[0]["polluter_test"] is None
+
+
+# ================= Sandbox Observatory wiring (SEAM-Phase-2) =================
+from retrial.registry import SandboxRegistry  # noqa: E402
+
+
+def test_probe_forks_are_bisect_probe_children_and_end_destroyed(monkeypatch):
+    bus = EventBus()
+    reg = SandboxRegistry(bus=bus)
+    client = FakeClient()
+    b = FlakeBisector(client=client, bus=bus, registry=reg, max_trials=10, conc=4)
+    b._suspect_code = "import sys; sys.exit(0)"
+    b._create_root()
+    b._checkpoint("pristine")
+    ckpt = client.checkpoints[0]
+
+    def fake_verify(pool, code, **kw):
+        sbs = [pool.lease() for _ in range(3)]
+        for sb in sbs:
+            pool.release(sb, reusable=False)
+        return {"trials": 3, "fails": 0, "errors": 0, "flake_rate": 0.0,
+                "wilson_ci": [0.0, 0.2], "verdict": "STABLE",
+                "stopped_early": False, "isolation": "sandbox", "history": []}
+
+    monkeypatch.setattr(bisect_mod, "verify", fake_verify)
+    b._probe(0)
+
+    probes = [s for s in reg.snapshot()["sandboxes"] if s["role"] == "bisect-probe"]
+    assert len(probes) == 3
+    assert all(p["parent_id"] == ckpt.id for p in probes)   # children of the ckpt
+    assert all(p["state"] == "destroyed" for p in probes)   # single-use, reaped
+    # The checkpoint itself is registered as a checkpoint, child of the root.
+    ckpt_rec = reg.record(ckpt.id)
+    assert ckpt_rec["role"] == "checkpoint"
+    assert ckpt_rec["parent_id"] == client.roots[0].id
+
+
+def test_exec_test_emits_one_sandbox_exec_with_parsed_exit_code():
+    bus = EventBus()
+    reg = SandboxRegistry(bus=bus)
+    client = FakeClient()
+    b = FlakeBisector(client=client, bus=bus, registry=reg)
+    b._create_root()
+    b._root.process.result = "some output\nEXIT:1\n"   # scripted non-zero exit
+
+    res = b._exec_test(b._root, "import sys; sys.exit(1)")
+    assert res["exit_code"] == 1
+
+    exec_events = [e for e in bus.history() if e["type"] == "sandbox_exec"]
+    assert len(exec_events) == 1                        # exactly one per exec
+    assert exec_events[0]["payload"]["exit_code"] == 1
+    assert exec_events[0]["payload"]["id"] == b._root.id
+
+
+def test_cooperative_cancel_stops_before_next_probe_and_reaps_once(monkeypatch):
+    client = FakeClient()
+    bus = EventBus()
+    b = FlakeBisector(client=client, bus=bus)
+
+    # Cancel right after the pristine checkpoint (checkpoint 0) is built.
+    orig_ckpt = b._checkpoint
+
+    def hooked(label, test_passed=None):
+        orig_ckpt(label, test_passed)
+        if label == "pristine":
+            b.cancel()
+
+    monkeypatch.setattr(b, "_checkpoint", hooked)
+    result = b.run(SUITE, suite_name="order_pollution")
+
+    # Honest terminal error mentioning cancellation; no polluter guessed.
+    assert result.get("polluter_test") is None
+    assert "cancel" in str(result.get("error", "")).lower()
+    # No probe ever started after the cancel point.
+    types = [e["type"] for e in bus.history()]
+    assert "checkpoint_probed" not in types
+    assert "bisect_narrowed" not in types
+    # destroy_all ran exactly once from the run thread's finally, leaf-first:
+    # the single checkpoint before the root, and the root deleted exactly once.
+    root_id = client.roots[0].id
+    assert client.deleted.count(root_id) == 1
+    ckpt_id = client.checkpoints[0].id
+    assert client.deleted.index(ckpt_id) < client.deleted.index(root_id)
