@@ -21,8 +21,18 @@ export interface ScriptedEvent {
 // 'bisect' = a fully scripted time-travel bisection on the checkpoint rail.
 // The two new outcomes are OPT-IN demos behind ?mock=…; the default replay
 // (no params) is the untouched realRun.json path.
-export type MockOutcome = 'winner' | 'quarantine' | 'promote' | 'bisect';
-export const MOCK_OUTCOMES: MockOutcome[] = ['winner', 'quarantine', 'promote', 'bisect'];
+// 'observatory' = the recorded winner run with a PARALLEL scripted registry
+// track interleaved (the fork story: root → checkpoint → clones, exec pulses, a
+// mid-run destroy wave) so the Sandbox Observatory panel churns live alongside
+// the tournament. The recorded frames keep their exact relative timing.
+export type MockOutcome = 'winner' | 'quarantine' | 'promote' | 'bisect' | 'observatory';
+export const MOCK_OUTCOMES: MockOutcome[] = [
+  'winner',
+  'quarantine',
+  'promote',
+  'bisect',
+  'observatory',
+];
 
 // A recorded frame: a real event plus capture metadata the reducer ignores.
 type RawFrame = RetrialEvent & { _t?: number; seq?: number; ts?: number };
@@ -34,7 +44,8 @@ const STITCH_MS = 250; // gap inserted where two segments are joined (_t resets)
 const FIRST_MS = 300;
 
 // Turn a contiguous, time-ordered list of recorded frames into a schedule.
-function buildSchedule(frames: RawFrame[]): ScriptedEvent[] {
+// Exported for the F7b sacred-default-replay guard (mockRun.test.ts).
+export function buildSchedule(frames: RawFrame[]): ScriptedEvent[] {
   const out: ScriptedEvent[] = [];
   let prevT: number | null = null;
 
@@ -89,8 +100,160 @@ export function buildMockScript(outcome: MockOutcome = 'winner'): ScriptedEvent[
   if (outcome === 'bisect') {
     return bisectScript();
   }
+  if (outcome === 'observatory') {
+    // The recorded winner run with the scripted registry track merged in by
+    // absolute time — the recorded frames keep their EXACT relative timing;
+    // only the parallel observatory track is interleaved. All other branches,
+    // and the default (no-arg) branch below, are untouched.
+    return mergeSchedules(buildSchedule(realRun as unknown as RawFrame[]), observatoryTrack());
+  }
   // The winning capture is a single clean run — play it as recorded.
   return buildSchedule(realRun as unknown as RawFrame[]);
+}
+
+// Merge two delta-encoded schedules into one, stably, by ABSOLUTE time. Each
+// schedule's `after` is a gap relative to its own previous event; we roll each
+// up to an absolute clock, concatenate, stable-sort by that clock (ties keep
+// a-before-b so the recorded frame leads its co-timed registry frame), then
+// convert back to deltas. buildSchedule's own math is never touched — this only
+// interleaves an already-built schedule with a parallel track. Pure and
+// unit-testable (F7b).
+export function mergeSchedules(a: ScriptedEvent[], b: ScriptedEvent[]): ScriptedEvent[] {
+  const abs = (list: ScriptedEvent[], bias: number) => {
+    let t = 0;
+    return list.map((e, i) => {
+      t += e.after;
+      // `order` breaks ties deterministically: track A (bias 0) before track B
+      // (bias 1), then by original index within a track.
+      return { at: t, order: bias, idx: i, event: e.event };
+    });
+  };
+  const merged = [...abs(a, 0), ...abs(b, 1)].sort(
+    (x, y) => x.at - y.at || x.order - y.order || x.idx - y.idx,
+  );
+  const out: ScriptedEvent[] = [];
+  let prev = 0;
+  for (const m of merged) {
+    out.push({ after: Math.max(0, m.at - prev), event: m.event });
+    prev = m.at;
+  }
+  return out;
+}
+
+// A scripted registry feed that tells the fork story alongside the recorded
+// winner run: an opening registry_snapshot (16 snapshot-pool sandboxes, matching
+// the recorded ticker), then a fork spine (root → checkpoint → 8 trial-clones)
+// with interleaved sandbox_exec pulses (exit_code 0/1 mix mirroring the recorded
+// pass/fail rhythm), then a mid-run destroy wave on the non-reusable clones.
+// Closing arithmetic is honest: total_ever = 26 (16 pool + root + checkpoint +
+// 8 trial-clones), destroyed = 8, live = 18; the reducer recomputes counts from
+// the stream, so these are the numbers a live registry would report.
+function observatoryTrack(): ScriptedEvent[] {
+  const s: ScriptedEvent[] = [];
+  const pool = Array.from({ length: 16 }, (_, i) => ({
+    id: `sb-pool-${String(i + 1).padStart(2, '0')}`,
+    role: 'snapshot-pool' as const,
+    backend: 'snapshot' as const,
+    state: 'warm' as const,
+    parent_id: null,
+    created_ts: 0,
+    labels: {},
+    isolation: null,
+    exec_count: 0,
+    preview_url: null,
+  }));
+
+  // Opening snapshot: the 16 warm pool sandboxes are already provisioned.
+  s.push({
+    after: 350,
+    event: {
+      type: 'registry_snapshot',
+      sandboxes: pool,
+      counts: { live: 16, total_ever: 16, destroyed: 0 },
+      lineage: {},
+    },
+  });
+
+  // The fork spine comes up: a root, then a paused checkpoint forked from it.
+  const rootId = 'sb-fork-root';
+  const ckptId = 'sb-fork-ckpt';
+  s.push({
+    after: 900,
+    event: {
+      type: 'sandbox_registered',
+      id: rootId,
+      role: 'root',
+      backend: 'fork',
+      state: 'creating',
+      parent_id: null,
+      created_ts: 0,
+      labels: { flake_class: 'order' },
+      isolation: 'sandbox',
+      exec_count: 0,
+      preview_url: null,
+    },
+  });
+  s.push({ after: 500, event: { type: 'sandbox_state', id: rootId, state: 'warm', current_cmd: null } });
+  s.push({
+    after: 600,
+    event: {
+      type: 'sandbox_registered',
+      id: ckptId,
+      role: 'checkpoint',
+      backend: 'fork',
+      state: 'paused',
+      parent_id: rootId,
+      created_ts: 0,
+      labels: { flake_class: 'order' },
+      isolation: 'sandbox',
+      exec_count: 0,
+      preview_url: null,
+    },
+  });
+
+  // Eight trial-clones fork off the checkpoint and each runs a rerun. The
+  // exit-code mix (mostly 0, a couple of 1s) mirrors the recorded flake rhythm.
+  const cloneIds: string[] = [];
+  const exitPattern = [0, 1, 0, 0, 1, 0, 0, 0];
+  for (let i = 0; i < 8; i++) {
+    const id = `sb-clone-${String(i + 1).padStart(2, '0')}`;
+    cloneIds.push(id);
+    s.push({
+      after: 260,
+      event: {
+        type: 'sandbox_registered',
+        id,
+        role: 'trial-clone',
+        backend: 'fork',
+        state: 'warm',
+        parent_id: ckptId,
+        created_ts: 0,
+        labels: { flake_class: 'order' },
+        isolation: 'sandbox',
+        exec_count: 0,
+        preview_url: null,
+      },
+    });
+    s.push({
+      after: 420,
+      event: {
+        type: 'sandbox_exec',
+        id,
+        cmd: 'pytest -x tests/test_first_key.py',
+        exit_code: exitPattern[i],
+        duration_s: 0.6 + i * 0.05,
+        output_tail: exitPattern[i] === 0 ? '1 passed in 0.5s' : '1 failed in 0.6s',
+        exec_count: 1,
+      },
+    });
+  }
+
+  // A mid-run destroy wave: the non-reusable clones are reaped leaf-first.
+  for (const id of cloneIds) {
+    s.push({ after: 180, event: { type: 'sandbox_destroyed', id, role: 'trial-clone' } });
+  }
+
+  return s;
 }
 
 // The scripted promote-gate coda for ?mock=promote. In replay the gate's

@@ -22,6 +22,7 @@ and there is no auth, so the server must not be exposed on 0.0.0.0 without a pro
 in front. Set HOST=0.0.0.0 explicitly only behind a trusted network boundary.
 """
 import asyncio
+import atexit
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -43,6 +44,7 @@ from .coordinator import TournamentCoordinator
 from .diagnosis import DiagnosisEngine
 from .prsmith import PRSmith
 from .genome import Genome
+from .registry import REGISTRY
 
 # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
 # Degrades to a no-op when no key is configured — logging must never break the server.
@@ -74,7 +76,16 @@ HERMETIC = os.environ.get("HERMETIC", "0") != "0"
 HERMETIC_PREWARM = int(os.environ.get("HERMETIC_PREWARM", "8"))
 
 # One process-wide bus: the tournament emits here, every /ws subscriber streams it.
-BUS = EventBus()
+# Buffer bumped to 2000: sandbox_exec adds ~1 event per trial (~200/run) plus
+# registrations on top of the tournament's own events; 500 could evict a run's
+# opening events. The reducer is upsert/out-of-order safe and registry_snapshot
+# makes eviction recoverable, but 2000 keeps replay whole.
+BUS = EventBus(buffer_size=2000)
+# The Sandbox Observatory ledger streams its typed events onto this same bus and
+# is read by the /sandboxes* endpoints. It is NEVER reset at run acceptance
+# (live sandboxes + total_ever/destroyed span runs — the pool is shared); see
+# _accept_run for the re-seed contract.
+REGISTRY.attach_bus(BUS)
 
 # One shared, pre-warmed pool reused across runs (see module docstring).
 _POOL = None
@@ -104,6 +115,76 @@ def _get_hpool():
         return _HPOOL
 
 
+def _reap_everything(bisector=None, skip_orphans=False):
+    """Idempotent global teardown, leaf-first by construction (each component is
+    already leaf-first internally, and probes/clones die inside their owners
+    before ckpts/roots).
+
+    Runs OUTSIDE _run_lock (to avoid starving /status), but every operation it
+    performs is individually safe against a live run — SAFETY-CLASS NOTE: this
+    is a DIFFERENT class of operation from a single-sandbox DELETE. DELETE of
+    one leaf is self-healing (the trial layer excludes the infra error and never
+    re-leases). Pool-scope reap deletes the shared checkpoint/root that in-flight
+    fork batches actively use, and is safe ONLY because of three mechanisms:
+    (1) ForkSandboxPool.destroy_all holds _fork_lock for its whole body, so it
+    serializes against any in-flight fork batch instead of yanking the
+    checkpoint mid-fork; (2) the _torn_down sentinel makes a surviving run
+    thread's next lease()/warm() fail honestly (infra-excluded) rather than
+    silently rebuilding a checkpoint; (3) an ACTIVE bisector is only ever
+    cancelled (by the caller), never reaped from this thread — callers pass a
+    bisector here ONLY when it is not actively running, and skip_orphans keeps
+    reap_orphans (a safety net for DEAD owners) from racing that owner teardown.
+    """
+    global _POOL, _HPOOL
+    total = 0
+    if bisector is not None:
+        try:
+            total += bisector.destroy_all() or 0
+        except Exception:
+            pass
+    # Null the module pool refs under the same guard _get_pool uses, so the NEXT
+    # accepted run builds a FRESH pool — the per-instance _torn_down sentinel
+    # must never leak into a new run.
+    with _POOL_LOCK:
+        pools = [p for p in (_POOL, _HPOOL) if p is not None]
+        _POOL = None
+        _HPOOL = None
+    for p in pools:
+        try:
+            total += p.destroy_all() or 0
+        except Exception:
+            pass
+    if not skip_orphans:
+        try:
+            total += REGISTRY.reap_orphans() or 0
+        except Exception:
+            pass
+    return total
+
+
+def _shutdown_reap():
+    """Process-exit teardown (lifespan shutdown + atexit): cancel any active
+    bisector first so its loop stops cooperating, then reap everything.
+    Idempotent — destroy_all on both pools is idempotent and mark_destroyed is a
+    no-op the second time, so calling this twice destroys nothing extra."""
+    bis = _active["bisector"]
+    if bis is not None:
+        try:
+            bis.cancel()
+        except Exception:
+            pass
+    try:
+        _reap_everything(bis)
+    except Exception:
+        pass
+
+
+# Belt-and-braces: even if the ASGI lifespan shutdown never fires (hard exit),
+# atexit destroys every sandbox both pools own so a crashed process can't leave
+# orphans burning credit. Idempotent with the lifespan hook.
+atexit.register(_shutdown_reap)
+
+
 @asynccontextmanager
 async def lifespan(app):
     # Pre-warm the shared pool(s) at boot so the first run is instant.
@@ -118,10 +199,9 @@ async def lifespan(app):
                 _pool_status["prewarming"] = False
         threading.Thread(target=prewarm, daemon=True).start()
     yield
-    # Tear down every sandbox both pools own on shutdown.
-    for p in (_POOL, _HPOOL):
-        if p is not None:
-            p.destroy_all()
+    # Cancel an active bisector, then tear down every sandbox both pools own,
+    # routed through the single idempotent teardown helper.
+    _shutdown_reap()
 
 
 app = FastAPI(title="Retrial", lifespan=lifespan)
@@ -139,6 +219,15 @@ _running = {"active": False, "test_name": None}
 # It intentionally SURVIVES _running clearing — approval happens after the run
 # ends — but is wiped at the NEXT run acceptance inside _accept_run().
 _pending = {"promotion": None}
+# The active bisector, so a forced reap can COOPERATIVELY cancel it (never yank
+# its resources — teardown belongs to the run thread's own finally). Guarded by
+# _run_lock. Set in /bisect's run(), cleared in its finally.
+_active = {"bisector": None}
+# Accept/reap TOCTOU sentinel (guarded by _run_lock): set while destroy_all is
+# tearing pools down OUTSIDE _run_lock, so a NEW run cannot be accepted in the
+# gap between the 409 check and the actual teardown (which would be reaped
+# without anyone consenting to force). _accept_run refuses while it is set.
+_reaping = {"now": False}
 
 
 def _accept_run(test_name):
@@ -156,6 +245,11 @@ def _accept_run(test_name):
     a stale verdict with no matching detect. Never reset from a background
     thread.
     """
+    # Close the accept/reap TOCTOU window: if a sandbox reap is in progress, a
+    # run accepted now would be torn down without force ever being consented to,
+    # violating the destroy_all 409 contract. The endpoints surface this as 409.
+    if _reaping["now"]:
+        raise RuntimeError("sandbox reap in progress — retry shortly")
     BUS.reset()
     # A promotion left unclicked by a finished run must never survive into a
     # new run (of ANY type — /tournament and /bisect both accept through here)
@@ -163,6 +257,12 @@ def _accept_run(test_name):
     _pending["promotion"] = None
     _running["active"] = True
     _running["test_name"] = test_name
+    # The registry is NOT reset (total_ever/live span runs — the pool is
+    # shared); instead re-seed the fresh buffer so a WS that connects now sees
+    # the current sandbox world instead of nothing (or a stale, half-evicted
+    # tail from the prior run). See OBSERVATORY-PLAN.md, "stale-bleed lesson" —
+    # and never emit this from a background thread.
+    REGISTRY.emit_snapshot()
 
 
 def _frame(ev):
@@ -264,7 +364,11 @@ def start_tournament(req: TournamentRequest):
     with _run_lock:
         if _running["active"]:
             raise HTTPException(status_code=409, detail="a tournament is already running")
-        _accept_run(path.name)
+        try:
+            _accept_run(path.name)
+        except RuntimeError as e:
+            # Accept/reap TOCTOU sentinel tripped (a reap is tearing pools down).
+            raise HTTPException(status_code=409, detail=str(e))
 
     def run():
         pool = _get_pool()
@@ -421,13 +525,20 @@ def start_bisect(req: BisectRequest):
     with _run_lock:
         if _running["active"]:
             raise HTTPException(status_code=409, detail="a run is already active")
-        _accept_run(resolved.name)
+        try:
+            _accept_run(resolved.name)
+        except RuntimeError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
     def run():
         try:
             bisector = FlakeBisector(bus=BUS,
                                      max_trials=req.max_trials or MAX_TRIALS,
                                      conc=CONC, threshold=THRESHOLD)
+            # Track the active bisector so a forced reap can cooperatively
+            # cancel it (never destroy_all it from another thread).
+            with _run_lock:
+                _active["bisector"] = bisector
             # run() is degrade-gracefully: errors come back as a terminal
             # bisect_done {"error": ...}, never a traceback to the client.
             bisector.run(suite, suspect_index=suspect_index,
@@ -438,11 +549,103 @@ def start_bisect(req: BisectRequest):
             with _run_lock:
                 _running["active"] = False
                 _running["test_name"] = None
+                _active["bisector"] = None
 
     threading.Thread(target=run, daemon=True).start()
     return {"status": "started", "suite": resolved.name,
             "n_tests": resolved_suspect,  # prefix length = checkpointed tests
             "suspect": names[resolved_suspect]}
+
+
+# --------------------------- Sandbox Observatory ---------------------------
+@app.get("/sandboxes")
+def sandboxes():
+    """Full registry snapshot: every live sandbox plus the most-recently
+    destroyed (bounded by RETRIAL_DESTROYED_RETAIN), the fork-lineage tree, and
+    exact live/total-ever/destroyed counts. `est_resources` is a COUNT-BASED
+    estimate — Daytona does not expose per-sandbox RAM here, so we do not claim
+    it."""
+    snap = REGISTRY.snapshot()
+    snap["est_resources"] = {
+        "live_sandboxes": snap["counts"]["live"],
+        "note": "count-based estimate; Daytona does not expose per-sandbox RAM here",
+    }
+    return snap
+
+
+@app.get("/sandboxes/{sid}")
+def sandbox_detail(sid: str):
+    """Full detail for one sandbox incl. its recent-exec history and a lazily
+    resolved Daytona preview URL (None when Daytona does not expose one — paused
+    sandboxes are retried on the next open, not cached as failed)."""
+    rec = REGISTRY.record(sid)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"unknown sandbox: {sid}")
+    if rec["state"] != "destroyed":
+        rec["preview_url"] = REGISTRY.preview(sid)  # lazy, cached, None on failure
+    return rec
+
+
+@app.delete("/sandboxes/{sid}")
+def destroy_sandbox(sid: str):
+    """Destroy ONE sandbox (allowed even mid-run). Killing a trial sandbox
+    surfaces as an infra error, which the trial layer already excludes and never
+    re-leases — kill-a-sandbox-live is a legitimate resilience demo.
+
+    SAFETY-CLASS BOUNDARY: this covers a single LEAF sandbox only. It does NOT
+    extend to pool-scope reap. destroy_all deletes the shared provisioning
+    source (checkpoint/root) that in-flight fork batches actively use, which is a
+    different safety class entirely (see POST /sandboxes/destroy_all and
+    _reap_everything). Future maintainers must NOT reuse this single-sandbox
+    justification for pool-scope operations."""
+    rec = REGISTRY.record(sid)
+    if rec is None or rec["state"] == "destroyed":
+        raise HTTPException(status_code=404,
+                            detail=f"unknown or already-destroyed sandbox: {sid}")
+    snap = REGISTRY.snapshot()
+    kids = [c for c in snap["lineage"].get(sid, [])
+            if (REGISTRY.record(c) or {}).get("state") != "destroyed"]
+    if kids:
+        raise HTTPException(
+            status_code=409,
+            detail="sandbox has live fork-children — destroy leaves first or "
+                   "use /sandboxes/destroy_all")
+    if not REGISTRY.destroy(sid):
+        raise HTTPException(status_code=502, detail="destroy could not be initiated")
+    return {"status": "destroying", "id": sid}
+
+
+@app.post("/sandboxes/destroy_all")
+def destroy_all_sandboxes(force: bool = False):
+    """Leaf-first teardown of every live sandbox across all pools/bisectors.
+
+    409 while a run is active unless ?force=1. FORCE-REAP CONTRACT (this is the
+    fix for the reachable destroy-mid-fork race): an active bisector is
+    cooperatively CANCELLED — never destroy_all'd from this thread — so its own
+    finally reaps leaf-first; a live tournament's pools are torn down under
+    _fork_lock with the _torn_down sentinel, after which the run's remaining
+    trials fail as infra-excluded rather than continuing on rebuilt sandboxes.
+    See _reap_everything for the full safety-class rationale."""
+    with _run_lock:
+        active = _running["active"]
+        bisector = _active["bisector"]
+        if active and not force:
+            raise HTTPException(
+                status_code=409,
+                detail="a run is active — pass ?force=1 to cancel it and reap")
+        _reaping["now"] = True   # closes the accept/reap TOCTOU window
+    try:
+        cancelled = False
+        if active and bisector is not None:
+            bisector.cancel()   # cooperative: the run thread's own finally reaps
+            cancelled = True    # leaf-first; we NEVER destroy_all an active bisector
+        n = _reap_everything(bisector=None if cancelled else bisector,
+                             skip_orphans=cancelled)
+    finally:
+        with _run_lock:
+            _reaping["now"] = False
+    return {"status": "destroyed", "count": n, "forced": bool(force),
+            "bisector_cancelled": cancelled, **REGISTRY.counts()}
 
 
 if __name__ == "__main__":
