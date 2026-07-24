@@ -55,6 +55,7 @@ def _frame(ev):
 class TournamentRequest(BaseModel):
     seed_path: str
     hypotheses: list[dict] | None = None
+    isolation: str | None = None  # "process" (default) | "sandbox"; falls back to env ISOLATION
 
 
 @app.get("/health")
@@ -108,6 +109,7 @@ def start_tournament(req: TournamentRequest):
         raise HTTPException(status_code=404, detail=f"seed not found: {req.seed_path}")
     test_code = path.read_text()
     hypotheses = req.hypotheses or []
+    isolation = req.isolation or ISOLATION
 
     with _run_lock:
         if _running["active"]:
@@ -121,8 +123,9 @@ def start_tournament(req: TournamentRequest):
             pool.warm(min(CONC, MAX_TRIALS))
             coord = TournamentCoordinator(
                 pool, bus=BUS, max_trials=MAX_TRIALS, conc=CONC,
-                threshold=THRESHOLD, isolation=ISOLATION)
-            coord.run_tournament(test_code, hypotheses, test_name=path.name)
+                threshold=THRESHOLD, isolation=isolation)
+            coord.run_tournament(test_code, hypotheses, test_name=path.name,
+                                 isolation=isolation)
         except Exception as e:
             BUS.emit("tournament_done", {"verdict": "ERROR", "error": str(e)[:200]})
         finally:
@@ -133,7 +136,7 @@ def start_tournament(req: TournamentRequest):
 
     threading.Thread(target=run, daemon=True).start()
     return {"status": "started", "test_name": path.name,
-            "num_hypotheses": len(hypotheses)}
+            "num_hypotheses": len(hypotheses), "isolation": isolation}
 
 
 if __name__ == "__main__":
