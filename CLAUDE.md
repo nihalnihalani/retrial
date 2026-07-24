@@ -53,6 +53,10 @@ Rules: `trial_index` is per-context 0-based (detect series = `hypothesis_id: nul
 - AUTO_DELETE_MIN (default 60): every pool sandbox auto-deletes — crashed runs can't leak credit.
 - Server threads hermetic context into diagnosis on the CLI/direct path only (server pre-diagnoses before detect by design; do NOT refactor before the demo — decided 2026-07-23).
 
+## DEMO-CONFIG LAW (violating these silently QUARANTINEs a genuine fix on stage)
+- **MAX_TRIALS >= 40 for any run that must reach FIXED** (50 recommended). Strict CI-upper rule: 0/40 → upper 8.76% < 10% ✓ FIXED; 0/16 → upper ~19% ✗ INCONCLUSIVE → QUARANTINE even for a perfect fix. Never demo/record/smoke at 16-24 trials expecting FIXED.
+- **Cached/fallback hypotheses must be REAL fixes** (deterministic-ordering etc.) — the neutering guard disqualifies trivial-pass patches (sys.exit(0), assert True, deleted assertions), so a stub in the bad-wifi fallback payload = on-stage QUARANTINE. Certify fallback payloads through guards.neutering_check before trusting them.
+
 ## Statistics — non-negotiable
 - Wilson 95% CI everywhere a rate is shown ("0/50" is reported as "≤7% at 95% confidence", never "0%").
 - Winner = lowest flake rate whose CI upper bound < original's rate, then a **fresh confirmation round** (guards selection bias). No winner → QUARANTINE verdict with evidence dossier — the run never dead-ends.
