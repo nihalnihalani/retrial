@@ -142,7 +142,8 @@ def health():
                  "prewarming": _pool_status["prewarming"]},
         "config": {"max_trials": MAX_TRIALS, "conc": CONC,
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
-                   "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH},
+                   "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH,
+                   "hermetic": HERMETIC},
     }
 
 
@@ -240,10 +241,13 @@ def start_tournament(req: TournamentRequest):
             with _run_lock:
                 _running["active"] = False
                 _running["test_name"] = None
-            # Reset the shared pool to a bounded, demo-ready size for the next run
-            # (in the background — this is after tournament_done, invisible to the UI).
-            threading.Thread(target=lambda: _get_pool().resize_to(PREWARM),
-                             daemon=True).start()
+            # Reset the shared pool(s) to a bounded, demo-ready size for the next
+            # run (in the background — after tournament_done, invisible to the UI).
+            def _reset_pools():
+                _get_pool().resize_to(PREWARM)
+                if HERMETIC:
+                    _get_hpool().resize_to(HERMETIC_PREWARM)
+            threading.Thread(target=_reset_pools, daemon=True).start()
 
     threading.Thread(target=run, daemon=True).start()
     return {"status": "started", "test_name": path.name, "isolation": isolation,
