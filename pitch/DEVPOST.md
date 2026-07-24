@@ -51,25 +51,46 @@ them.
 
 ---
 
-## It works on real code, not just a demo seed
+## It rediscovered the human's fix
 
-To prove Retrial isn't a toy, we pointed it at a **documented real-world flake
-from the academic flakiness dataset**. We pulled `test_rearrange` from
+The headline result: on a **real, documented flake from the academic flakiness
+dataset**, Retrial's model tournament independently converged on the *exact fix
+the human maintainer shipped* — and empirically rejected the model that got it
+wrong.
+
+We pointed it at `test_rearrange` from
 [penman](https://github.com/goodmami/penman) `v1.2.1` — a real MIT-licensed
-Python OSS project — catalogued in **IDoFT** (the Illinois Dataset of Flaky
+Python OSS project, catalogued in **IDoFT** (the Illinois Dataset of Flaky
 Tests, py-data.csv, category NOD, status Accepted) and already fixed by the
 maintainer in [penman#102](https://github.com/goodmami/penman/pull/102). The
-documented root cause is a `random.random()` sort key whose module-level seed
-was ineffective.
+documented root cause: a `random.random()` sort key whose module-level RNG seed
+was ineffective. Retrial reproduced the flake on Daytona at **88%** and ran the
+full four-model tournament:
 
-Retrial **reproduced it on Daytona at 88% flake (95% CI 74–95%)** across 40
-trials with **0 infra errors** — using the same process-isolation model the
-engine ships (a fresh `python3` process per trial = fresh random entropy). This
-is the honest boundary of the substrate, and we state it: **randomness and
-hash-ordering flakes reproduce; thread/timing races do not** (measured 0/120
-elsewhere in this repo). Retrial's detector targets exactly the class that
-reproduces. [PENDING EXPERIMENT: the hypothesis tournament rediscovering the
-maintainer's exact fix.]
+- Detect measured the baseline at **88% flake (14/16, 95% CI 64–96%)** — the
+  test really is broken.
+- **3 of 4 models — `glm-5p2`, `glm-5p1`, and `deepseek-v4-pro` — independently
+  converged on the same fix: seed the RNG before the `random_order` rearrange.**
+  That is byte-for-byte the maintainer's approach in PR #102. All three drove the
+  flake to **0/16**.
+- **`kimi-k2p6`'s hypothesis was wrong** — its patch was still **94% flaky
+  (15/16)** — and it was **empirically eliminated.** Evidence killed it, not
+  vibes.
+- The winner (`glm-5p2`) survived a **fresh confirmation round: 0/25 sandboxes
+  (95% CI 0–13%).** Whole tournament: **57 seconds, 0 infra errors.**
+
+This is the thesis made real: three models proposed a fix that *looked* right,
+one proposed a fix that looked right too — and only the empirical rerun told them
+apart. It reproduces and repairs the honest class the substrate reaches:
+**randomness and hash-ordering flakes** (thread/timing races do not flake here —
+measured 0/120 elsewhere in this repo).
+
+> *Fine print (we disclose it):* the standalone reproduction runs the test under
+> its documented bug condition (RNG seed ineffective); `kimi-k2p6`'s cause label
+> came from a fallback hint, but its patch was verified live and lost on the
+> evidence like every other. Baseline calibration over a larger 40-trial run put
+> the same flake at 88% (95% CI 74–95%). Source:
+> `seeds/real/tournament_penman_result.json`.
 
 ---
 
