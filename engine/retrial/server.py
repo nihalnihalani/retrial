@@ -213,7 +213,10 @@ def start_tournament(req: TournamentRequest):
             # instantly. On absent key / failure, fall through with [] (the
             # coordinator's detect-only quarantine path — never a hard error).
             if will_diagnose:
-                BUS.emit("diagnosing", {"test_name": path.name, "n": 4})
+                # The real per-hypothesis model slugs (round-robin over FIREWORKS_MODELS)
+                # so the UI chips show actual model names, not placeholders.
+                models = [engine.models[i % len(engine.models)] for i in range(4)]
+                BUS.emit("diagnosing", {"test_name": path.name, "n": 4, "models": models})
                 try:
                     hypotheses = engine.diagnose(test_code, path.name, log_tail="", n=4)
                 except Exception:
