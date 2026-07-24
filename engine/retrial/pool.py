@@ -16,16 +16,12 @@ Isolation is matched to the flake class (set by the Verifier per seed):
 Verified pattern (scripts/calibrate_seeds.py, DAYTONA-COOKBOOK.md): container
 create ~0.7s, 16 concurrent creates ~2.0s, region "us".
 """
-import os
 import threading
-from pathlib import Path
 
-from dotenv import load_dotenv
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 
 from .registry import as_safe
-
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+from .settings import get_settings
 
 
 class SandboxPool:
@@ -34,7 +30,7 @@ class SandboxPool:
     def __init__(self, client=None, target=None, labels=None, hermetic=False,
                  auto_delete_min=None, registry=None):
         self._client = client or Daytona(
-            DaytonaConfig(target=target or os.environ.get("DAYTONA_TARGET", "us"))
+            DaytonaConfig(target=target or get_settings().resolved_pool_target())
         )
         self._labels = labels or {"retrial": "pool"}
         # Sandbox Observatory feed: every create/warm/destroy is mirrored into
@@ -50,7 +46,7 @@ class SandboxPool:
         # Belt-and-braces credit protection: sandboxes auto-delete after this many
         # minutes, so a crashed run can't leave orphans burning credit.
         self._auto_delete_min = (auto_delete_min if auto_delete_min is not None
-                                 else int(os.environ.get("AUTO_DELETE_MIN", "60")))
+                                 else get_settings().auto_delete_min)
         self._available = []          # clean, ready-to-lease sandbox objects
         self._live = {}               # id -> sandbox, every sandbox we created and own
         self._lock = threading.Lock()
@@ -224,7 +220,7 @@ def make_pool(bus=None, registry=None, **kwargs):
     Sandbox Observatory ledger) is threaded through to whichever backend is
     built; None means the process-default REGISTRY.
     """
-    backend = os.environ.get("RETRIAL_POOL_BACKEND", "snapshot").lower()
+    backend = get_settings().retrial_pool_backend.lower()
     if backend == "fork":
         from .forkpool import ForkSandboxPool  # lazy: avoids import cycle
         return ForkSandboxPool(bus=bus, registry=registry, **kwargs)
