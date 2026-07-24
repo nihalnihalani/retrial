@@ -22,15 +22,15 @@
 - Public GitHub repo URL.
 
 ## Sponsors + credits (confirmed)
-Daytona ($100: DAYTONA_HACKSPRINT_07_24_639EXIRT), Braintrust ($250: BT-DISCOUNT-HACKATHON, Pro upgrade path), ElevenLabs (free via Discord redemption), Fireworks ($ via dashboard code DEVREL-WEBINAR1), WorkOS (host; free domain), CodeRabbit (14-day trial), CopilotKit (`npx copilotkit@latest license`).
+Daytona ($100: DAYTONA_HACKSPRINT_07_24_639EXIRT), Braintrust ($250: BT-DISCOUNT-HACKATHON, Pro upgrade path), Fireworks ($ via dashboard code DEVREL-WEBINAR1), WorkOS (host; free domain), plus credit bundles from the other sponsors (voice, code-review, agentic-UI).
 
 ## Prizes (confirmed, unchanged)
-1st $3k / 2nd $1k / 3rd $500 (+credit bundles). Best Use: Daytona $1k+$10k credits, Braintrust $500+Lego, ElevenLabs 6mo Scale (~$1,980/member), Fireworks $500+Bose, CodeRabbit $1k+swag, CopilotKit $500+Ray-Ban. NO WorkOS prize.
+1st $3k / 2nd $1k / 3rd $500 (+credit bundles). Best Use: Daytona $1k+$10k credits, Braintrust $500+Lego, Fireworks $500+Bose, plus per-sponsor prizes from the other sponsors. NO WorkOS prize.
 
 ## 🚨 STRATEGY IMPLICATIONS (major)
 1. **Criteria are 25/25/25/25 — NOT sponsor-evangelist-weighted.** Our whole "8-of-10 judges are sponsor engineers, optimize for creative API use" strategy was over-indexed. Sponsor usage is a BONUS. Impact + Creativity = 50% of the score.
    → **This VALIDATES the flaky-test pivot hard**: it scores higher on Impact (real recurring pain) AND Creativity (novel parallel-empirical approach) than the derivative bug-race would have.
-   → **Stop kitchen-sinking sponsors.** Deep, meaningful use of 2-3 that are load-bearing beats shallow use of 6. (Daytona swarm + Braintrust eval + Fireworks are the load-bearing three; CodeRabbit/CopilotKit/ElevenLabs are bonus polish.)
+   → **Stop kitchen-sinking sponsors.** Deep, meaningful use of 2-3 that are load-bearing beats shallow use of 6. (Daytona swarm + Braintrust eval + Fireworks are the load-bearing three; the remaining sponsor tools are bonus polish — and claimed ONLY if a real code path ships.)
 2. **Two rounds — the Devpost <2min video is now a CRITICAL round-1 deliverable.** You can PERFECT it during pre-build. Presentation is 25% and round-1 IS the submission. A crisp problem→demo→impact video gets you into the top 8.
 3. **Best Use awards are separate & open to all** → lock ONE deep sponsor integration as insurance. **Daytona is the natural pick** (the swarm is genuinely its flagship use) → "Best Use of Daytona" = $1k + $10k credits, winnable even if you miss top 8.
 4. **"2 days" = PRE-BUILD (today Thu + tomorrow AM before the 10am start).** Rules don't explicitly forbid pre-building; the repo is submitted, not written live. Build the engine now, polish on-site. (Confirm no pre-build restriction in Tuesday's guidelines / with Marijan if unsure.)

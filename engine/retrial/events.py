@@ -10,15 +10,37 @@ import threading
 import time
 from collections import deque
 
-# The canonical event types this system emits. Documentation, not enforcement.
+# The canonical event types this system emits. The tuple itself is
+# documentation, but it is KEPT honest by enforcement: tests/test_events.py
+# walks every emit site in engine/retrial/*.py with ast and fails the suite
+# on any emitted type missing from this registry (the tuple had silently
+# drifted before — hermetic_diagnosis was emitted but never listed).
 EVENT_TYPES = (
+    # tournament run lifecycle
+    "diagnosing",
+    "run_started",
     "trial_done",
     "detect_done",
+    "hermetic_diagnosis",
     "hypothesis_created",
     "hypothesis_verified",
     "hypothesis_eliminated",
     "winner_confirmed",
+    "quarantine_confirmed",
     "tournament_done",
+    "genome_updated",
+    # shipping (promote gate -> PRSmith)
+    "promotion_pending",
+    "promotion_closed",
+    "pr_opened",
+    # provisioning
+    "pool_degraded",
+    # time-travel bisection
+    "bisect_started",
+    "checkpoint_created",
+    "checkpoint_probed",
+    "bisect_narrowed",
+    "bisect_done",
 )
 
 
