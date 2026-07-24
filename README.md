@@ -11,8 +11,10 @@ Flaky tests pass and fail on the same code. A green run proves nothing when a te
 
 > Every flaky test deserves a retrial. Fifty of them, actually.
 
-![Retrial live verdict — 63% flake proven fixed at 0% across 40 trials, real Braintrust receipt, live genome](docs/assets/verdict-live.jpg)
-*A live, fully-generated run: detect → 4-model differential diagnosis → tournament → verdict, with real receipts. Nothing staged.*
+![Retrial live demo — a fully-generated run from armed board through 4-model differential diagnosis, tournament with a broken hypothesis eliminated at 100% flake, to the proven verdict](docs/assets/retrial-demo.gif)
+*A live, fully-generated run, recorded as it happened: the diagnosis window (4 real Fireworks models proposing competing theories) → the tournament (one broken fix eliminated at 100% flake while the winner holds 0% across 40 reruns, 32 sandboxes live) → **44% → 0%, proven** with a real Braintrust receipt and the flake genome incrementing. Nothing staged.*
+
+![Retrial verdict card](docs/assets/verdict-live.jpg)
 
 Built for **Daytona HackSprint w/ Braintrust — SF, July 2026**.
 
