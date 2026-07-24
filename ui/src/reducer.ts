@@ -48,6 +48,20 @@ function liveFlakeRate(trials: TrialCell[]): number | null {
 }
 
 export function reduce(state: BoardState, event: RetrialEvent): BoardState {
+  // ALWAYS_FAILING is a terminal regression verdict: the original test fails
+  // every run, so there is nothing to fix. Once detect declares it, ignore any
+  // late tournament/winner traffic — a hardcoded failure shown as "FIXED" would
+  // be dishonest. A brand-new run (diagnosing/run_started) still resets cleanly;
+  // cumulative genome and the receipt PR are still allowed through.
+  if (state.phase === 'always_failing') {
+    const passthrough =
+      event.type === 'diagnosing' ||
+      event.type === 'run_started' ||
+      event.type === 'genome_updated' ||
+      event.type === 'pr_opened';
+    if (!passthrough) return state;
+  }
+
   switch (event.type) {
     case 'diagnosing': {
       return {
