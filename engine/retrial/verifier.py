@@ -12,6 +12,7 @@ tournament winner against selection bias.
 import math
 import threading
 
+from .config import DEFAULT_THRESHOLD
 from .trial import run_trial
 
 
@@ -48,7 +49,7 @@ def _verdict(fails, n, lo, hi, threshold, min_trials):
     return "INCONCLUSIVE"
 
 
-def verify(pool, test_code, max_trials=50, conc=16, threshold=0.10,
+def verify(pool, test_code, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
            min_trials=8, bus=None, label=None, timeout=60, isolation="process",
            hypothesis_id=None, emit_trials=True):
     """Rerun test_code up to max_trials times (conc at a time) and classify it.
@@ -121,7 +122,7 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.10,
     }
 
 
-def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.10,
+def confirm(pool, test_code, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
             min_trials=8, bus=None, label=None, timeout=60, isolation="process",
             emit_trials=False):
     """A fresh, independent verify run to confirm a tournament winner.
@@ -136,7 +137,7 @@ def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.10,
                   emit_trials=emit_trials)
 
 
-def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=0.10,
+def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
                     min_trials=8, bus=None, timeout=60, isolation="process"):
     """Measure a test's flake rate in NETWORK-BLOCKED sandboxes (a hermetic pool
     created with network_block_all=True). Compared against the networked detect
@@ -152,7 +153,7 @@ def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=
 class Verifier:
     """Object wrapper bundling default verify/confirm parameters."""
 
-    def __init__(self, max_trials=50, conc=16, threshold=0.10, min_trials=8,
+    def __init__(self, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD, min_trials=8,
                  bus=None, timeout=60, isolation="process"):
         self.max_trials = max_trials
         self.conc = conc
