@@ -26,16 +26,29 @@ def wilson(fails, n, z=1.96):
     return (p, max(0.0, c - m), min(1.0, c + m))
 
 
-def _verdict(p, lo, hi, threshold):
+def _verdict(fails, n, lo, hi, threshold, min_trials):
+    """Classify a rate from EVIDENCE, never a point estimate.
+
+    - ERROR:          no valid trials (never STABLE by default).
+    - ALWAYS_FAILING: 100% failing with enough trials — a regression, not flake.
+    - STABLE:         the Wilson upper bound is below the threshold.
+    - FLAKY:          both passes AND failures were observed and the whole CI sits
+                      above the threshold (confidently, not just on average).
+    - INCONCLUSIVE:   the CI still straddles the threshold (e.g. at max_trials).
+    """
+    if n == 0:
+        return "ERROR"
+    passes = n - fails
+    if fails == n and n >= min_trials:
+        return "ALWAYS_FAILING"
     if hi < threshold:
         return "STABLE"
-    if lo > threshold:
+    if fails > 0 and passes > 0 and lo > threshold:
         return "FLAKY"
-    # Interval straddles the threshold (inconclusive) — fall back to point estimate.
-    return "FLAKY" if p > threshold else "STABLE"
+    return "INCONCLUSIVE"
 
 
-def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
+def verify(pool, test_code, max_trials=50, conc=16, threshold=0.10,
            min_trials=8, bus=None, label=None, timeout=60, isolation="process",
            hypothesis_id=None, emit_trials=True):
     """Rerun test_code up to max_trials times (conc at a time) and classify it.
@@ -101,14 +114,14 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=0.05,
         "errors": errors,
         "flake_rate": round(p, 4),
         "wilson_ci": [round(lo, 4), round(hi, 4)],
-        "verdict": _verdict(p, lo, hi, threshold),
+        "verdict": _verdict(fails, n, lo, hi, threshold, min_trials),
         "stopped_early": stopped_early,
         "isolation": isolation,
         "history": history,
     }
 
 
-def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.05,
+def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.10,
             min_trials=8, bus=None, label=None, timeout=60, isolation="process",
             emit_trials=False):
     """A fresh, independent verify run to confirm a tournament winner.
@@ -123,7 +136,7 @@ def confirm(pool, test_code, max_trials=50, conc=16, threshold=0.05,
                   emit_trials=emit_trials)
 
 
-def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=0.05,
+def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=0.10,
                     min_trials=8, bus=None, timeout=60, isolation="process"):
     """Measure a test's flake rate in NETWORK-BLOCKED sandboxes (a hermetic pool
     created with network_block_all=True). Compared against the networked detect
@@ -139,7 +152,7 @@ def verify_hermetic(hermetic_pool, test_code, max_trials=50, conc=16, threshold=
 class Verifier:
     """Object wrapper bundling default verify/confirm parameters."""
 
-    def __init__(self, max_trials=50, conc=16, threshold=0.05, min_trials=8,
+    def __init__(self, max_trials=50, conc=16, threshold=0.10, min_trials=8,
                  bus=None, timeout=60, isolation="process"):
         self.max_trials = max_trials
         self.conc = conc
