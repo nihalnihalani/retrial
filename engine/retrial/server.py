@@ -16,12 +16,19 @@ first trials land near-instantly. After each run the pool is resized back to
 PREWARM in the background, keeping it bounded and ready for the next run.
 
 Run: uvicorn retrial.server:app --port 8000   (the UI expects ws://localhost:8000/ws)
+
+Binds 127.0.0.1 by default (loopback only) — CORS is wide-open (allow_origins=*)
+and there is no auth, so the server must not be exposed on 0.0.0.0 without a proxy
+in front. Set HOST=0.0.0.0 explicitly only behind a trusted network boundary.
 """
 import asyncio
 import os
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]  # repo root, for relative seed paths
+_SEEDS_DIR = (_REPO_ROOT / "seeds").resolve()      # seed files MUST resolve inside here
 
 import braintrust
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -50,7 +57,7 @@ CONC = int(os.environ.get("CONC", "16"))
 # Per-lane concurrency during the parallel hypothesis phase (default 8) so peak
 # sandboxes = num_hypotheses * TOURNAMENT_CONC stays bounded (~32 for 4 lanes).
 TOURNAMENT_CONC = int(os.environ.get("TOURNAMENT_CONC", "8"))
-THRESHOLD = float(os.environ.get("THRESHOLD", "0.05"))
+THRESHOLD = float(os.environ.get("THRESHOLD", "0.10"))  # matches the UI's 10% marker; 0/40 clears it
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
 PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
@@ -188,7 +195,21 @@ async def ws(websocket: WebSocket):
 
 @app.post("/tournament")
 def start_tournament(req: TournamentRequest):
+    # Resolve relative seed paths (e.g. "seeds/test_dict_order.py") against the
+    # repo root so the UI can send repo-relative paths regardless of server CWD.
     path = Path(req.seed_path)
+    if not path.is_absolute():
+        path = (_REPO_ROOT / req.seed_path)
+    # Scope guard: the seed MUST live inside the repo's seeds/ directory. Without
+    # this, a request could point seed_path at any file on disk (../../.env, etc.)
+    # and the server would read it and ship it into a sandbox. Resolve symlinks/..
+    # first, then require the result to sit under seeds/.
+    resolved = path.resolve()
+    if not resolved.is_relative_to(_SEEDS_DIR):
+        raise HTTPException(
+            status_code=400,
+            detail=f"seed_path must resolve inside {_SEEDS_DIR.name}/: {req.seed_path}")
+    path = resolved
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"seed not found: {req.seed_path}")
     test_code = path.read_text()
@@ -260,4 +281,6 @@ def start_tournament(req: TournamentRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Loopback by default (see module docstring): no auth + open CORS means this
+    # must not listen on all interfaces unless deliberately placed behind a proxy.
+    uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))
