@@ -839,6 +839,135 @@ body {
   color: var(--gold-2);
 }
 
+.brand-test {
+  font-size: 13px;
+  color: var(--ink-dim);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  border-radius: 7px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Quarantine verdict ---------- */
+.quarantine-phase {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.quarantine-card {
+  width: 100%;
+  max-width: 880px;
+  text-align: center;
+  background: linear-gradient(165deg, rgba(242, 193, 78, 0.06), var(--panel));
+  border: 1px solid rgba(242, 193, 78, 0.4);
+  border-radius: 26px;
+  padding: 40px 48px 34px;
+  box-shadow: 0 40px 120px -55px rgba(242, 193, 78, 0.4);
+  animation: fade-up 0.5s ease;
+}
+.quarantine-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  border: 1px solid rgba(242, 193, 78, 0.5);
+  background: rgba(242, 193, 78, 0.1);
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+.quarantine-headline {
+  font-size: 32px;
+  font-weight: 800;
+  margin: 22px 0 8px;
+  letter-spacing: -0.01em;
+}
+.quarantine-lead {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  margin: 0 auto;
+  max-width: 640px;
+}
+.quarantine-numbers {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  margin: 26px 0 6px;
+}
+.qn-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qn-value {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 60px;
+  line-height: 1;
+}
+.qn-value.fail {
+  color: var(--fail);
+}
+.qn-value.amber {
+  color: var(--gold-2);
+  text-shadow: 0 0 40px rgba(242, 193, 78, 0.4);
+}
+.qn-label {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.qn-arrow {
+  font-size: 40px;
+  color: var(--ink-faint);
+}
+.quarantine-ci {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin: 4px 0 0;
+}
+.quarantine-best {
+  margin: 24px auto 0;
+  max-width: 640px;
+  padding: 16px 20px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+}
+.quarantine-best-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-left: 10px;
+}
+.quarantine-best-exp {
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+  text-align: left;
+}
+.quarantine-reason {
+  margin: 20px auto 0;
+  max-width: 660px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+.amber-foot {
+  color: var(--gold-2);
+}
+
 /* ---------- Animations ---------- */
 @keyframes land {
   0% {
