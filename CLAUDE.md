@@ -64,12 +64,13 @@ Rules: `trial_index` is per-context 0-based (detect series = `hypothesis_id: nul
 - KNOWN RESIDUAL (deferred, cosmetic): server pre-diagnoses before detect, so a non-flaky GO briefly shows the diagnosing state and burns one Fireworks call before the gate discards it. Outcome fully honest. Fixing needs the detect-before-diagnose reorder — deferred per the 2026-07-23 no-refactor decision.
 
 ## Statistics — non-negotiable
-- Wilson 95% CI everywhere a rate is shown ("0/50" is reported as "≤7% at 95% confidence", never "0%").
+- Wilson 95% CI everywhere a rate is shown ("0/50" is reported as "≤7% at 95% confidence", never "0%"). This binds SPOKEN output too (narrator.py), not just the UI.
+- **NEVER `rate or <default>` — 0.0 is falsy.** A measured 0.0 flake rate silently became the default and the narrator announced "flaked 100 percent" for a candidate the board showed at 0%. Use explicit `is None` checks on every rate/CI lookup. Fabricating a number is worse than showing none.
 - Winner = lowest flake rate whose CI upper bound < original's rate, then a **fresh confirmation round** (guards selection bias). No winner → QUARANTINE verdict with evidence dossier — the run never dead-ends.
 - Adaptive early-stop: stop when CI fully excludes the decision threshold. Don't remove it; it's why the live demo fits 3 minutes.
 
 ## Sponsor integrations (depth over breadth — sponsor usage is a BONUS criterion, not a pillar)
-Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Experiment; each batch = eval run; permalink = the audit receipt), **Fireworks** (DiagnosisEngine: OpenAI-compat, base_url `https://api.fireworks.ai/inference/v1`, models VERIFIED 2026-07-23: `accounts/fireworks/models/{glm-5p2, glm-5p1, kimi-k2p6, deepseek-v4-pro}` — "p" not ".", read from env FIREWORKS_MODELS, never hardcode). Bonus: **CodeRabbit** (reviews the real output PR; latency 1–5 min — always pre-run, never claim live turnaround), **ElevenLabs** (v3 emotional-tag narration, OUTPUT only — never live voice input). Cut: CopilotKit, WorkOS. Do not add sponsor calls that aren't load-bearing.
+Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Experiment; each batch = eval run; permalink = the audit receipt), **Fireworks** (DiagnosisEngine: OpenAI-compat, base_url `https://api.fireworks.ai/inference/v1`, models VERIFIED 2026-07-23: `accounts/fireworks/models/{glm-5p2, glm-5p1, kimi-k2p6, deepseek-v4-pro}` — "p" not ".", read from env FIREWORKS_MODELS, never hardcode). Bonus: **CodeRabbit** (reviews the real output PR; latency 1–5 min — always pre-run, never claim live turnaround), **ElevenLabs** (`engine/retrial/narrator.py`: `eleven_v3` verdict autopsy, OUTPUT only — never voice input; NARRATE=1, default OFF; script is TEMPLATED from the dossier, never LLM-written, so speech can't drift from the board; ~20s synth, fired after `tournament_done` off the run thread; served at `GET /narration/<run_id>`). Cut: CopilotKit, WorkOS. Do not add sponsor calls that aren't load-bearing.
 
 ## Honesty rules (judges include the engineers who built these tools)
 - Never state a latency/throughput/flake number that wasn't measured in THIS repo. Measured numbers live in `docs/WINNING-IDEA.md` ("MEASURED DEMO-TIMING TRUTH") and `calibration-results.json`.
@@ -97,7 +98,7 @@ Load-bearing: **Daytona** (the swarm), **Braintrust** (each hypothesis = an Expe
 Default URL = winning-path REPLAY, spotless console. `?mock=quarantine` = no-winner rehearsal. `?live=1` = attempt engine WS (falls back to replay). ↻ Replay button restarts cleanly. Mock test name must always be an ORDER-DEPENDENCY-class name (never race/timing — we measured those don't flake here and must not imply otherwise).
 
 ## Env keys (.env at repo root; coupon codes in .env.example comments)
-`DAYTONA_API_KEY` ✅ filled · `FIREWORKS_API_KEY` ⏳ (blocks DiagnosisEngine) · `BRAINTRUST_API_KEY` ⏳ · `ELEVENLABS_API_KEY` ⏳ · `GITHUB_TOKEN` (or gh CLI) for PRSmith.
+`DAYTONA_API_KEY` ✅ filled · `FIREWORKS_API_KEY` ✅ · `BRAINTRUST_API_KEY` ✅ · `ELEVENLABS_API_KEY` ✅ (Creator tier, 131k chars/mo; a verdict autopsy costs ~900) · `GITHUB_TOKEN` (or gh CLI) for PRSmith.
 
 ## When you make a mistake this file didn't prevent
 Add the rule here in the same commit as the fix. Keep this file under 150 lines — delete rules the code now makes obvious.
