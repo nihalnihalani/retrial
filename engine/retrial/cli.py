@@ -17,6 +17,8 @@ import json
 import os
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import braintrust
@@ -141,6 +143,89 @@ def _cmd_bisect(args):
     return 0
 
 
+# ------------------------ Sandbox Observatory (HTTP) ------------------------
+# The registry lives in the SERVER process; a CLI in another process cannot see
+# it, so `sandboxes` and `reap` are thin HTTP clients of the running server
+# (stdlib urllib — no new deps). `fetch` is injectable so the tests exercise the
+# formatting/exit-code logic without a live server.
+def _http_json(method, url, timeout=10):
+    """GET/POST `url`, returning (status_code, parsed_json). Raises URLError-
+    family (connection refused, DNS, timeout) which callers map to exit 2; an
+    HTTP 4xx/5xx is returned as (code, body) so callers can read the detail."""
+    req = urllib.request.Request(url, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8")
+            return resp.status, (json.loads(body) if body else {})
+    except urllib.error.HTTPError as e:      # 4xx/5xx: read the detail body
+        body = e.read().decode("utf-8")
+        return e.code, (json.loads(body) if body else {})
+
+
+def _unreachable(url, exc):
+    print(f"error: engine not reachable at {url} — is "
+          f"`uvicorn retrial.server:app` running? ({exc})", file=sys.stderr)
+    return 2
+
+
+def _cmd_sandboxes(args, fetch=_http_json):
+    url = args.url.rstrip("/") + "/sandboxes"
+    try:
+        status, data = fetch("GET", url)
+    except urllib.error.URLError as e:
+        return _unreachable(args.url, e)
+    if status != 200:
+        print(f"error: {data.get('detail', data)}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(data))
+        return 0
+    boxes = data.get("sandboxes", [])
+    counts = data.get("counts", {})
+    # A pseudo-"now" from the freshest timestamp in the snapshot: the CLI runs in
+    # a different process and cannot share the server's monotonic clock, so age
+    # is computed RELATIVE to the newest activity in this snapshot (honest and
+    # deterministic for the given payload).
+    now = max((sb.get("updated_ts") or sb.get("created_ts") or 0.0)
+              for sb in boxes) if boxes else 0.0
+    print(f"{'ID':<12}  {'ROLE':<13}  {'BACKEND':<8}  {'STATE':<11}  "
+          f"{'PARENT':<12}  {'EXECS':<5}  {'AGE':<7}  CURRENT_CMD")
+    for sb in boxes:
+        age = round(now - (sb.get("created_ts") or 0.0), 1)
+        cmd = sb.get("current_cmd") or ""
+        print(f"{str(sb.get('id',''))[:12]:<12}  {str(sb.get('role',''))[:13]:<13}  "
+              f"{str(sb.get('backend',''))[:8]:<8}  {str(sb.get('state',''))[:11]:<11}  "
+              f"{str(sb.get('parent_id') or '-')[:12]:<12}  "
+              f"{sb.get('exec_count', 0):<5}  {age:<7}  {cmd[:60]}")
+    print(f"live {counts.get('live', 0)} · total-ever "
+          f"{counts.get('total_ever', 0)} · destroyed {counts.get('destroyed', 0)}")
+    return 0
+
+
+def _cmd_reap(args, fetch=_http_json):
+    url = args.url.rstrip("/") + "/sandboxes/destroy_all"
+    if args.force:
+        url += "?force=1"
+    try:
+        status, data = fetch("POST", url)
+    except urllib.error.URLError as e:
+        return _unreachable(args.url, e)
+    if status == 409:
+        print(f"refused: {data.get('detail', 'a run is active')}", file=sys.stderr)
+        return 1
+    if status != 200:
+        print(f"error: {data.get('detail', data)}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(data))
+        return 0
+    msg = f"destroyed {data.get('count', 0)} sandboxes"
+    if data.get("bisector_cancelled"):
+        msg += " (active bisect run cancelled)"
+    print(msg)
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -183,6 +268,25 @@ def build_parser():
     bis.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
                      help="flake-rate decision threshold (matches the UI's 10%% marker)")
     bis.set_defaults(func=_cmd_bisect)
+
+    sb = sub.add_parser(
+        "sandboxes",
+        help="observatory: list every sandbox the engine tracks")
+    sb.add_argument("--url", default="http://localhost:8000",
+                    help="engine base URL (default http://localhost:8000)")
+    sb.add_argument("--json", action="store_true", help="machine-readable output")
+    sb.set_defaults(func=_cmd_sandboxes)
+
+    rp = sub.add_parser(
+        "reap",
+        help="destroy every live sandbox (409-guarded while a run is active; "
+             "--force cancels the run and reaps)")
+    rp.add_argument("--url", default="http://localhost:8000",
+                    help="engine base URL (default http://localhost:8000)")
+    rp.add_argument("--force", action="store_true",
+                    help="cancel an active run and reap anyway")
+    rp.add_argument("--json", action="store_true", help="machine-readable output")
+    rp.set_defaults(func=_cmd_reap)
     return p
 
 
