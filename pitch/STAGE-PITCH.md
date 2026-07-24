@@ -94,13 +94,15 @@ carry the moment.
 ### Beat 4 — The close: flywheel + intent (2:40–3:00)
 
 > "And we proved this isn't a toy: on a real catalogued flake from an academic
-> dataset, our tournament converged on the exact fix the maintainer shipped — and
-> rejected the model that got it wrong. Human ground truth, matched by evidence.
+> dataset, all four models named the right cause — but only one fix survived the
+> evidence, and the reruns rejected the other three. That's the whole point:
+> naming the cause is cheap, proving the cure is what we automate.
 >
 > Every run also records your repo's **flake genome** — which model wins on which
-> kind of flake, on *your* code. It's already accumulating: `glm-5p2` is winning
-> order-dependency fixes right now. That grows into a per-repo model leaderboard;
-> it gets sharper the more you run it.
+> kind of flake, on *your* code. Five runs in, no single model dominates —
+> `glm-5p2` and `deepseek-v4-pro` are tied on wins — which is exactly why a
+> tournament beats betting on one favorite. That grows into a per-repo model
+> leaderboard; it gets sharper the more you run it.
 >
 > Detection tools need a month of history. We need sixty seconds. Every flaky
 > test deserves a retrial — fifty of them, actually. We're going to keep
@@ -123,18 +125,23 @@ carry the moment.
 
 **Q: "Is this just a toy? Does it work on real code, or only your seeded test?"**
 > *(This is our strongest answer — lead with it if you get any opening.)*
-> "It rediscovered a human maintainer's fix on a real bug. We took
+> "Real code, and it's the sharpest demonstration of why we exist. We took
 > `test_rearrange` from the penman library, 1.2.1 — a real MIT Python project,
 > catalogued in IDoFT, the academic flakiness dataset out of Illinois, already
-> fixed by the maintainer. We pointed Retrial at it. It reproduced the flake at
-> eighty-eight percent, then ran the tournament — and **three of our four models
-> independently converged on the exact fix the maintainer shipped: seed the RNG
-> before the random reorder.** The fourth model's patch was still ninety-four
-> percent flaky, and the evidence *eliminated it* — not our opinion, the reruns.
-> The winner confirmed at zero out of twenty-five fresh sandboxes. Fifty-seven
-> seconds, zero infra errors. That's the whole thesis in one run: three fixes
-> looked right, only the empirical rerun told the wrong one from the right ones —
-> against human ground truth."
+> fixed by the maintainer. We fed our four models a *sanitized* copy — every hint
+> about the cause stripped out — and ran the tournament. **All four correctly
+> named the root cause: randomness in the ordering.** But here's the thing —
+> **only one produced a fix that actually worked.** The other three looked just
+> as plausible and came back sixty-nine, eighty-eight, ninety-four percent
+> flaky — the evidence *rejected* them. The winner, a valid alternative fix,
+> confirmed at zero failures across twenty-five fresh-process trials. That's the
+> whole thesis in one run: models talk a good game — all four named the right
+> cause — but only one fix survived the evidence. That's exactly why
+> verification, not vibes, has to decide.
+> *(If pressed on ground truth:)* An earlier run of ours let the repro's comments
+> leak the cause, and we briefly overclaimed that the models rediscovered the
+> maintainer's exact fix. We caught it, re-ran it clean, and this is the honest
+> result. We'd rather show you the corrected number than the flattering one."
 
 **Q: "Why not just run `pytest --count=50` locally? Why the sandboxes?"**
 > "Because shared-state and environment flakes need a *fresh* environment per

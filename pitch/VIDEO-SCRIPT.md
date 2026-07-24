@@ -128,7 +128,7 @@ rate across the swarm (the real shipped run carries 5 of these).
 ## Shot 6 — Flywheel + close (1:30–1:45)
 
 **SCREEN:** The **flake genome** card slides in — cause-class taxonomy, model
-win-rates (real data: `glm-5p2` 2-for-2 on order-dependency fixes). Quick
+win-rates (real data: `glm-5p2` and `deepseek-v4-pro` tied on wins across 5 runs). Quick
 glimpse of the **real opened PR — retrial#1** — with the evidence dossier +
 Braintrust permalinks + a **CodeRabbit** review badge. Land on the tagline card.
 
@@ -142,9 +142,9 @@ Braintrust permalinks + a **CodeRabbit** review badge. Land on the tagline card.
 
 **OPTIONAL — proof title card (≈5s, 1:45–1:50, only if under the 2:00 ceiling):**
 Silent full-screen text over the board, no VO (or a single line if room):
-> **On a real catalogued OSS flake, our tournament rediscovered the maintainer's
-> exact fix — and rejected the model that got it wrong.**
-> *penman v1.2.1 · IDoFT · 3 of 4 models converged · winner 0/25 · 57s*
+> **On a real catalogued OSS flake, all four models named the cause — only one
+> fix survived the evidence. The other three were rejected on measured reruns.**
+> *penman v1.2.1 · IDoFT · winner confirmed 0 fails / 25 trials · 3 rejected at 69/88/94%*
 
 **SCREEN (end card):** RETRIAL · *the lie detector for flaky tests* ·
 `github.com/nihalnihalani/retrial`
