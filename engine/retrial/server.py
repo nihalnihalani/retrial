@@ -31,6 +31,7 @@ from pydantic import BaseModel
 from .events import EventBus
 from .pool import SandboxPool
 from .coordinator import TournamentCoordinator
+from .diagnosis import DiagnosisEngine
 
 # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
 # Degrades to a no-op when no key is configured — logging must never break the server.
@@ -162,6 +163,17 @@ def start_tournament(req: TournamentRequest):
     test_code = path.read_text()
     hypotheses = req.hypotheses or []
     isolation = req.isolation or ISOLATION
+
+    # No hypotheses supplied and Fireworks is available -> diagnose live.
+    # If the key is absent or diagnosis fails, fall through with [] (the
+    # coordinator's detect-only quarantine path — never a hard error).
+    if not hypotheses:
+        engine = DiagnosisEngine()
+        if engine.available:
+            try:
+                hypotheses = engine.diagnose(test_code, path.name, log_tail="", n=4)
+            except Exception:
+                hypotheses = []
 
     with _run_lock:
         if _running["active"]:
