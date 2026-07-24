@@ -12,12 +12,13 @@ import threading
 from .verifier import verify, confirm, verify_hermetic
 from .ledger import EvidenceLedger
 from .genome import Genome
+from .guards import neutering_check
 
 
 class TournamentCoordinator:
     """Runs the detect -> diagnose-verify -> confirm tournament over hypotheses."""
 
-    def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.05,
+    def __init__(self, pool, bus=None, max_trials=50, conc=16, threshold=0.10,
                  min_trials=8, timeout=60, isolation="process", ledger=None,
                  tournament_conc=None, genome=None, hermetic=None, hermetic_pool=None):
         self.pool = pool
@@ -122,19 +123,23 @@ class TournamentCoordinator:
         self._emit("run_started", {
             "test_name": test_name,
             "planned_trials": self.max_trials,
+            "threshold": self.threshold,
         })
 
         # --- DETECT: is the original test actually flaky? (hypothesis_id=None) ---
         detect = self._verify(test_code, label="detect", isolation=isolation,
                               hypothesis_id=None)
         orig_rate = detect["flake_rate"]
+        # A test whose CI lower bound is ~1.0 isn't flaky — it's a hard regression.
+        detect_verdict = ("ALWAYS_FAILING" if detect["wilson_ci"][0] > 0.95
+                          else detect["verdict"])
         self._log_series(ledger_run, "detect", detect, cause_class="original")
         self._emit("detect_done", {
             "flake_rate": orig_rate,
             "wilson_ci": detect["wilson_ci"],
             "trials": detect["trials"],
             "fails": detect["fails"],
-            "verdict": detect["verdict"],
+            "verdict": detect_verdict,
         })
 
         # Optional hermetic (network-blocked) detect pass — diagnose external-dep by infra.
@@ -149,6 +154,7 @@ class TournamentCoordinator:
                 "id": h["id"],
                 "cause_class": h.get("cause_class"),
                 "explanation": h.get("explanation"),
+                "model": h.get("model"),   # honest attribution: which model authored this
             })
             v = self._verify(h["patched_code"], label=h["id"], isolation=isolation,
                             hypothesis_id=h["id"], conc=self.tournament_conc)
@@ -171,6 +177,7 @@ class TournamentCoordinator:
                 "trials": v["trials"],
                 "cause_class": h.get("cause_class"),
                 "verdict": v["verdict"],
+                "model": h.get("model"),
             })
 
         threads = [threading.Thread(target=race, args=(h,)) for h in hypotheses]
@@ -180,14 +187,47 @@ class TournamentCoordinator:
             t.join()
 
         # --- PICK WINNER: CI upper bound below the original rate, lowest flake ---
+        # Eligibility: the patched test must read STABLE (INCONCLUSIVE / FLAKY /
+        # ALWAYS_FAILING / ERROR are never winners) and its CI upper bound must
+        # sit strictly below the original flake rate.
         eligible = [
             r for r in results.values()
             if r["wilson_ci"][1] < orig_rate and r["verdict"] == "STABLE"
         ]
-        eligible.sort(key=lambda r: (r["flake_rate"], r["wilson_ci"][1]))
-        winner = eligible[0] if eligible else None
+        # Deterministic ordering so a tie never depends on thread arrival order:
+        # lowest flake rate, then tightest upper bound, then id.
+        eligible.sort(key=lambda r: (r["flake_rate"], r["wilson_ci"][1], r["id"]))
+
+        # Neutering guard: a candidate may win only if its patch still genuinely
+        # tests the failure condition. Walk eligible best-first; the first patch
+        # that survives the guard wins, any that fail are disqualified (they
+        # "won" only by deleting/neutering the assertion).
+        winner = None
+        neutered = {}
+        for cand in eligible:
+            try:
+                guard = neutering_check(
+                    test_code, cand["patched_code"], pool=self.pool,
+                    isolation=isolation, timeout=self.timeout)
+            except Exception:
+                guard = None  # a guard crash must never block a legitimate fix
+            if guard is None or guard.ok:
+                winner = cand
+                break
+            neutered[cand["id"]] = guard.reason
+            self._emit("hypothesis_eliminated", {
+                "id": cand["id"],
+                "reason": guard.reason,
+                "cause_class": cand["cause_class"],
+                "flake_rate": cand["flake_rate"],
+                "wilson_ci": cand["wilson_ci"],
+                "model": cand.get("model"),
+                "neutered": True,
+            })
 
         for r in results.values():
+            if r["id"] in neutered:
+                continue  # already eliminated by the neutering guard above
             if winner is None or r["id"] != winner["id"]:
                 self._emit("hypothesis_eliminated", {
                     "id": r["id"],
@@ -195,6 +235,7 @@ class TournamentCoordinator:
                     "cause_class": r["cause_class"],
                     "flake_rate": r["flake_rate"],
                     "wilson_ci": r["wilson_ci"],
+                    "model": r.get("model"),
                 })
 
         # --- CONFIRM the winner with a fresh, independent run (trials suppressed) ---
@@ -216,7 +257,9 @@ class TournamentCoordinator:
                 "id": winner["id"],
                 "flake_rate": winner["flake_rate"],            # tournament round
                 "confirm_flake_rate": confirmation["flake_rate"],  # confirmation round
+                "confirm_trials": confirmation["trials"],
                 "cause_class": winner["cause_class"],
+                "model": winner.get("model"),                  # winning model slug (same key as diagnosing)
                 "wilson_ci": confirmation["wilson_ci"],
                 "orig_flake_rate": orig_rate,
                 "braintrust_url": ledger_run.permalink(winner["id"]),
@@ -267,8 +310,10 @@ class TournamentCoordinator:
                 **{r["id"]: ledger_run.permalink(r["id"]) for r in results.values()},
             },
         }
+        result["orig_verdict"] = detect_verdict  # ALWAYS_FAILING passes through as a regression
         self._emit("tournament_done", {
             "verdict": verdict,
+            "orig_verdict": detect_verdict,   # a 100%-failing original is a regression, not flake
             "orig_flake_rate": orig_rate,
             "winner_id": winner["id"] if winner else None,
             "winner_flake_rate": winner["flake_rate"] if winner else None,
@@ -276,11 +321,17 @@ class TournamentCoordinator:
         })
 
         # --- GENOME: append this run to the flywheel, then publish the aggregate ---
+        # Record EVERY hypothesis attempt (model + won) so /genome can report a
+        # true per-model win_rate = wins / attempts, not wins / FIXED-runs.
+        attempts = [{
+            "model": r.get("model"),
+            "won": bool(winner is not None and r["id"] == winner["id"]),
+        } for r in results.values()]
         try:
             self.genome.record(
                 test_name=test_name, verdict=verdict, cause_class=genome_cause,
                 orig_flake_rate=orig_rate, final_flake_rate=genome_final,
-                winner_model=genome_model)
+                winner_model=genome_model, attempts=attempts)
             agg = self.genome.aggregate()
             self._emit("genome_updated", {
                 "runs": agg["runs"],

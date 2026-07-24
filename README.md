@@ -35,5 +35,10 @@ cp .env.example .env   # fill in keys (see comments for hackathon coupon codes)
 .venv/bin/python -m retrial.cli check seeds/test_race_counter.py   # run a retrial
 ```
 
+The API server (`uvicorn retrial.server:app --port 8000`) binds **127.0.0.1** by
+default — it has no auth and wide-open CORS, so it must stay on loopback. Set
+`HOST=0.0.0.0` only behind a trusted proxy. `POST /tournament` only accepts
+`seed_path`s that resolve inside `seeds/`.
+
 ## Docs
 Full strategy, research, and verified Daytona findings live in [docs/](docs/) — start with [WINNING-IDEA.md](docs/WINNING-IDEA.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).

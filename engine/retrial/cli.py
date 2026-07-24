@@ -93,7 +93,7 @@ def build_parser():
     chk.add_argument("--json", action="store_true", help="machine-readable output")
     chk.add_argument("--max-trials", type=int, default=0, help="max reruns (env MAX_TRIALS)")
     chk.add_argument("--conc", type=int, default=0, help="concurrent sandboxes (env CONC)")
-    chk.add_argument("--threshold", type=float, default=0.05, help="flake-rate decision threshold")
+    chk.add_argument("--threshold", type=float, default=0.10, help="flake-rate decision threshold (matches the UI's 10%% marker)")
     chk.add_argument("--isolation", choices=("process", "sandbox"), default="process",
                      help="process=reuse warm sandboxes (fast, fresh interpreter per trial); "
                           "sandbox=fresh sandbox per trial (state-polluting flakes)")
