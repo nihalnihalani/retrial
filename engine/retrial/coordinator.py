@@ -425,6 +425,9 @@ class TournamentCoordinator:
             self._emit("genome_updated", {
                 "runs": agg["runs"],
                 "by_cause_class": agg["by_cause_class"],
+                # Per-model win rates (wins/attempts) so the flywheel card can show
+                # a real Fireworks-model leaderboard instead of an empty promise.
+                "by_model": agg.get("model_win_rates") or {},
             })
             result["genome"] = agg
         except Exception:
