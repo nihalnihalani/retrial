@@ -44,13 +44,28 @@ will fail in production often enough that the team stops trusting the suite.
 In 2026 the whole industry noticed: Bitbucket, Datadog, and Kong all shipped
 flake-fixer agents. The pain is real, recurring, and budgeted.
 
-Published research puts numbers on it (softly attributed): Google's work has
-put roughly **16% of tests** somewhere on the flaky spectrum and reported about
-**3.7 engineering hours** burned investigating a *single* flaky test, with
-roughly **1 in 7** suite runs hitting a flaky failure. Microsoft has reported
-that about **25% of CI test failures** are flaky, at ~30 minutes of
-investigation each. Across the industry, teams burn an estimated **15–30% of CI
-time** on reruns.
+Published research puts numbers on it. Google (John Micco, *Advances in
+Continuous Integration Testing @ Google*) measures **almost 16% of its 4.2M
+tests** as having some level of flakiness, a continual **1.5% of test
+executions** reporting a flaky result, and **2–16% of compute resources** spent
+re-running them — with **84% of Pass→Fail transitions** coming from flaky tests.
+Microsoft (Lam et al., ISSTA 2019) found **27.4% of builds** exhibit flaky tests
+and **4.6% of individual test cases** are flaky.
+
+<!-- CITATION DISCIPLINE — do not "improve" these numbers.
+     Every figure above is quoted from a primary source with its original
+     denominator. An earlier draft of this paragraph claimed "3.7 engineering
+     hours per flaky test", "1 in 7 suite runs", "25% of CI test failures",
+     "~30 minutes of investigation", and "15-30% of CI time on reruns". Audited
+     2026-07-25 against primaries: the 3.7-hours and 30-minutes figures have NO
+     primary source (vendor cost-calculator blogs only); "1 in 7" was the 16%
+     restated with the denominator swapped from tests to runs, i.e. one fact
+     double-counted; "25% of CI test failures" was Microsoft's 27.4% of BUILDS;
+     and "15-30% of CI time" was Google's measured "2-16% of compute resources",
+     roughly doubled. They were sourced from aggregator blogs and attributed to
+     Google/Microsoft. The verified numbers above are already striking and they
+     survive a judge with a laptop. -->
+
 
 The deeper reason existing tools struggle is **verification asymmetry**. Flaky
 tests are the one bug class where *verification*, not generation, is the
