@@ -109,8 +109,13 @@ def build_parser():
 
 def main(argv=None):
     # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
-    braintrust.init_logger(project="My Project")
-    braintrust.auto_instrument()
+    # Conditional + fail-silent: logging must never break the CLI.
+    if os.environ.get("BRAINTRUST_API_KEY"):
+        try:
+            braintrust.init_logger(project="retrial")
+            braintrust.auto_instrument()
+        except Exception:
+            pass
     args = build_parser().parse_args(argv)
     return args.func(args)
 
