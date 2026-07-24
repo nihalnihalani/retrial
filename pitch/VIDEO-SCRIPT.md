@@ -1,3 +1,8 @@
+> **ARCHIVED — historical deck, not current product truth.** This script
+> predates the Rewind merge and shows a CodeRabbit review beat that was never
+> built (no code path exists). The truthful integration list lives in
+> `docs/SPONSORS.md`. Kept only as a record of the original pitch.
+
 # Retrial — Devpost Video Script (< 2 min)
 
 Target length **1:45–1:55** (hard ceiling 2:00). Screen recording, voiceover.
