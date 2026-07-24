@@ -1,10 +1,12 @@
 import { ciText, pct } from '../format';
+import { ReceiptTiles } from './ReceiptTiles';
 import type { DetectState, Hypothesis, QuarantineState } from '../types';
 
 interface Props {
   quarantine: QuarantineState;
   bestHypothesis: Hypothesis | undefined;
   detect: DetectState;
+  prUrl: string | null;
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -19,7 +21,7 @@ const causeLabel = (c: string) =>
 // The no-dead-end verdict: nothing stabilized the test, so we quarantine it
 // WITH the full evidence dossier. Amber tone — a real, useful outcome, not a
 // failure. The receipts still ship (Braintrust autopsy + quarantine PR).
-export function QuarantineCard({ quarantine, bestHypothesis, detect }: Props) {
+export function QuarantineCard({ quarantine, bestHypothesis, detect, prUrl }: Props) {
   const before = detect.flakeRate ?? 0.48;
 
   return (
@@ -60,26 +62,12 @@ export function QuarantineCard({ quarantine, bestHypothesis, detect }: Props) {
 
         <div className="quarantine-reason">{quarantine.reason}</div>
 
-        <div className="winner-receipts">
-          <a className="receipt braintrust" href="#" onClick={(e) => e.preventDefault()}>
-            <span className="receipt-icon">◈</span>
-            <span className="receipt-body">
-              <span className="receipt-title">Braintrust autopsy</span>
-              <span className="receipt-sub mono">
-                braintrust.dev/app/retrial/… <em>(permalink)</em>
-              </span>
-            </span>
-          </a>
-          <a className="receipt pr" href="#" onClick={(e) => e.preventDefault()}>
-            <span className="receipt-icon">⑃</span>
-            <span className="receipt-body">
-              <span className="receipt-title">Quarantine PR opened</span>
-              <span className="receipt-sub mono">
-                github.com/…/pull/### <em>(with evidence dossier)</em>
-              </span>
-            </span>
-          </a>
-        </div>
+        <ReceiptTiles
+          braintrustUrl={quarantine.braintrustUrl}
+          braintrustLabel="Braintrust autopsy"
+          prUrl={prUrl}
+          prLabel="Quarantine PR opened"
+        />
 
         <p className="winner-foot amber-foot">
           Worst case, we still hand you a real, reproducible verdict.
