@@ -51,6 +51,28 @@ them.
 
 ---
 
+## It works on real code, not just a demo seed
+
+To prove Retrial isn't a toy, we pointed it at a **documented real-world flake
+from the academic flakiness dataset**. We pulled `test_rearrange` from
+[penman](https://github.com/goodmami/penman) `v1.2.1` — a real MIT-licensed
+Python OSS project — catalogued in **IDoFT** (the Illinois Dataset of Flaky
+Tests, py-data.csv, category NOD, status Accepted) and already fixed by the
+maintainer in [penman#102](https://github.com/goodmami/penman/pull/102). The
+documented root cause is a `random.random()` sort key whose module-level seed
+was ineffective.
+
+Retrial **reproduced it on Daytona at 88% flake (95% CI 74–95%)** across 40
+trials with **0 infra errors** — using the same process-isolation model the
+engine ships (a fresh `python3` process per trial = fresh random entropy). This
+is the honest boundary of the substrate, and we state it: **randomness and
+hash-ordering flakes reproduce; thread/timing races do not** (measured 0/120
+elsewhere in this repo). Retrial's detector targets exactly the class that
+reproduces. [PENDING EXPERIMENT: the hypothesis tournament rediscovering the
+maintainer's exact fix.]
+
+---
+
 ## How it works
 
 Point Retrial at a flaky test. It runs a five-stage pipeline —
@@ -61,9 +83,8 @@ measured, not asserted.
    swarm of disposable Daytona sandboxes — a fresh environment per trial — and
    measures its empirical flake rate with a **Wilson 95% confidence interval**.
    Our locked demo seed calibrated at **51% flake (95% CI 36–66%)** over real
-   Daytona trials. A given live run re-measures it fresh; the reading lands
-   inside that interval (≈48% on the demo run). The number *is* the lie made
-   quantitative.
+   Daytona trials. A given live run re-measures it fresh; a recent run clocked
+   **50% (95% CI 28–72%)**. The number *is* the lie made quantitative.
 
 2. **Diagnose (differential diagnosis).** Fireworks frontier models generate
    *competing root-cause hypotheses* — order dependency, shared state,
@@ -81,15 +102,20 @@ measured, not asserted.
    lowest flake rate whose CI upper bound falls below the original's rate, then
    runs a **fresh confirmation round** on that winner alone (selection bias
    across candidates is real; the confirmation round is the guard). A winning
-   fix confirmed at **0/50** is reported honestly as "**≤7% at 95%
-   confidence**," never "0%." A full tournament — detect + two hypotheses +
-   confirmation, 80 trials — completes in **17.3 seconds** end to end.
+   fix confirmed at **0/40** is reported honestly as "**≤8.8% at 95%
+   confidence**," never "0%." That recent live run went **50% → 0/40 (FIXED)**
+   with the full detect-diagnose-tournament-confirm arc in **42.7 seconds** end
+   to end — real Fireworks calls included.
 
-5. **Ship.** The winning fix goes out as a real pull request with the evidence
-   dossier in the body (flake rate before/after, the confidence interval, the
-   Braintrust permalink). If nothing fully stabilizes the test, Retrial instead
-   opens a **quarantine PR** carrying the same dossier — the run never
-   dead-ends. CodeRabbit reviews whichever PR is produced.
+5. **Ship.** The winning fix goes out as a **real pull request** with the
+   evidence dossier in the body (flake rate before/after, the confidence
+   interval, the Braintrust permalinks). This isn't a mock: Retrial's PRSmith
+   opened [**retrial#1**](https://github.com/nihalnihalani/retrial/pull/1) — a
+   full evidence-dossier PR documenting a **69% → 0%** fix authored by model
+   `glm-5p2`, with **5 Braintrust experiment permalinks** as the receipt. If
+   nothing fully stabilizes the test, Retrial instead opens a **quarantine PR**
+   carrying the same dossier — the run never dead-ends. CodeRabbit reviews
+   whichever PR is produced.
 
 Because every stage emits typed events, the same run drives the live board, the
 voice autopsy, and the audit log independently.
@@ -127,10 +153,13 @@ exists — the board is a subscriber, not the system.
   out to the UI stream, the ElevenLabs voice announcer, and the log. `ui/src/
   types.ts` is the authoritative engine⇄UI contract.
 - **EvidenceLedger** — Braintrust Experiments as the public scoreboard +
-  permalink receipts, plus a local SQLite **flake genome** (cause-class taxonomy
-  and model win-rates per repo).
+  permalink receipts (a single shipped run produced **5 experiment permalinks**),
+  plus a local SQLite **flake genome** (cause-class taxonomy and model win-rates
+  per repo).
 - **PRSmith** — winner ⇒ fix PR with dossier; no winner ⇒ quarantine PR with
-  dossier.
+  dossier. Real output:
+  [retrial#1](https://github.com/nihalnihalani/retrial/pull/1) (69%→0%, model
+  `glm-5p2`, Braintrust permalinks in the body).
 
 ---
 
@@ -149,9 +178,10 @@ exists — the board is a subscriber, not the system.
   a Braintrust **Experiment**; each batch of reruns is an eval run whose scorer
   is the empirical pass rate — a real, reproducible eval, not an LLM vibe-check.
   The Braintrust dashboard literally *is* our tournament scoreboard, and the
-  permalink showing 48%→0/50 across the swarm is the **governance receipt**: we
-  didn't just fix it, we proved it's fixed, reproducibly, at a link you can
-  audit.
+  permalinks are the **governance receipt** — the shipped PR
+  [retrial#1](https://github.com/nihalnihalani/retrial/pull/1) carries **5 of
+  them** documenting a 69%→0% fix across the swarm. We didn't just fix it, we
+  proved it's fixed, reproducibly, at a link you can audit.
 
 - **Fireworks — the differential-diagnosis engine.** The DiagnosisEngine calls
   Fireworks (OpenAI-compatible, `https://api.fireworks.ai/inference/v1`) across
@@ -174,11 +204,20 @@ exists — the board is a subscriber, not the system.
 
 ## What's next
 
-The compounding moat is the **flake genome**: every run classifies the flake and
-records which model won on which cause class, per repo. That grows into a
-repo-specific **flake leaderboard** — "Kimi wins 63% of order-dependency fixes on
-your repo" — so Retrial gets sharper the more you run it. Detection today,
-prediction and prevention next: a CI gate that knows your suite's failure
+The compounding moat is the **flake genome**, and it's **already accumulating** —
+not a roadmap slide. Every run classifies the flake and records which model won
+on which cause class. Our live `GET /genome` after two runs already returns:
+
+```json
+{"runs": 2, "fixed": 2,
+ "by_cause_class": {"order_dependency": 2},
+ "model_win_rates": {"glm-5p2": {"wins": 2, "win_rate": 1.0}}}
+```
+
+That's the seed of a repo-specific **flake leaderboard** — "`glm-5p2` is 2-for-2
+on order-dependency fixes on this repo" today, a statistically-weighted model
+routing table tomorrow — so Retrial gets sharper the more you run it. Detection
+today, prediction and prevention next: a CI gate that knows your suite's failure
 taxonomy before the flake ever reaches a human.
 
 Every flaky test deserves a retrial. Fifty of them, actually.
