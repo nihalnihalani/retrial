@@ -41,6 +41,12 @@ EVENT_TYPES = (
     "checkpoint_probed",
     "bisect_narrowed",
     "bisect_done",
+    # sandbox observatory
+    "sandbox_registered",
+    "sandbox_state",
+    "sandbox_exec",
+    "sandbox_destroyed",
+    "registry_snapshot",
 )
 
 

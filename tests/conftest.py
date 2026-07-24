@@ -27,12 +27,22 @@ class FakeExecResult:
 
 
 class FakeProcess:
-    def __init__(self):
+    def __init__(self, result=""):
         self.execs = []  # (cmd, timeout)
+        # Scripted output string returned by every exec (default ""). Set e.g.
+        # "EXIT:0\n" so the bisector/trial parser reads a real exit code.
+        self.result = result
 
     def exec(self, cmd, timeout=None):
         self.execs.append((cmd, timeout))
-        return FakeExecResult()
+        return FakeExecResult(result=self.result)
+
+
+class FakePreviewLink:
+    """Stands in for Daytona's preview-link object (has a `.url`)."""
+
+    def __init__(self, url):
+        self.url = url
 
 
 class FakeChild:
@@ -52,6 +62,9 @@ class FakeChild:
 
     def start(self):
         pass
+
+    def get_preview_link(self, port):
+        return FakePreviewLink(f"https://preview.fake/{self.id}:{port}")
 
 
 class FakeCheckpointSandbox:
@@ -81,6 +94,9 @@ class FakeCheckpointSandbox:
 
     def pause(self):
         self.pause_calls += 1
+
+    def get_preview_link(self, port):
+        return FakePreviewLink(f"https://preview.fake/{self.id}:{port}")
 
     def _experimental_fork(self, name=None):
         with self._mutex:
@@ -119,6 +135,9 @@ class FakeRootSandbox:
     def _experimental_fork(self, name=None):
         self.fork_calls += 1
         return self._ckpt_factory(name)
+
+    def get_preview_link(self, port):
+        return FakePreviewLink(f"https://preview.fake/{self.id}:{port}")
 
 
 class FakeClient:
@@ -176,6 +195,24 @@ class FakeClient:
             obj = self.registry.pop(sid, None)
         if obj is not None:
             obj.deleted = True
+
+
+class RaisingRegistry:
+    """A SandboxRegistry look-alike whose EVERY public method raises.
+
+    Injected into the pools/bisector to prove the never-break-a-run contract:
+    with observability wired to explode, warm/lease/release/destroy_all must
+    still behave byte-identically to a run with no registry at all. (The real
+    registry swallows internally via @_safe; this fake goes further by raising
+    from the call itself, exercising the call sites' own robustness.)
+    """
+
+    def _boom(self, *a, **k):
+        raise RuntimeError("registry exploded (never-break-a-run probe)")
+
+    attach_bus = register = set_state = exec_started = exec_finished = _boom
+    mark_destroyed = mark_degraded = preview = destroy = reap_orphans = _boom
+    emit_snapshot = snapshot = record = counts = lineage = _boom
 
 
 @pytest.fixture(autouse=True)
