@@ -58,12 +58,22 @@ class SandboxPool:
 
     # -- public API ------------------------------------------------------
     def warm(self, n):
-        """Pre-create n sandboxes concurrently. Returns the count made ready."""
+        """Pre-create n sandboxes concurrently, each pre-execed so its cold-start
+        is paid now. Returns the count made ready."""
         made = [None] * n
 
         def mk(i):
             try:
-                made[i] = self._create_one()
+                sb = self._create_one()
+                # Pay the sandbox's first-exec cold-start now (concurrently, as part
+                # of warm) so the first REAL trial lands instantly instead of after
+                # a multi-second stall. A freshly created container's first exec is
+                # slow; every exec after it is fast.
+                try:
+                    sb.process.exec("echo warm")
+                except Exception:
+                    pass
+                made[i] = sb
             except Exception as e:
                 made[i] = e
 
@@ -76,6 +86,31 @@ class SandboxPool:
         with self._lock:
             self._available.extend(ready)
         return len(ready)
+
+    def ensure_warm(self, target):
+        """Warm up to at least `target` ready sandboxes (never trims). Returns the
+        available count after topping up. Used before a run so it starts demo-ready
+        even if boot pre-warm was off or incomplete."""
+        with self._lock:
+            deficit = target - len(self._available)
+        if deficit > 0:
+            self.warm(deficit)
+        with self._lock:
+            return len(self._available)
+
+    def resize_to(self, target):
+        """Bring the warm pool to exactly `target` ready sandboxes: warm more if
+        short, destroy the surplus if over. Keeps the pool bounded and demo-ready
+        between runs. Returns the available count afterward."""
+        with self._lock:
+            surplus = len(self._available) - target
+            extra = [self._available.pop() for _ in range(surplus)] if surplus > 0 else []
+        for sb in extra:
+            threading.Thread(target=self._destroy, args=(sb,), daemon=True).start()
+        if surplus < 0:
+            self.warm(-surplus)
+        with self._lock:
+            return len(self._available)
 
     def lease(self):
         """Hand out a fresh sandbox, popping a warm one or creating on demand."""
