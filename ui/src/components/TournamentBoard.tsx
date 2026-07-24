@@ -39,6 +39,7 @@ export function TournamentBoard({ onRestart }: Props) {
     testName,
     plannedTrials,
     diagnoseModels,
+    diagnoseModelNames,
     genome,
     prUrl,
   } = state;
@@ -57,7 +58,11 @@ export function TournamentBoard({ onRestart }: Props) {
 
       <main className="board-main">
         {phase === 'diagnosing' && (
-          <DiagnosingView testName={testName} n={diagnoseModels ?? 4} />
+          <DiagnosingView
+            testName={testName}
+            n={diagnoseModels ?? 4}
+            modelNames={diagnoseModelNames}
+          />
         )}
         {phase === 'detect' && (
           <DetectPhase detect={detect} expectedTrials={plannedTrials ?? DETECT_EXPECTED} />

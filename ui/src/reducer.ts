@@ -4,6 +4,7 @@ export const initialState: BoardState = {
   phase: 'detect',
   testName: null,
   diagnoseModels: null,
+  diagnoseModelNames: null,
   plannedTrials: null,
   detect: {
     trials: [],
@@ -35,6 +36,7 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
         phase: 'diagnosing',
         testName: event.test_name,
         diagnoseModels: event.n,
+        diagnoseModelNames: event.models ?? null,
       };
     }
 
