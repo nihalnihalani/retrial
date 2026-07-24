@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEventStream } from '../useEventStream';
 import { useDaytonaHealth, type PoolHealth } from '../useDaytonaHealth';
-import { modelForHypothesis } from '../models';
+import { modelForHypothesis, displayModel } from '../models';
 import type { ConnectionMode, Phase } from '../types';
 import { DiagnosingView } from './DiagnosingView';
 import { DetectPhase } from './DetectPhase';
@@ -67,10 +67,16 @@ export function TournamentBoard({ onRestart }: Props) {
   const bestIdx = quarantine ? hypotheses.findIndex((h) => h.id === quarantine.bestId) : -1;
   const winnerHyp = winnerIdx >= 0 ? hypotheses[winnerIdx] : undefined;
   const bestHyp = bestIdx >= 0 ? hypotheses[bestIdx] : undefined;
-  // Prefer the model the engine explicitly credits with the winning fix; fall
-  // back to positional index-mapping only when it doesn't supply one.
-  const winnerModel = winner?.model ?? modelForHypothesis(diagnoseModelNames, winnerIdx);
-  const bestModel = modelForHypothesis(diagnoseModelNames, bestIdx);
+  // Prefer the model the engine explicitly credits (winner_confirmed.model, or
+  // the lane's own model); fall back to positional index-mapping only when none.
+  const winnerModel = displayModel(
+    winner?.model ?? winnerHyp?.model ?? null,
+    modelForHypothesis(diagnoseModelNames, winnerIdx),
+  );
+  const bestModel = displayModel(
+    bestHyp?.model ?? null,
+    modelForHypothesis(diagnoseModelNames, bestIdx),
+  );
 
   const [toast, setToast] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -112,7 +118,9 @@ export function TournamentBoard({ onRestart }: Props) {
           ? ' — a run is already in progress'
           : lastStatus === 404
             ? ' — seed not found by the engine'
-            : ` — engine returned ${lastStatus}`;
+            : lastStatus === 400
+              ? ' — seed path rejected by the engine'
+              : ` — engine returned ${lastStatus}`;
       setToast(`Couldn't start run${extra}`);
     } catch {
       setToast('Engine unreachable on :8000 — is it running?');
