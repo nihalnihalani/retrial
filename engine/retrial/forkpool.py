@@ -25,19 +25,15 @@ Drop-in guarantee: same 7-method public surface as `SandboxPool`
 never know which backend served them. Select via RETRIAL_POOL_BACKEND=fork
 (see `pool.make_pool`; the default is snapshot, the safe choice).
 """
-import os
 import threading
 import time
-from pathlib import Path
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 
 from .pool import SandboxPool
 from .registry import as_safe
-
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+from .settings import get_settings
 
 
 def _retry(op_name, fn, attempts=3, base_delay=1.0):
@@ -67,9 +63,7 @@ class ForkSandboxPool:
         # pool's default region) — Rewind's spike and live smoke both verified
         # against us-east-1. Overridable via RETRIAL_FORK_TARGET.
         self._client = client or Daytona(
-            DaytonaConfig(target=target or os.environ.get(
-                "RETRIAL_FORK_TARGET",
-                os.environ.get("DAYTONA_TARGET", "us-east-1")))
+            DaytonaConfig(target=target or get_settings().resolved_fork_target())
         )
         # Remember ctor args so the lazy fallback SandboxPool is built with the
         # same shape (same client if one was injected — the mocked tests rely
@@ -116,7 +110,7 @@ class ForkSandboxPool:
         self._torn_down = False
         # Spend guard: hard cap on simultaneously live trial forks. Every live
         # fork bills real compute — no bug should be able to fork-bomb the wallet.
-        self._max_forks = int(os.environ.get("RETRIAL_MAX_FORKS", "64"))
+        self._max_forks = get_settings().retrial_max_forks
 
     # -- internals -------------------------------------------------------
     def _ensure_checkpoint(self):
@@ -136,12 +130,12 @@ class ForkSandboxPool:
             # default (container) snapshot rejects it with "Forking is not
             # supported for this sandbox" (verified live 2026-07-25). Rewind's
             # spike measured fork at 0.6-0.7s on this exact snapshot.
-            snapshot = os.environ.get("RETRIAL_FORK_SNAPSHOT", "daytona-vm-small")
+            snapshot = get_settings().retrial_fork_snapshot
             if snapshot:
                 kwargs["snapshot"] = snapshot
             if self._auto_delete_min is None:
                 # Same belt-and-braces credit protection as SandboxPool.
-                self._auto_delete_min = int(os.environ.get("AUTO_DELETE_MIN", "60"))
+                self._auto_delete_min = get_settings().auto_delete_min
             if self._auto_delete_min and self._auto_delete_min > 0:
                 kwargs["auto_delete_interval"] = self._auto_delete_min
             if self._hermetic:
@@ -165,7 +159,7 @@ class ForkSandboxPool:
             # Optional bootstrap (repo clone / deps / cache warm) baked into the
             # checkpoint so every clone starts past it. Default empty — retrial
             # seeds only need python3, which the snapshot image already has.
-            bootstrap = os.environ.get("RETRIAL_FORK_BOOTSTRAP_CMD", "").strip()
+            bootstrap = get_settings().retrial_fork_bootstrap_cmd.strip()
             if bootstrap:
                 root.process.exec(bootstrap, timeout=180)
             fork = _retry("ckpt.fork", lambda: root._experimental_fork(
