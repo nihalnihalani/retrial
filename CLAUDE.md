@@ -48,6 +48,11 @@ npm run build                                       # must pass before committin
 Types: `run_started {test_name, planned_trials}` · `trial_done {hypothesis_id|null, trial_index, passed, duration_s}` · `detect_done {flake_rate, wilson_ci, trials, fails}` · `hypothesis_created {id, cause_class, explanation}` · `hypothesis_verified {id, flake_rate, wilson_ci, trials}` · `hypothesis_eliminated {id, reason?}` · `winner_confirmed {id, flake_rate, confirm_flake_rate}` · `quarantine_confirmed {best_id, dossier}` · `tournament_done`.
 Rules: `trial_index` is per-context 0-based (detect series = `hypothesis_id: null`; each lane its own series). `wilson_ci` = `[low, high]` fractions 0..1. Change the contract in BOTH types.ts and the engine emitter in the same commit, or don't change it.
 
+## Hermetic mode + credit safety (default OFF — demo path unchanged)
+- HERMETIC=1: second network-blocked detect pass (block at CREATE only), emits `hermetic_diagnosis` — CI overlap → "env_independent" (eliminates external_dep by infrastructure), non-overlap → "external_dep". Validated live: 56% vs 50%, env_independent.
+- AUTO_DELETE_MIN (default 60): every pool sandbox auto-deletes — crashed runs can't leak credit.
+- Server threads hermetic context into diagnosis on the CLI/direct path only (server pre-diagnoses before detect by design; do NOT refactor before the demo — decided 2026-07-23).
+
 ## Statistics — non-negotiable
 - Wilson 95% CI everywhere a rate is shown ("0/50" is reported as "≤7% at 95% confidence", never "0%").
 - Winner = lowest flake rate whose CI upper bound < original's rate, then a **fresh confirmation round** (guards selection bias). No winner → QUARANTINE verdict with evidence dossier — the run never dead-ends.
