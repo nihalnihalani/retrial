@@ -10,6 +10,8 @@ import { WinnerCard } from './WinnerCard';
 import { QuarantineCard } from './QuarantineCard';
 import { TerminalVerdictCard } from './TerminalVerdictCard';
 import { GenomeCard } from './GenomeCard';
+import { TreeTimeline } from './TreeTimeline';
+import { PromoteGate } from './PromoteGate';
 
 const DETECT_EXPECTED = 40;
 const TOURNAMENT_URL = 'http://localhost:8000/tournament';
@@ -40,8 +42,14 @@ const PHASE_STEP: Record<Phase, number> = {
   winner: 2,
   quarantine: 2,
   baseline_verdict: 2,
+  bisect: -1, // time travel has its own rail; the 3-act stepper stays dark
 };
 const STEPS = ['Detect', 'Tournament', 'Verdict'];
+
+// Grid = the classic phase router (the existing star, default). Tree = the
+// tournament rendered as a timeline rail; also forced whenever a bisection
+// is running (the rail IS that feature's view).
+type BoardView = 'grid' | 'tree';
 
 interface Props {
   onRestart: () => void;
@@ -67,6 +75,9 @@ export function TournamentBoard({ onRestart }: Props) {
     genome,
     prUrl,
     tournamentDone,
+    bisect,
+    promotion,
+    poolDegraded,
   } = state;
   const winnerIdx = winner ? hypotheses.findIndex((h) => h.id === winner.id) : -1;
   const bestIdx = quarantine ? hypotheses.findIndex((h) => h.id === quarantine.bestId) : -1;
@@ -86,12 +97,20 @@ export function TournamentBoard({ onRestart }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [seedLabel, setSeedLabel] = useState(SEEDS[0].label);
+  const [view, setView] = useState<BoardView>('grid');
 
   // A run is "active" from the moment it names a test until it reaches a
   // terminal verdict; the GO button disables itself for that whole window.
   const terminal =
-    phase === 'winner' || phase === 'quarantine' || phase === 'baseline_verdict' || tournamentDone;
+    phase === 'winner' ||
+    phase === 'quarantine' ||
+    phase === 'baseline_verdict' ||
+    tournamentDone ||
+    (phase === 'bisect' && (bisect?.done ?? false));
   const runActive = testName !== null && !terminal;
+
+  // A running bisection IS the tree view — the checkpoint rail is its board.
+  const showTree = phase === 'bisect' || view === 'tree';
 
   useEffect(() => {
     if (!toast) return;
@@ -141,6 +160,7 @@ export function TournamentBoard({ onRestart }: Props) {
         phase={phase}
         testName={testName}
         health={health}
+        degraded={poolDegraded !== null}
         onRestart={onRestart}
         canGo={mode === 'live'}
         goDisabled={runActive || posting}
@@ -148,6 +168,9 @@ export function TournamentBoard({ onRestart }: Props) {
         seedLabel={seedLabel}
         onSeedChange={setSeedLabel}
         onGo={startRun}
+        view={view}
+        onViewChange={setView}
+        viewLocked={phase === 'bisect'}
       />
 
       {toast && (
@@ -157,50 +180,57 @@ export function TournamentBoard({ onRestart }: Props) {
       )}
 
       <main className="board-main">
-        {phase === 'diagnosing' && (
+        {phase === 'diagnosing' ? (
           <DiagnosingView
             testName={testName}
             n={diagnoseModels ?? 4}
             modelNames={diagnoseModelNames}
           />
-        )}
-        {phase === 'detect' && (
-          <DetectPhase
-            detect={detect}
-            expectedTrials={plannedTrials ?? DETECT_EXPECTED}
-            threshold={threshold}
-          />
-        )}
-        {phase === 'tournament' && (
-          <TournamentPhase
-            hypotheses={hypotheses}
-            modelNames={diagnoseModelNames}
-            plannedTrials={plannedTrials}
-            threshold={threshold}
-          />
-        )}
-        {phase === 'winner' && winner && (
-          <WinnerCard
-            winner={winner}
-            hypothesis={winnerHyp}
-            detect={detect}
-            prUrl={prUrl}
-            model={winnerModel}
-          />
-        )}
-        {phase === 'quarantine' && quarantine && (
-          <QuarantineCard
-            quarantine={quarantine}
-            bestHypothesis={bestHyp}
-            detect={detect}
-            prUrl={prUrl}
-            model={bestModel}
-          />
-        )}
-        {phase === 'baseline_verdict' && baselineVerdict && (
-          <TerminalVerdictCard state={baselineVerdict} />
+        ) : showTree ? (
+          <TreeTimeline state={state} />
+        ) : (
+          <>
+            {phase === 'detect' && (
+              <DetectPhase
+                detect={detect}
+                expectedTrials={plannedTrials ?? DETECT_EXPECTED}
+                threshold={threshold}
+              />
+            )}
+            {phase === 'tournament' && (
+              <TournamentPhase
+                hypotheses={hypotheses}
+                modelNames={diagnoseModelNames}
+                plannedTrials={plannedTrials}
+                threshold={threshold}
+              />
+            )}
+            {phase === 'winner' && winner && (
+              <WinnerCard
+                winner={winner}
+                hypothesis={winnerHyp}
+                detect={detect}
+                prUrl={prUrl}
+                model={winnerModel}
+              />
+            )}
+            {phase === 'quarantine' && quarantine && (
+              <QuarantineCard
+                quarantine={quarantine}
+                bestHypothesis={bestHyp}
+                detect={detect}
+                prUrl={prUrl}
+                model={bestModel}
+              />
+            )}
+            {phase === 'baseline_verdict' && baselineVerdict && (
+              <TerminalVerdictCard state={baselineVerdict} />
+            )}
+          </>
         )}
       </main>
+
+      <PromoteGate promotion={promotion} mode={mode} />
 
       {(hypotheses.length > 0 || genome) && (
         <footer className="board-footer">
@@ -219,6 +249,7 @@ function TopBar({
   phase,
   testName,
   health,
+  degraded,
   onRestart,
   canGo,
   goDisabled,
@@ -226,11 +257,15 @@ function TopBar({
   seedLabel,
   onSeedChange,
   onGo,
+  view,
+  onViewChange,
+  viewLocked,
 }: {
   mode: ConnectionMode;
   phase: Phase;
   testName: string | null;
   health: PoolHealth | null;
+  degraded: boolean;
   onRestart: () => void;
   canGo: boolean;
   goDisabled: boolean;
@@ -238,6 +273,9 @@ function TopBar({
   seedLabel: string;
   onSeedChange: (label: string) => void;
   onGo: () => void;
+  view: BoardView;
+  onViewChange: (view: BoardView) => void;
+  viewLocked: boolean;
 }) {
   const activeIndex = PHASE_STEP[phase];
   return (
@@ -269,6 +307,7 @@ function TopBar({
       </nav>
 
       <div className="topbar-right">
+        <ViewToggle view={view} onViewChange={onViewChange} locked={viewLocked} />
         {canGo && (
           <GoControl
             seedLabel={seedLabel}
@@ -278,7 +317,7 @@ function TopBar({
             posting={posting}
           />
         )}
-        <SandboxTicker mode={mode} health={health} />
+        <SandboxTicker mode={mode} health={health} degraded={degraded} />
         {mode === 'disconnected' && (
           <span className="stale-note">connection lost — data may be stale</span>
         )}
@@ -333,9 +372,53 @@ function GoControl({
   );
 }
 
+// Grid | Tree view toggle. Grid (the existing star) stays default; while a
+// bisection runs the rail is the only sensible view, so the toggle locks.
+function ViewToggle({
+  view,
+  onViewChange,
+  locked,
+}: {
+  view: BoardView;
+  onViewChange: (view: BoardView) => void;
+  locked: boolean;
+}) {
+  return (
+    <div className="view-toggle" role="group" aria-label="Board view">
+      {(['grid', 'tree'] as const).map((v) => (
+        <button
+          key={v}
+          className={`view-toggle-btn ${(locked ? 'tree' : view) === v ? 'active' : ''}`}
+          onClick={() => onViewChange(v)}
+          disabled={locked}
+          title={locked ? 'bisection always shows the timeline rail' : `${v} view`}
+        >
+          {v === 'grid' ? '▦ Grid' : '⑂ Tree'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Daytona presence: live pool counts while LIVE, a static badge in replay.
-function SandboxTicker({ mode, health }: { mode: ConnectionMode; health: PoolHealth | null }) {
+// `degraded` renders the honest "snapshot fallback" tag once pool_degraded
+// was seen (the fork backend fell back; runs continue on the snapshot pool).
+function SandboxTicker({
+  mode,
+  health,
+  degraded,
+}: {
+  mode: ConnectionMode;
+  health: PoolHealth | null;
+  degraded: boolean;
+}) {
   if (mode === 'connecting') return null;
+
+  const degradedTag = degraded ? (
+    <span className="sandbox-degraded" title="fork backend degraded — running on the snapshot pool">
+      snapshot fallback
+    </span>
+  ) : null;
 
   if (mode === 'replay') {
     return (
@@ -346,6 +429,7 @@ function SandboxTicker({ mode, health }: { mode: ConnectionMode; health: PoolHea
         <span className="hex">⬢</span>
         <span className="sandbox-text">16 sandboxes</span>
         <span className="sandbox-dim">(recorded)</span>
+        {degradedTag}
       </span>
     );
   }
@@ -367,6 +451,7 @@ function SandboxTicker({ mode, health }: { mode: ConnectionMode; health: PoolHea
       ) : (
         <span className="sandbox-dim">connecting to pool…</span>
       )}
+      {degradedTag}
     </span>
   );
 }

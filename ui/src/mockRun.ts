@@ -16,7 +16,13 @@ export interface ScriptedEvent {
 }
 
 // 'winner' = the winning-fix recording; 'quarantine' = the no-fix recording.
-export type MockOutcome = 'winner' | 'quarantine';
+// 'promote' = the winner recording + a scripted promote-gate coda (the gate
+// renders with buttons disabled in replay — approval is live-only).
+// 'bisect' = a fully scripted time-travel bisection on the checkpoint rail.
+// The two new outcomes are OPT-IN demos behind ?mock=…; the default replay
+// (no params) is the untouched realRun.json path.
+export type MockOutcome = 'winner' | 'quarantine' | 'promote' | 'bisect';
+export const MOCK_OUTCOMES: MockOutcome[] = ['winner', 'quarantine', 'promote', 'bisect'];
 
 // A recorded frame: a real event plus capture metadata the reducer ignores.
 type RawFrame = RetrialEvent & { _t?: number; seq?: number; ts?: number };
@@ -73,6 +79,110 @@ export function buildMockScript(outcome: MockOutcome = 'winner'): ScriptedEvent[
   if (outcome === 'quarantine') {
     return buildSchedule(sliceQuarantine(realRunQuarantine as unknown as RawFrame[]));
   }
+  if (outcome === 'promote') {
+    // The real winner recording, plus a scripted promote-gate coda APPENDED
+    // after the final recorded frame — never spliced into buildSchedule's
+    // delta math, so the recorded portion plays exactly as always. Payload
+    // values mirror the recording's own winner_confirmed frame.
+    return [...buildSchedule(realRun as unknown as RawFrame[]), ...promoteCoda()];
+  }
+  if (outcome === 'bisect') {
+    return bisectScript();
+  }
   // The winning capture is a single clean run — play it as recorded.
   return buildSchedule(realRun as unknown as RawFrame[]);
+}
+
+// The scripted promote-gate coda for ?mock=promote. In replay the gate's
+// buttons are disabled (approval is live-engine only), so the script simply
+// opens the modal and leaves it up for the demo.
+function promoteCoda(): ScriptedEvent[] {
+  return [
+    {
+      after: 1200,
+      event: {
+        type: 'promotion_pending',
+        test_name: 'test_first_key.py',
+        verdict: 'FIXED',
+        winner_id: 'h1',
+        flake_rate: 0.5,
+        confirm_flake_rate: 0.0,
+        braintrust_url:
+          'https://www.braintrust.dev/app/NIHAL/p/retrial/experiments/test_first_key.py%2Fh1%2Frun2-ba1dda',
+      },
+    },
+  ];
+}
+
+// A fully scripted time-travel bisection for ?mock=bisect: the order_pollution
+// demo suite (6 tests, polluter = test_03_cache_writer.py). Synthetic and
+// labeled as such by the REPLAY badge — it exercises the checkpoint rail:
+// bisect_started → checkpoint_created×6 → endpoint probes → narrowing →
+// confirmation probes → bisect_done.
+function bisectScript(): ScriptedEvent[] {
+  const suite = [
+    'test_00_smoke.py',
+    'test_01_math.py',
+    'test_02_strings.py',
+    'test_03_cache_writer.py',
+    'test_04_parse.py',
+  ];
+  const clean = { flake_rate: 0.0, wilson_ci: [0.0, 0.08] as [number, number], trials: 24, verdict: 'STABLE' };
+  const dirty = { flake_rate: 0.5, wilson_ci: [0.31, 0.69] as [number, number], trials: 24, verdict: 'FLAKY' };
+
+  const s: ScriptedEvent[] = [
+    {
+      after: 400,
+      event: {
+        type: 'bisect_started',
+        suite: 'order_pollution',
+        n_tests: 5,
+        suspect: 'test_05_suspect.py',
+        max_trials: 24,
+      },
+    },
+    { after: 700, event: { type: 'checkpoint_created', k: 0, label: 'pristine' } },
+  ];
+  suite.forEach((name, i) => {
+    s.push({
+      after: 550,
+      event: { type: 'checkpoint_created', k: i + 1, label: name, test_passed: true },
+    });
+  });
+  // Endpoint probes: pristine is clean, full prefix is dirty — the flip exists.
+  s.push({ after: 900, event: { type: 'checkpoint_probed', k: 0, ...clean } });
+  s.push({ after: 1400, event: { type: 'checkpoint_probed', k: 5, ...dirty } });
+  // Binary search: 2 → clean, 3 → clean, 4 → dirty ⇒ polluter is index 3.
+  // (Engine ordering: each probe lands first, then the narrowed window with
+  // the post-update lo/hi — exactly what FlakeBisector._run emits.)
+  s.push({ after: 1300, event: { type: 'checkpoint_probed', k: 2, ...clean } });
+  s.push({ after: 400, event: { type: 'bisect_narrowed', lo: 2, hi: 5, k: 2, flipped: false } });
+  s.push({ after: 1300, event: { type: 'checkpoint_probed', k: 3, ...clean } });
+  s.push({ after: 400, event: { type: 'bisect_narrowed', lo: 3, hi: 5, k: 3, flipped: false } });
+  s.push({ after: 1300, event: { type: 'checkpoint_probed', k: 4, ...dirty } });
+  s.push({ after: 400, event: { type: 'bisect_narrowed', lo: 3, hi: 4, k: 4, flipped: true } });
+  // Full-budget confirmation of both sides of the flip, then the verdict.
+  s.push({ after: 1500, event: { type: 'checkpoint_probed', k: 3, ...clean, trials: 24 } });
+  s.push({ after: 1500, event: { type: 'checkpoint_probed', k: 4, ...dirty, trials: 24 } });
+  s.push({
+    after: 900,
+    event: {
+      type: 'bisect_done',
+      polluter_test: 'test_03_cache_writer.py',
+      polluter_index: 3,
+      suspect: 'test_05_suspect.py',
+      checkpoints: 6,
+      base_flake_rate: 0.0,
+      full_flake_rate: 0.5,
+      confirmed: true,
+      probes: [
+        { k: 0, ...clean },
+        { k: 2, ...clean },
+        { k: 3, ...clean },
+        { k: 4, ...dirty },
+        { k: 5, ...dirty },
+      ],
+    },
+  });
+  return s;
 }
