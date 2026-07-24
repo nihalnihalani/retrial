@@ -6,7 +6,6 @@ the original's rate) -> confirm the winner with a fresh run -> emit typed events
 at every transition. If no hypothesis statistically beats the original, the
 verdict is QUARANTINE (no dead-end: the evidence dossier is still produced).
 """
-import os
 import threading
 
 from .config import DEFAULT_THRESHOLD
@@ -14,6 +13,7 @@ from .verifier import verify, confirm, verify_hermetic
 from .ledger import EvidenceLedger
 from .genome import Genome
 from .guards import neutering_check
+from .settings import get_settings
 
 
 class TournamentCoordinator:
@@ -43,8 +43,7 @@ class TournamentCoordinator:
         # Hermetic mode: a second, network-blocked detect pass to diagnose
         # external-dependency flakes by infrastructure. Off by default; a
         # hermetic_pool (created with network_block_all) must be supplied to run.
-        self.hermetic = hermetic if hermetic is not None else (
-            os.environ.get("HERMETIC", "0") != "0")
+        self.hermetic = hermetic if hermetic is not None else get_settings().hermetic_on
         self.hermetic_pool = hermetic_pool
 
     def _emit(self, event_type, payload):

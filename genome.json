@@ -265,5 +265,15 @@
     "final_flake_rate": 0.0,
     "winner_model": null,
     "attempts": []
+  },
+  {
+    "seq": 18,
+    "test_name": "test_dict_order.py",
+    "verdict": "ERROR",
+    "cause_class": null,
+    "orig_flake_rate": 0.0,
+    "final_flake_rate": 0.0,
+    "winner_model": null,
+    "attempts": []
   }
 ]
