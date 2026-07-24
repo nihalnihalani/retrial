@@ -10,7 +10,8 @@ export type WilsonCI = [number, number]; // [low, high], each 0..1
 export interface Diagnosing {
   type: 'diagnosing';
   test_name: string;
-  n: number; // number of models drafting hypotheses
+  n: number; // number of models drafting hypotheses (== hypotheses used)
+  models?: string[]; // real model slugs, when the engine supplies them
 }
 
 export interface RunStarted {
@@ -89,10 +90,11 @@ export interface GenomeUpdated {
   by_cause_class: Record<string, number>;
 }
 
-// Emitted when the fix / quarantine PR is actually opened.
+// Emitted (after tournament_done) when the fix / quarantine PR is actually opened.
 export interface PrOpened {
   type: 'pr_opened';
   url: string;
+  verdict?: string; // 'FIXED' | 'QUARANTINE' | …
 }
 
 export interface TournamentDone {
@@ -171,6 +173,7 @@ export interface BoardState {
   phase: Phase;
   testName: string | null;
   diagnoseModels: number | null; // N models drafting during the diagnosing pre-phase
+  diagnoseModelNames: string[] | null; // real model slugs, only when supplied
   plannedTrials: number | null;
   detect: DetectState;
   hypotheses: Hypothesis[];
