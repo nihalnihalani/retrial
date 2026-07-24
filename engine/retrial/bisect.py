@@ -141,10 +141,15 @@ class FlakeBisector:
                  max_trials=30, conc=8, threshold=DEFAULT_THRESHOLD,
                  min_trials=8, timeout=60, auto_delete_min=None, registry=None):
         # Own root sandbox lifecycle, NOT via the pool: bisection needs direct
-        # fork control over one long-lived root (same client construction and
-        # create kwargs as SandboxPool._create_one).
+        # fork control over one long-lived root. The root must therefore be
+        # created exactly like ForkSandboxPool's — fork REGION and fork
+        # SNAPSHOT — not like SandboxPool's. An earlier version mirrored
+        # SandboxPool._create_one, which builds a container in the container
+        # region; containers cannot fork, so EVERY bisection died on
+        # "Failed to fork sandbox: Forking is not supported for this sandbox"
+        # regardless of RETRIAL_POOL_BACKEND (verified live 2026-07-25).
         self._client = client or Daytona(
-            DaytonaConfig(target=target or get_settings().resolved_pool_target())
+            DaytonaConfig(target=target or get_settings().resolved_fork_target())
         )
         self._labels = labels or {"retrial": "bisect"}
         self._auto_delete_min = (auto_delete_min if auto_delete_min is not None
@@ -235,6 +240,13 @@ class FlakeBisector:
 
     def _create_root(self):
         kwargs = {"labels": self._labels}
+        # The bisect root is forked at every test boundary, so it must be a
+        # Linux VM-class sandbox from the fork snapshot — the default (container)
+        # snapshot rejects _experimental_fork. Same rule as
+        # ForkSandboxPool._ensure_checkpoint; keep the two in step.
+        snapshot = get_settings().retrial_fork_snapshot
+        if snapshot:
+            kwargs["snapshot"] = snapshot
         if self._auto_delete_min and self._auto_delete_min > 0:
             kwargs["auto_delete_interval"] = self._auto_delete_min
         root = self._client.create(CreateSandboxFromSnapshotParams(**kwargs),
