@@ -13,6 +13,7 @@ Isolation levels (chosen per seed by the flake class):
 A trial that hits an infra error never returns its sandbox to the pool,
 regardless of isolation — a broken sandbox must not serve another trial.
 """
+import base64
 import re
 import time
 
@@ -32,8 +33,13 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
     try:
         # Write the test file AND run it in a single exec round-trip (the exec
         # round-trip, not create, is the per-trial cost — one call, not two).
-        cmd = ("cat > /tmp/seed.py << 'PYEOF'\n" + test_code
-               + "\nPYEOF\npython3 /tmp/seed.py; echo EXIT:$?")
+        # The seed is shipped base64-encoded, not via a heredoc: candidate/patched
+        # code is untrusted and could otherwise contain the heredoc sentinel (or
+        # shell metacharacters) and break out of the write. base64 has no shell-
+        # special chars, so the payload can never escape its own decode.
+        b64 = base64.b64encode(test_code.encode("utf-8")).decode("ascii")
+        cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py && "
+               f"python3 /tmp/seed.py; echo EXIT:$?")
         r = sb.process.exec(cmd, timeout=timeout)
         out = r.result or ""
         duration = time.monotonic() - t0
