@@ -35,9 +35,10 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .bisect import FlakeBisector
 from .config import DEFAULT_THRESHOLD
 from .events import EventBus
-from .pool import SandboxPool
+from .pool import make_pool
 from .coordinator import TournamentCoordinator
 from .diagnosis import DiagnosisEngine
 from .prsmith import PRSmith
@@ -62,6 +63,11 @@ THRESHOLD = float(os.environ.get("THRESHOLD", str(DEFAULT_THRESHOLD)))  # matche
 ISOLATION = os.environ.get("ISOLATION", "process")
 PREWARM = int(os.environ.get("PREWARM", "16"))  # boot pre-warm size; 0 disables
 PRSMITH = os.environ.get("PRSMITH", "0") != "0"  # default OFF so runs don't spam PRs
+# Human-approval promote gate (default ON): a FIXED/QUARANTINE verdict parks the
+# result as a pending promotion and emits promotion_pending; a human approves via
+# POST /promote before PRSmith opens the PR. PROMOTE_GATE=0 restores the old
+# auto-PR behavior for headless demos.
+PROMOTE_GATE = os.environ.get("PROMOTE_GATE", "1") != "0"
 # Hermetic mode (default OFF): a second network-blocked detect pass to diagnose
 # external-dependency flakes by infrastructure. Uses its own small sub-pool.
 HERMETIC = os.environ.get("HERMETIC", "0") != "0"
@@ -81,7 +87,10 @@ def _get_pool():
     global _POOL
     with _POOL_LOCK:
         if _POOL is None:
-            _POOL = SandboxPool()
+            # Backend picked by RETRIAL_POOL_BACKEND (default snapshot). The
+            # fork backend degrades to snapshot on its own, emitting
+            # pool_degraded on this bus — no special casing here.
+            _POOL = make_pool(bus=BUS)
         return _POOL
 
 
@@ -89,7 +98,9 @@ def _get_hpool():
     global _HPOOL
     with _POOL_LOCK:
         if _HPOOL is None:
-            _HPOOL = SandboxPool(hermetic=True)
+            # The fork backend propagates network_block_all to the root create;
+            # if the platform rejects that combination it degrades automatically.
+            _HPOOL = make_pool(bus=BUS, hermetic=True)
         return _HPOOL
 
 
@@ -121,9 +132,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serialize tournaments: interleaving two runs on one bus would scramble the board.
+# Serialize runs: interleaving two runs on one bus would scramble the board.
 _run_lock = threading.Lock()
 _running = {"active": False, "test_name": None}
+# The pending human-approval promotion (guarded by _run_lock; per-run state).
+# It intentionally SURVIVES _running clearing — approval happens after the run
+# ends — but is wiped at the NEXT run acceptance inside _accept_run().
+_pending = {"promotion": None}
+
+
+def _accept_run(test_name):
+    """Single point of run acceptance. MUST be called with _run_lock held.
+
+    Everything that must be wiped between runs is wiped HERE and only here —
+    the ring-buffer stale-bleed bug recurred the moment a second endpoint
+    hand-rolled its own reset block. Add future per-run state to this helper.
+
+    Resetting the bus inside the lock, before the background thread emits
+    anything, matters: otherwise a WS that connects between the accepting POST
+    and the run thread starting would replay the PRIOR run's tail — and
+    because the buffer is capped, an early event (that run's detect_done) may
+    already be evicted while its tournament_done survives, so the board shows
+    a stale verdict with no matching detect. Never reset from a background
+    thread.
+    """
+    BUS.reset()
+    # A promotion left unclicked by a finished run must never survive into a
+    # new run (of ANY type — /tournament and /bisect both accept through here)
+    # and feed /promote stale result data. Same reasoning as the bus reset.
+    _pending["promotion"] = None
+    _running["active"] = True
+    _running["test_name"] = test_name
 
 
 def _frame(ev):
@@ -151,7 +190,8 @@ def health():
         "config": {"max_trials": MAX_TRIALS, "conc": CONC,
                    "tournament_conc": TOURNAMENT_CONC, "threshold": THRESHOLD,
                    "isolation": ISOLATION, "prewarm": PREWARM, "prsmith": PRSMITH,
-                   "hermetic": HERMETIC},
+                   "promote_gate": PROMOTE_GATE, "hermetic": HERMETIC,
+                   "pool_backend": os.environ.get("RETRIAL_POOL_BACKEND", "snapshot")},
     }
 
 
@@ -224,17 +264,7 @@ def start_tournament(req: TournamentRequest):
     with _run_lock:
         if _running["active"]:
             raise HTTPException(status_code=409, detail="a tournament is already running")
-        _running["active"] = True
-        _running["test_name"] = path.name
-        # Clear the shared replay buffer the instant GO is accepted (inside the
-        # lock, before the background thread emits anything). Otherwise a WS that
-        # connects between this POST and the run thread starting would replay the
-        # PRIOR run's tail — and because the buffer is capped, an early event
-        # (that run's detect_done) may already be evicted while its
-        # tournament_done survives, so the board shows a stale verdict with no
-        # matching detect. Resetting here guarantees the buffer only ever holds
-        # the current run once it has been accepted.
-        BUS.reset()
+        _accept_run(path.name)
 
     def run():
         pool = _get_pool()
@@ -266,9 +296,30 @@ def start_tournament(req: TournamentRequest):
                 hermetic=HERMETIC, hermetic_pool=hpool)
             result = coord.run_tournament(test_code, hypotheses, test_name=path.name,
                                           isolation=isolation)
-            # After the verdict, optionally open a fix/quarantine PR (emits pr_opened).
+            # After the verdict, optionally ship a fix/quarantine PR. With the
+            # promote gate ON (default) the result is parked as a pending
+            # promotion and a human approves via POST /promote before PRSmith
+            # runs; PROMOTE_GATE=0 restores the direct auto-PR path. Emitting
+            # promotion_pending after tournament_done is fine — the reducer
+            # treats it like pr_opened (allowed post-terminal).
             if open_pr and result.get("verdict") in ("FIXED", "QUARANTINE"):
-                PRSmith(bus=BUS).open_pr(result, path.name)
+                if PROMOTE_GATE:
+                    with _run_lock:
+                        _pending["promotion"] = {"result": result,
+                                                 "test_name": path.name}
+                    winner = result.get("winner") or {}
+                    confirmation = result.get("confirmation") or {}
+                    bt = result.get("braintrust") or {}
+                    BUS.emit("promotion_pending", {
+                        "test_name": path.name,
+                        "verdict": result["verdict"],
+                        "winner_id": winner.get("id"),
+                        "flake_rate": result.get("orig_flake_rate"),
+                        "confirm_flake_rate": confirmation.get("flake_rate"),
+                        "braintrust_url": bt.get(winner.get("id")) or bt.get("detect"),
+                    })
+                else:
+                    PRSmith(bus=BUS).open_pr(result, path.name)
         except Exception as e:
             BUS.emit("tournament_done", {"verdict": "ERROR", "error": str(e)[:200]})
         finally:
@@ -287,6 +338,111 @@ def start_tournament(req: TournamentRequest):
     return {"status": "started", "test_name": path.name, "isolation": isolation,
             "diagnosing": will_diagnose,
             "num_hypotheses": None if will_diagnose else len(supplied)}
+
+
+class PromoteRequest(BaseModel):
+    approve: bool = True
+
+
+@app.post("/promote")
+def promote(req: PromoteRequest):
+    """Close the pending human-approval promotion.
+
+    Approve: hand the parked result to PRSmith in a background thread (which
+    emits pr_opened, the existing terminal event). promotion_closed is emitted
+    BEFORE the PR call so the modal can dismiss immediately — but it only
+    means "handed to PRSmith"; the UI must not claim shipped until pr_opened
+    actually arrives (the honest-state rule). Reject: emit promotion_closed
+    only.
+    """
+    with _run_lock:
+        pending = _pending["promotion"]
+        _pending["promotion"] = None
+    if pending is None:
+        raise HTTPException(status_code=404, detail="no promotion pending")
+    if not req.approve:
+        BUS.emit("promotion_closed", {"approved": False,
+                                      "test_name": pending["test_name"]})
+        return {"status": "rejected"}
+    BUS.emit("promotion_closed", {"approved": True,
+                                  "test_name": pending["test_name"]})
+
+    def ship():
+        # PRSmith degrades to None on any failure — never crashes the server.
+        PRSmith(bus=BUS).open_pr(pending["result"], pending["test_name"])
+
+    threading.Thread(target=ship, daemon=True).start()
+    return {"status": "approved"}
+
+
+class BisectRequest(BaseModel):
+    suite_dir: str          # e.g. "seeds/suites/order_pollution"
+    suspect: str | None = None   # filename within the suite; default = last test
+    max_trials: int | None = None
+
+
+@app.post("/bisect")
+def start_bisect(req: BisectRequest):
+    # Honest gate: bisection's capability IS the fork — there is no snapshot
+    # fallback to fake it with, so refuse up front rather than fail mid-run.
+    if os.environ.get("RETRIAL_POOL_BACKEND", "snapshot") != "fork":
+        raise HTTPException(
+            status_code=400,
+            detail="bisection requires the fork backend (set RETRIAL_POOL_BACKEND=fork)")
+    # Resolve relative suite paths against the repo root, same as /tournament.
+    path = Path(req.suite_dir)
+    if not path.is_absolute():
+        path = _REPO_ROOT / req.suite_dir
+    # Scope guard: the suite MUST live inside the repo's seeds/ directory.
+    # Without this, a request could point suite_dir at any directory on disk
+    # and the server would read every test_*.py in it and ship them into a
+    # sandbox. Resolve symlinks/.. first, then require the result under seeds/.
+    resolved = path.resolve()
+    if not resolved.is_relative_to(_SEEDS_DIR):
+        raise HTTPException(
+            status_code=400,
+            detail=f"suite_dir must resolve inside {_SEEDS_DIR.name}/: {req.suite_dir}")
+    if not resolved.is_dir():
+        raise HTTPException(status_code=404, detail=f"suite not found: {req.suite_dir}")
+    files = sorted(resolved.glob("test_*.py"))
+    if not files:
+        raise HTTPException(status_code=404,
+                            detail=f"no test_*.py files in {req.suite_dir}")
+    suite = [(f.name, f.read_text()) for f in files]
+    names = [n for n, _ in suite]
+    suspect_index = None
+    if req.suspect is not None:
+        if req.suspect not in names:
+            raise HTTPException(status_code=404,
+                                detail=f"suspect not in suite: {req.suspect}")
+        suspect_index = names.index(req.suspect)
+    resolved_suspect = suspect_index if suspect_index is not None else len(suite) - 1
+
+    with _run_lock:
+        if _running["active"]:
+            raise HTTPException(status_code=409, detail="a run is already active")
+        _accept_run(resolved.name)
+
+    def run():
+        try:
+            bisector = FlakeBisector(bus=BUS,
+                                     max_trials=req.max_trials or MAX_TRIALS,
+                                     conc=CONC, threshold=THRESHOLD)
+            # run() is degrade-gracefully: errors come back as a terminal
+            # bisect_done {"error": ...}, never a traceback to the client.
+            bisector.run(suite, suspect_index=suspect_index,
+                         suite_name=resolved.name)
+        except Exception as e:
+            BUS.emit("bisect_done", {"error": str(e)[:200]})
+        finally:
+            with _run_lock:
+                _running["active"] = False
+                _running["test_name"] = None
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"status": "started", "suite": resolved.name,
+            "n_tests": resolved_suspect,  # prefix length = checkpointed tests
+            "suspect": names[resolved_suspect]}
 
 
 if __name__ == "__main__":
