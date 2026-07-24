@@ -11,7 +11,7 @@
     {
       "id": "h2",
       "cause_class": "timing",
-      "explanation": "Hypothesis: a startup timing race. Adds a settle delay before reading the events (a plausible but WRONG cause \u2014 the flake is hash-order, so this stays flaky and is eliminated empirically).",
+      "explanation": "Hypothesis: a startup timing race. Adds a settle delay before reading events \u2014 a plausible but WRONG cause; the flake is hash-order, so this stays flaky and is eliminated by evidence.",
       "model": "accounts/fireworks/models/kimi-k2p6",
       "patched_code": "import sys, time\ntime.sleep(0.01)\nevents = {f\"evt-{i}\" for i in range(8)}\nfirst = next(iter(events))\nsys.exit(0 if first == \"evt-0\" else 1)\n"
     }
