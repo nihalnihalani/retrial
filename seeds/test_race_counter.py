@@ -1,16 +1,19 @@
-"""Seed A — genuine data race: unsynchronized counter increments across threads.
-TUNING: THREADS/ITERS control collision probability. Exit 0 = pass, 1 = fail (flake)."""
+"""Seed A2 — split read-modify-write race: a thread switch between the read
+and the write loses updates. Exit 0 = pass, 1 = fail (flake)."""
 import threading, sys
+sys.setswitchinterval(1e-6)
 
-THREADS, ITERS = 8, 60000
+THREADS, ITERS = 8, 2000
 counter = 0
+barrier = threading.Barrier(THREADS)
 
 def work():
     global counter
+    barrier.wait()
     for _ in range(ITERS):
-        counter += 1  # read-modify-write, not atomic across bytecode boundaries
+        tmp = counter      # read
+        counter = tmp + 1  # write — switch between these loses an update
 
 ts = [threading.Thread(target=work) for _ in range(THREADS)]
 [t.start() for t in ts]; [t.join() for t in ts]
-expected = THREADS * ITERS
-sys.exit(0 if counter == expected else 1)
+sys.exit(0 if counter == THREADS * ITERS else 1)
