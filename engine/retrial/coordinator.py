@@ -118,6 +118,7 @@ class TournamentCoordinator:
                 "cause_class": h.get("cause_class"),
                 "explanation": h.get("explanation"),
                 "patched_code": h["patched_code"],
+                "model": h.get("model"),   # generating model, for the flake genome
                 **v,
             }
             with results_lock:
