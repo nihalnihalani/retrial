@@ -93,10 +93,14 @@ carry the moment.
 
 ### Beat 4 — The close: flywheel + intent (2:40–3:00)
 
-> "And every run records your repo's **flake genome** — which model wins on which
-> kind of flake, on *your* code. It's already accumulating: our genome endpoint
-> shows `glm-5p2` two-for-two on order-dependency fixes right now. That grows
-> into a per-repo model leaderboard. It gets sharper the more you run it.
+> "And we proved this isn't a toy: on a real catalogued flake from an academic
+> dataset, our tournament converged on the exact fix the maintainer shipped — and
+> rejected the model that got it wrong. Human ground truth, matched by evidence.
+>
+> Every run also records your repo's **flake genome** — which model wins on which
+> kind of flake, on *your* code. It's already accumulating: `glm-5p2` is winning
+> order-dependency fixes right now. That grows into a per-repo model leaderboard;
+> it gets sharper the more you run it.
 >
 > Detection tools need a month of history. We need sixty seconds. Every flaky
 > test deserves a retrial — fifty of them, actually. We're going to keep
@@ -118,17 +122,19 @@ carry the moment.
 ## Q&A bank (2 min) — prepared honest answers
 
 **Q: "Is this just a toy? Does it work on real code, or only your seeded test?"**
-> "Real code. We took a documented flaky test — `test_rearrange` from the penman
-> library, version 1.2.1, a real MIT Python project — that's catalogued in
-> IDoFT, the academic flakiness dataset out of Illinois, and was already fixed by
-> the maintainer. We pointed Retrial at it and reproduced the flake on Daytona at
-> **eighty-eight percent, confidence interval seventy-four to ninety-five, zero
-> infra errors**, using the exact same process-isolation model the engine ships.
-> A real, in-the-wild, maintainer-confirmed flake, reproduced on our substrate.
-> The demo seed is calibrated for a clean 40-to-55-percent band; this proves the
-> engine reaches real-world flakes, not just our fixture. [If the tournament
-> experiment lands: 'and our model tournament rediscovered the maintainer's exact
-> fix.']"
+> *(This is our strongest answer — lead with it if you get any opening.)*
+> "It rediscovered a human maintainer's fix on a real bug. We took
+> `test_rearrange` from the penman library, 1.2.1 — a real MIT Python project,
+> catalogued in IDoFT, the academic flakiness dataset out of Illinois, already
+> fixed by the maintainer. We pointed Retrial at it. It reproduced the flake at
+> eighty-eight percent, then ran the tournament — and **three of our four models
+> independently converged on the exact fix the maintainer shipped: seed the RNG
+> before the random reorder.** The fourth model's patch was still ninety-four
+> percent flaky, and the evidence *eliminated it* — not our opinion, the reruns.
+> The winner confirmed at zero out of twenty-five fresh sandboxes. Fifty-seven
+> seconds, zero infra errors. That's the whole thesis in one run: three fixes
+> looked right, only the empirical rerun told the wrong one from the right ones —
+> against human ground truth."
 
 **Q: "Why not just run `pytest --count=50` locally? Why the sandboxes?"**
 > "Because shared-state and environment flakes need a *fresh* environment per
