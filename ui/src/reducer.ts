@@ -38,6 +38,7 @@ export const initialState: BoardState = {
   poolDegraded: null,
   preflight: null,
   hermetic: null,
+  narration: null,
   observatory: {
     sandboxes: {},
     counts: { live: 0, totalEver: 0, destroyed: 0 },
@@ -69,6 +70,10 @@ function resetPerRun(state: BoardState): BoardState {
     bisect: null,
     promotion: null,
     hermetic: null,
+    // Per-run, unlike genome/poolDegraded/observatory: the audio describes ONE
+    // verdict. Leaving it would let run 2 offer a play button that speaks run
+    // 1's numbers — the audio equivalent of the ring-buffer stale-bleed bug.
+    narration: null,
   };
 }
 
@@ -332,6 +337,21 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
           hermeticRate: event.hermetic_rate,
           networkedCi: event.networked_ci,
           hermeticCi: event.hermetic_ci,
+        },
+      };
+    }
+
+    case 'narration_ready': {
+      // Post-terminal by design (fired after tournament_done), so this must NOT
+      // touch phase or tournamentDone — same contract as pr_opened.
+      return {
+        ...state,
+        narration: {
+          url: event.url,
+          durationS: event.duration_s,
+          script: event.script,
+          voiceId: event.voice_id,
+          modelId: event.model_id,
         },
       };
     }

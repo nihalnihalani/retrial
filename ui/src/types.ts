@@ -133,6 +133,24 @@ export interface HermeticDiagnosis {
   hermetic_ci: WilsonCI;
 }
 
+// The verdict autopsy finished synthesizing (ElevenLabs, output only). Arrives
+// AFTER tournament_done — narration is fired off the run thread once the verdict
+// is final, so like pr_opened it is a legal post-terminal event and the reducer
+// must not treat it as a new run. Absent entirely when NARRATE=0 or no API key.
+// `url` is server-relative (`/narration/run-<hex>`); duration_s is derived from
+// the CBR mp3 payload, not promised by the API.
+export interface NarrationReady {
+  type: 'narration_ready';
+  run_id: string;
+  url: string;
+  duration_s: number;
+  synth_s: number;
+  bytes: number;
+  script: string;
+  voice_id: string;
+  model_id: string;
+}
+
 // The fork pool backend fell back to the snapshot pool (sticky, per-process).
 export interface PoolDegraded {
   type: 'pool_degraded';
@@ -342,6 +360,7 @@ export type RetrialEvent =
   | PrOpened
   | TournamentDone
   | HermeticDiagnosis
+  | NarrationReady
   | PoolDegraded
   | PreflightDone
   | BisectStarted
@@ -485,6 +504,17 @@ export interface HermeticState {
   hermeticCi: WilsonCI;
 }
 
+// The spoken verdict autopsy, once synthesis finished. null for the entire run
+// when narration is off — the board renders no audio affordance at all rather
+// than a dead play button.
+export interface NarrationState {
+  url: string;
+  durationS: number;
+  script: string;
+  voiceId: string;
+  modelId: string;
+}
+
 // ---- Derived Observatory view state (built by the reducer) ----
 
 // One sandbox as the Observatory renders it: the wire record plus the
@@ -530,6 +560,7 @@ export interface BoardState {
   // leaves it be. Drives the persistent degrade banner (rendered in PKG-B).
   preflight: { ok: boolean; liveChecked: boolean; checks: PreflightCheck[] } | null;
   hermetic: HermeticState | null;
+  narration: NarrationState | null;
   // The sandbox observatory feed. Like genome/poolDegraded, it OUTLIVES a
   // single run (the pool is shared across runs), so resetPerRun leaves it be.
   observatory: ObservatoryState;
