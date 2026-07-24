@@ -13,9 +13,10 @@ The JSON parsing (`_parse_hypothesis`) is pure and unit-tested against canned
 responses; the network path is wired and will work once the key lands.
 """
 import json
-import os
 import re
 import threading
+
+from .settings import get_settings
 
 BASE_URL = "https://api.fireworks.ai/inference/v1"
 DEFAULT_MODELS = ["accounts/fireworks/models/glm-5.2"]  # real slugs TBD when key lands
@@ -32,7 +33,7 @@ _JSON_OBJ_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
 def _models_from_env():
-    raw = os.environ.get("FIREWORKS_MODELS", "").strip()
+    raw = get_settings().fireworks_models.strip()
     if raw:
         return [m.strip() for m in raw.split(",") if m.strip()]
     return list(DEFAULT_MODELS)
@@ -123,7 +124,7 @@ def diagnose(test_code, test_name, log_tail="", n=4, models=None,
     `context` (optional) is an infrastructure finding fed into every prompt.
     """
     models = models or _models_from_env()
-    api_key = api_key or os.environ.get("FIREWORKS_API_KEY")
+    api_key = api_key or get_settings().fireworks_api_key
 
     if client is None:
         if not api_key:
@@ -181,7 +182,7 @@ class DiagnosisEngine:
 
     def __init__(self, models=None, api_key=None, base_url=BASE_URL):
         self.models = models or _models_from_env()
-        self.api_key = api_key or os.environ.get("FIREWORKS_API_KEY")
+        self.api_key = api_key or get_settings().fireworks_api_key
         self.base_url = base_url
 
     @property
