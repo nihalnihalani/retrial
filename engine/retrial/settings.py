@@ -83,10 +83,16 @@ class Settings(BaseSettings):
     hermetic: str = "0"
     ledger: str = "1"
     retrial_preflight_live: str = "0"
+    narrate: str = "0"
     # --- integrations ---
     fireworks_api_key: str | None = None
     fireworks_models: str = ""
     braintrust_api_key: str | None = None
+    elevenlabs_api_key: str | None = None
+    # Slugs VERIFIED live 2026-07-25 against GET /v1/models and /v1/voices; the
+    # narrator's module defaults are the same two values. Overridable, never guessed.
+    elevenlabs_voice_id: str | None = None
+    elevenlabs_model_id: str | None = None
     retrial_repo: str | None = None
     genome_path: str | None = None
     # --- observatory ---
@@ -109,6 +115,7 @@ class Settings(BaseSettings):
         "fireworks_api_key", "braintrust_api_key", "retrial_repo",
         "genome_path", "retrial_auth_token", "max_trials", "conc",
         "threshold", "retrial_est_rate_per_sandbox_hour",
+        "elevenlabs_api_key", "elevenlabs_voice_id", "elevenlabs_model_id",
         mode="before",
     )
     @classmethod
@@ -137,6 +144,10 @@ class Settings(BaseSettings):
     @property
     def preflight_live_on(self) -> bool:
         return self.retrial_preflight_live != "0"
+
+    @property
+    def narrate_on(self) -> bool:
+        return self.narrate != "0"
 
     # -- resolved chains (one place each) -------------------------------
     def resolved_fork_target(self) -> str:
@@ -191,6 +202,12 @@ class Settings(BaseSettings):
                 out.append({"name": "max_forks", "status": "warn",
                             "detail": f"RETRIAL_MAX_FORKS={self.retrial_max_forks} <= 0 "
                                       "disables forking"})
+        # NARRATE=1 with no key would degrade to silence with no other signal —
+        # exactly the "silent degrade" class this module exists to make loud.
+        if self.narrate_on and not self.elevenlabs_api_key:
+            out.append({"name": "narration", "status": "warn",
+                        "detail": "NARRATE=1 but ELEVENLABS_API_KEY is unset — "
+                                  "the verdict autopsy will be silently skipped"})
         return out
 
 

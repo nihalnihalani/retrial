@@ -285,3 +285,52 @@ describe('degrade banner state (PKG-B)', () => {
     expect(state.poolDegraded).toEqual({ reason: 'fork VM missing' });
   });
 });
+
+// The `default: return state` catch-all means a missing case SILENTLY DROPS the
+// event (the hermetic_diagnosis lesson). narration_ready arrives after
+// tournament_done, so it also has to prove it doesn't disturb the terminal state.
+describe('narration_ready', () => {
+  const narration = {
+    type: 'narration_ready',
+    run_id: 'run-abc',
+    url: '/narration/run-abc',
+    duration_s: 51.36,
+    synth_s: 19.4,
+    bytes: 821751,
+    script: '[serious] Flake autopsy.',
+    voice_id: 'XrExE9yKIg1WjnnlVkGX',
+    model_id: 'eleven_v3',
+  } as RetrialEvent;
+
+  it('is stored rather than dropped', () => {
+    const state = reduce(initialState, narration);
+    expect(state.narration).toEqual({
+      url: '/narration/run-abc',
+      durationS: 51.36,
+      script: '[serious] Flake autopsy.',
+      voiceId: 'XrExE9yKIg1WjnnlVkGX',
+      modelId: 'eleven_v3',
+    });
+  });
+
+  it('does not disturb the terminal phase it arrives after', () => {
+    let state = reduce(initialState, { type: 'tournament_done' } as RetrialEvent);
+    const phaseBefore = state.phase;
+    state = reduce(state, narration);
+    expect(state.tournamentDone).toBe(true);
+    expect(state.phase).toBe(phaseBefore);
+  });
+
+  it('is cleared by the next run so audio can never outlive its verdict', () => {
+    // Audio describing run 1 offered on run 2's board is the stale-bleed bug
+    // with a speaker attached.
+    let state = reduce(initialState, narration);
+    expect(state.narration).not.toBeNull();
+    state = reduce(state, {
+      type: 'run_started',
+      test_name: 't',
+      planned_trials: 10,
+    } as RetrialEvent);
+    expect(state.narration).toBeNull();
+  });
+});

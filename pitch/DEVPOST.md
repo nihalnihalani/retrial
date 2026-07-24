@@ -182,9 +182,11 @@ exists — the board is a subscriber, not the system.
   (parallel) → confirm → gate → ship, emitting a typed event at every
   transition, with decision gates for all-pass, all-fail (quarantine), and
   mid-race progress.
-- **EventBus** — every event is a typed JSON payload (ring buffer of 500) fanned
-  out to the UI stream, the ElevenLabs voice announcer, and the log. `ui/src/
-  types.ts` is the authoritative engine⇄UI contract.
+- **EventBus** — every event is a typed JSON payload (ring buffer of 2000) fanned
+  out to the UI stream and the log. `ui/src/types.ts` is the authoritative
+  engine⇄UI contract. The ElevenLabs narrator is NOT a bus subscriber: it runs
+  once off the run thread after the verdict is final and publishes its result
+  back onto the bus as `narration_ready`.
 - **EvidenceLedger** — Braintrust Experiments as the public scoreboard +
   permalink receipts (a single shipped run produced **5 experiment permalinks**),
   plus a local SQLite **flake genome** (cause-class taxonomy and model win-rates
@@ -229,9 +231,16 @@ exists — the board is a subscriber, not the system.
   so in the demo this is pre-run and disclosed as such — never claimed as live
   turnaround.
 
-- **ElevenLabs — the flake autopsy.** v3 emotional-tag narration on the run's
-  outcome (hesitant on eliminated hypotheses, triumphant on the confirmed fix).
-  Output only — narrating the verdict, never taking voice input.
+- **ElevenLabs — the flake autopsy.** `eleven_v3` emotional-tag narration of the
+  run's outcome (hesitant over eliminated hypotheses, triumphant over a
+  confirmed fix), served at `GET /narration/<run_id>` and offered as a play
+  button under the verdict card. Output only — it narrates the verdict and never
+  takes voice input. Two things worth stating plainly: the script is **templated
+  from the evidence dossier, not written by an LLM**, so the narration cannot
+  drift from the numbers on screen; and it is **opt-in** (`NARRATE=1`, default
+  off) because synthesis takes ~20s, which is real time we do not spend during a
+  3-minute run unless asked. Measured on this account: ~50s of audio per verdict,
+  ~20s to synthesize, fired after `tournament_done` so it never delays a result.
 
 ---
 
