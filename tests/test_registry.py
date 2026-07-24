@@ -274,3 +274,79 @@ def test_destroyed_retention_window_bounds_records_not_counters():
     # Lineage lists contain no pruned ids.
     kids = snap["lineage"].get("ckpt", [])
     assert all(k not in {f"sb-{i}" for i in range(10)} for k in kids)
+
+
+# ----------------------- test 10: spend meter (T1-4) -----------------------
+def test_spend_meter_determinism():
+    # Drive a deterministic clock through _now so lifetime seconds are exact
+    # (no wall-clock flakiness). register at t=0, destroy at t=10, add a second
+    # live sandbox, then a double-destroy that must not double-bill.
+    reg = SandboxRegistry(destroyed_retain=50)
+    clock = {"t": 0.0}
+    reg._now = lambda: clock["t"]
+
+    clock["t"] = 0.0
+    reg.register(FakeChild("a"), role="root", backend="fork")
+    clock["t"] = 10.0
+    reg.mark_destroyed("a")
+    sp = reg.spend()
+    assert sp["total_sandbox_seconds"] == 10
+    assert sp["live_sandbox_seconds"] == 0
+
+    clock["t"] = 15.0
+    reg.register(FakeChild("b"), role="root", backend="fork")
+    clock["t"] = 20.0
+    sp = reg.spend()
+    assert sp["live_sandbox_seconds"] == 5           # b: 20-15
+    assert sp["total_sandbox_seconds"] == 15         # 10 destroyed + 5 live
+
+    # A double mark_destroyed on the already-dead "a" adds nothing.
+    clock["t"] = 25.0
+    reg.mark_destroyed("a")
+    sp = reg.spend()
+    # a stays billed at 10; b is still live (25-15=10) => total 20.
+    assert sp["live_sandbox_seconds"] == 10
+    assert sp["total_sandbox_seconds"] == 20
+
+
+def test_spend_seconds_survive_pruning():
+    # The exact-forever accumulator must not lose seconds when the destroyed
+    # record itself is pruned past the retention window.
+    reg = SandboxRegistry(destroyed_retain=1)
+    clock = {"t": 0.0}
+    reg._now = lambda: clock["t"]
+
+    lifetimes = [5.0, 7.0, 3.0]
+    t = 0.0
+    for i, life in enumerate(lifetimes):
+        clock["t"] = t
+        reg.register(FakeChild(f"s{i}"), role="trial-clone", backend="fork",
+                     parent_id="ckpt")
+        clock["t"] = t + life
+        reg.mark_destroyed(f"s{i}")
+        t += life + 1.0
+
+    # Only 1 destroyed record retained — but the seconds are exact.
+    assert len(reg.snapshot()["sandboxes"]) == 1
+    assert reg._destroyed_seconds == sum(lifetimes)
+    assert reg.spend()["total_sandbox_seconds"] == int(sum(lifetimes))
+
+
+def test_spend_cost_estimate_and_snapshot_serializable():
+    reg = SandboxRegistry()
+    clock = {"t": 0.0}
+    reg._now = lambda: clock["t"]
+    reg.register(FakeChild("a"), role="root", backend="fork")
+    clock["t"] = 3600.0                                   # one sandbox-hour live
+
+    assert reg.spend()["est_cost_usd"] is None            # no rate => no price
+    sp = reg.spend(rate_per_hour=0.10)
+    assert sp["est_cost_usd"] == 0.10                     # 1h * $0.10
+    assert sp["rate_per_sandbox_hour"] == 0.10
+
+    snap = reg.snapshot()
+    assert "spend" in snap
+    for k in ("live_sandbox_seconds", "total_sandbox_seconds", "est_cost_usd",
+              "rate_per_sandbox_hour", "note"):
+        assert k in snap["spend"]
+    json.dumps(snap)                                       # must not raise

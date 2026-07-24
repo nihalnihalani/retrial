@@ -14,8 +14,8 @@ with the Wilson-CI oracle, and binary-search to the exact test that poisons it.
 """
 import argparse
 import json
-import os
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -26,8 +26,13 @@ import braintrust
 from .bisect import FlakeBisector
 from .config import DEFAULT_THRESHOLD
 from .pool import make_pool
+from .preflight import run_preflight
+from .settings import get_settings
 from .verifier import verify
 from .diagnosis import diagnose
+
+# Live fork smoke budget (s); the doctor --live outer timeout is this + grace.
+_LIVE_SMOKE_BUDGET_S = 180
 
 
 def _cmd_check(args):
@@ -37,8 +42,9 @@ def _cmd_check(args):
         return 2
     test_code = test_path.read_text()
 
-    max_trials = args.max_trials or int(os.environ.get("MAX_TRIALS", "50"))
-    conc = args.conc or int(os.environ.get("CONC", "16"))
+    _s = get_settings()
+    max_trials = args.max_trials or _s.max_trials or 50
+    conc = args.conc or _s.conc or 16
 
     pool = make_pool()
     t0 = time.monotonic()
@@ -76,7 +82,7 @@ def _cmd_diagnose(args):
         print(f"error: no such file: {test_path}", file=sys.stderr)
         return 2
     test_code = test_path.read_text()
-    if not os.environ.get("FIREWORKS_API_KEY"):
+    if not get_settings().fireworks_api_key:
         print("error: FIREWORKS_API_KEY not set — cannot run diagnosis", file=sys.stderr)
         return 3
     try:
@@ -114,8 +120,10 @@ def _cmd_bisect(args):
         suspect_index = names.index(args.suspect)
     suspect_name = names[suspect_index if suspect_index is not None else -1]
 
-    max_trials = args.max_trials or int(os.environ.get("MAX_TRIALS", "30"))
-    conc = args.conc or int(os.environ.get("CONC", "8"))
+    # bisect keeps its OWN defaults (30/8), distinct from check's 50/16.
+    _s = get_settings()
+    max_trials = args.max_trials or _s.max_trials or 30
+    conc = args.conc or _s.conc or 8
     b = FlakeBisector(max_trials=max_trials, conc=conc, threshold=args.threshold)
     t0 = time.monotonic()
     result = b.run(suite, suspect_index=suspect_index, suite_name=suite_dir.name)
@@ -226,6 +234,61 @@ def _cmd_reap(args, fetch=_http_json):
     return 0
 
 
+# ------------------------------- doctor -------------------------------
+def _fmt_timings(timings):
+    """One-line 'create 4.2s · fork 0.7s · … · total 8.3s' from the smoke's
+    timings dict, in the natural fork-cycle order, only the steps reached."""
+    order = [("create_s", "create"), ("checkpoint_s", "checkpoint"),
+             ("fork_s", "fork"), ("exec_s", "exec"),
+             ("teardown_s", "teardown"), ("total_s", "total")]
+    parts = [f"{label} {timings[key]}s" for key, label in order if key in timings]
+    return " · ".join(parts)
+
+
+def _cmd_doctor(args, preflight_fn=run_preflight):
+    """Validate config end-to-end (PASS/WARN/FAIL per check). `--live` runs the
+    real budget-capped fork smoke behind a HARD outer timeout so a wedged SDK
+    call can never hang the operator's terminal. Exit 0 iff no check failed
+    (warns never fail); errors from the preflight function itself → exit 1."""
+    try:
+        if args.live:
+            # Hard external timeout: the smoke's internal budget is cooperative
+            # (see preflight.live_fork_smoke residual-risk note) and a pre-demo
+            # `doctor --live` on venue wifi is exactly when a hang costs most.
+            box = {}
+            t = threading.Thread(
+                target=lambda: box.update(res=preflight_fn(live=True)),
+                daemon=True)
+            t.start()
+            t.join(_LIVE_SMOKE_BUDGET_S + 30)   # smoke budget + grace
+            if "res" not in box:
+                print("FAIL  live_smoke         timed out after "
+                      f"{_LIVE_SMOKE_BUDGET_S + 30}s — wedged SDK call; sandbox "
+                      "auto-deletes in <=10 min (auto_delete_interval)")
+                return 1                          # daemon thread: process exits clean
+            res = box["res"]
+        else:
+            res = preflight_fn(live=False)
+    except Exception as e:
+        print(f"error: preflight failed: {e}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps(res))
+        return 0 if res.get("ok") else 1
+
+    for c in res.get("checks", []):
+        print(f"{c['status'].upper():<4}  {c['name']:<18}  {c['detail']}")
+    if res.get("timings"):
+        print(f"timings:  {_fmt_timings(res['timings'])}")
+    fails = [c for c in res.get("checks", []) if c["status"] == "fail"]
+    if res.get("ok"):
+        print("doctor: OK")
+    else:
+        print(f"doctor: FAILED ({len(fails)} failing checks)")
+    return 0 if res.get("ok") else 1
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -287,13 +350,28 @@ def build_parser():
                     help="cancel an active run and reap anyway")
     rp.add_argument("--json", action="store_true", help="machine-readable output")
     rp.set_defaults(func=_cmd_reap)
+
+    doc = sub.add_parser(
+        "doctor",
+        help="validate config end-to-end: PASS/FAIL per check; --live runs a "
+             "real budget-capped fork smoke",
+        epilog=(
+            "Config checks are OFFLINE (pure, instant, no key needed). --live "
+            "performs REAL Daytona API calls (~1 sandbox-minute, budget-capped) "
+            "and is the SAME code path as the server's RETRIAL_PREFLIGHT_LIVE=1 "
+            "deep check and scripts/live_smoke.py's SDK sequence."))
+    doc.add_argument("--live", action="store_true",
+                     help="create+fork+exec+destroy ONE real sandbox and report "
+                          "timings (requires DAYTONA_API_KEY; costs ~1 sandbox-minute)")
+    doc.add_argument("--json", action="store_true", help="machine-readable output")
+    doc.set_defaults(func=_cmd_doctor)
     return p
 
 
 def main(argv=None):
     # Braintrust tracing: auto-instruments supported AI clients (e.g. openai).
     # Conditional + fail-silent: logging must never break the CLI.
-    if os.environ.get("BRAINTRUST_API_KEY"):
+    if get_settings().braintrust_api_key:
         try:
             braintrust.init_logger(project="retrial")
             braintrust.auto_instrument()

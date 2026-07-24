@@ -36,19 +36,22 @@ export const initialState: BoardState = {
   bisect: null,
   promotion: null,
   poolDegraded: null,
+  preflight: null,
   hermetic: null,
   observatory: {
     sandboxes: {},
     counts: { live: 0, totalEver: 0, destroyed: 0 },
     seen: false,
+    spend: null,
   },
 };
 
 // Clears everything that belongs to a single run so a second live run can't
 // inherit the first run's board, while PRESERVING the cumulative genome, the
-// sticky poolDegraded badge, and the sandbox `observatory` — all of which
-// outlive a single run (the pool is shared and pre-warmed across runs, exactly
-// like the server's REGISTRY, which _accept_run re-seeds but never wipes) — and
+// sticky poolDegraded badge, the boot `preflight` result, and the sandbox
+// `observatory` — all of which outlive a single run (the pool is shared and
+// pre-warmed across runs, exactly like the server's REGISTRY, which _accept_run
+// re-seeds but never wipes) — and
 // the diagnosing pre-phase's model list / test name, which the caller re-sets.
 // A stale pending promotion is also dropped, mirroring the server's
 // _accept_run wipe: a new run of ANY type dismisses an unclicked gate.
@@ -95,6 +98,8 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       event.type === 'promotion_pending' ||
       event.type === 'promotion_closed' ||
       event.type === 'pool_degraded' ||
+      // Preflight is pool-level (a boot fact), honest to show post-terminal.
+      event.type === 'preflight_done' ||
       event.type === 'hermetic_diagnosis' ||
       // Sandbox registry traffic is pool-level and honest post-terminal (the
       // pool keeps living after a verdict), same rationale as pool_degraded.
@@ -337,6 +342,23 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       return { ...state, poolDegraded: { reason: event.reason } };
     }
 
+    case 'preflight_done': {
+      // Upsert (last write wins): a second preflight_done is the live deep-check
+      // updating the config-level result. Sticky like poolDegraded — never
+      // cleared in resetPerRun (a pool-level boot fact). Banner RENDERING lands
+      // in PKG-B; the state plumbing lands HERE so the event is never silently
+      // dropped (reducer.ts's default-return-state would swallow it otherwise —
+      // the hermetic_diagnosis lesson).
+      return {
+        ...state,
+        preflight: {
+          ok: event.ok,
+          liveChecked: event.live_checked,
+          checks: event.checks,
+        },
+      };
+    }
+
     case 'bisect_started': {
       return {
         ...resetPerRun(state),
@@ -491,6 +513,7 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
       return {
         ...state,
         observatory: {
+          ...obs,
           seen: true,
           sandboxes: { ...obs.sandboxes, [event.id]: rec },
           counts: existed
@@ -621,6 +644,9 @@ export function reduce(state: BoardState, event: RetrialEvent): BoardState {
             totalEver: event.counts.total_ever,
             destroyed: event.counts.destroyed,
           },
+          // The snapshot is the one honest spend source (per-event spend
+          // updates would be fake precision); the live poll refreshes it too.
+          spend: event.spend,
         },
       };
     }
