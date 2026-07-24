@@ -111,6 +111,42 @@ is why the demo keeps the calibrated `test_dict_order.py`.)
 - Reproduced via the same process-isolation model the engine uses (`isolation="process"`),
   with a one-time `pip install` per warm sandbox.
 
+## ULTIMATE EXPERIMENT — full Retrial tournament converges on the maintainer's fix
+
+We ran a **complete Retrial tournament** on this real flake: the engine's
+Fireworks `diagnose()` (imported as-is from `retrial.diagnosis`, 4 models
+round-robin) generated 4 competing hypotheses; each was re-verified by rerunning
+its `patched_code` on Daytona (pip-install penman once per warm sandbox, fresh-process
+trials, Wilson 95% CI). Script: `seeds/real/tournament_penman.py`, raw data:
+`seeds/real/tournament_penman_result.json`.
+
+**Result: 3 of 4 models independently rediscovered the maintainer's fix (PR #102)
+— add an effective `random.seed(1)` before `rearrange(t, model.random_order)` —
+and evidence eliminated the 4th.**
+
+| Hypothesis | Model | Stated cause | Re-measured flake rate | Verdict |
+|---|---|---|---|---|
+| baseline (unpatched) | — | — | 14/16 = **88%** (CI 64–96%) | flaky |
+| **h1 (WINNER)** | glm-5p2 | order_dependency | **0/16 = 0%** (CI 0–19%) | fixes it |
+| h2 | glm-5p1 | shared_state | 0/16 = 0% (CI 0–19%) | fixes it |
+| h3 | kimi-k2p6 | timing | 15/16 = **94%** (CI 72–99%) | **eliminated** |
+| h4 | deepseek-v4-pro | order_dependency | 0/16 = 0% (CI 0–19%) | fixes it |
+
+- **Winner h1 (glm-5p2)** — explanation: *"…sorts roles using `random.random()`, but the
+  RNG is never seeded deterministically…"* Its patch adds `random.seed(1)` immediately
+  before the `rearrange` call — **the same fix goodmami/penman shipped in PR #102.**
+  Confirmation round (fresh independent sandboxes): **0/25 = 0%** (CI 0–13%).
+- **h3 (kimi-k2p6)** is the instructive counter-example: it returned an empty explanation
+  and a patch that still flaked at **94%** — so the empirical reruns **eliminated it on
+  evidence**, exactly the mechanism Retrial exists for (objective flake-rate, not LLM vibes).
+- Winner selection rule (engine's): lowest flake rate whose Wilson CI upper bound < the
+  original rate. h1/h2/h4 all qualify (CI upper 19% < 88%); h1 chosen (ties broken by rate,
+  then order). Total tournament wallclock: **57s** including diagnosis + 89 Daytona trials.
+
+**The claim this unlocks:** *Retrial took a real, IDoFT-catalogued OSS flake, and its
+model tournament independently converged on the exact fix the human maintainer shipped —
+verified with 0% flake across a fresh confirmation round.*
+
 ## Reproduce it yourself
 
 ```bash
