@@ -91,4 +91,6 @@ Build window: the event schedule is a 1-day sprint (~5.5h), but user said "2 day
 - Process isolation (warm-pool reuse, fresh python3 per trial): **6.1 trials/s** → ~200 trials ≈ 33s. Sandbox isolation (fresh sandbox per trial): 2.7 trials/s.
 - Full tournament (detect + 2 hypotheses + confirm, 80 trials): **17.3s**, verdict FIXED, all event types fired. The fully-live 3-minute demo is REAL with margin.
 - Perf lever was collapsing write+run into ONE Daytona exec round-trip (~5s per 16-concurrent batch is the true unit cost, not sandbox create).
+- **Pre-warm (measured): run_started → first trial = 0.60s** (was 12.5s cold; pool warm-up execs pay cold-start before GO).
+- **FULLY-GENERATED RUN (2026-07-23, no cached hypotheses):** detect 44% (7/16, CI 23-67%) → 4 live Fireworks hypotheses → 3/4 correctly identified order-dependency/PYTHONHASHSEED; the 'timing' guess stayed 56% flaky and was ELIMINATED ("CI overlaps original flake rate") → winner confirmed 0/24 (CI ≤14%) → verdict FIXED with real Braintrust permalink. The differential-diagnosis story happened for real, autonomously.
 - Pitch line now measured: "isolation level matched to flake class — fresh interpreter for order/scheduling flakes, full sandbox teardown only for state-polluting flakes."
