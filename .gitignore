@@ -6,3 +6,6 @@ node_modules/
 dist/
 .DS_Store
 calibration-results.json
+# Added by Braintrust Wizard
+.env.braintrust
+.braintrust.json
