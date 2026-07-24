@@ -29,6 +29,8 @@ EVENT_TYPES = (
     "quarantine_confirmed",
     "tournament_done",
     "genome_updated",
+    # verdict narration (ElevenLabs, output only)
+    "narration_ready",
     # shipping (promote gate -> PRSmith)
     "promotion_pending",
     "promotion_closed",

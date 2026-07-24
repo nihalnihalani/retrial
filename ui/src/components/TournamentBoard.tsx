@@ -16,6 +16,7 @@ import { TournamentPhase } from './TournamentPhase';
 import { WinnerCard } from './WinnerCard';
 import { QuarantineCard } from './QuarantineCard';
 import { TerminalVerdictCard } from './TerminalVerdictCard';
+import { NarrationPlayer } from './NarrationPlayer';
 import { GenomeCard } from './GenomeCard';
 import { TreeTimeline } from './TreeTimeline';
 import { PromoteGate } from './PromoteGate';
@@ -90,6 +91,7 @@ export function TournamentBoard({ onRestart }: Props) {
     promotion,
     poolDegraded,
     preflight,
+    narration,
     observatory,
   } = state;
   const winnerIdx = winner ? hypotheses.findIndex((h) => h.id === winner.id) : -1;
@@ -302,6 +304,12 @@ export function TournamentBoard({ onRestart }: Props) {
             {phase === 'baseline_verdict' && baselineVerdict && (
               <TerminalVerdictCard state={baselineVerdict} />
             )}
+            {/* Rendered under whichever verdict card is up — every terminal
+                phase gets an autopsy, including the non-flaky gates. Absent
+                entirely (not disabled) when narration is off or still
+                synthesizing, so the board never shows a button that does
+                nothing. */}
+            {terminalPhase && narration && <NarrationPlayer narration={narration} />}
           </>
         )}
       </main>
