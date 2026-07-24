@@ -7,6 +7,8 @@ interface Props {
   hypotheses: Hypothesis[];
   // real model slugs (round-robined across hypotheses in order); null => omit
   modelNames: string[] | null;
+  plannedTrials: number | null; // per-lane rerun budget (run_started.planned_trials)
+  threshold?: number | null; // decision threshold (0..1) for each lane's meter
 }
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -21,30 +23,51 @@ const causeLabel = (c: string) =>
 
 // Act 2 — the fix tournament. One lane per hypothesis; each races its patched
 // test through fresh reruns. Losers grey out with a strike.
-export function TournamentPhase({ hypotheses, modelNames }: Props) {
+export function TournamentPhase({ hypotheses, modelNames, plannedTrials, threshold }: Props) {
   return (
     <section className="phase tournament-phase">
       <header className="phase-head">
         <h2 className="phase-title">Act 2 · The Tournament</h2>
-        <p className="phase-sub">
-          One hypothesis per lane. Evidence eliminates. Fifty reruns decide the winner.
-        </p>
+        <p className="phase-sub">{tournamentSubtitle(plannedTrials)}</p>
       </header>
 
       <div className="lanes">
         {hypotheses.map((h, i) => (
-          <Lane key={h.id} h={h} model={modelForHypothesis(modelNames, i)} />
+          <Lane key={h.id} h={h} model={modelForHypothesis(modelNames, i)} threshold={threshold} />
         ))}
       </div>
     </section>
   );
 }
 
-function Lane({ h, model }: { h: Hypothesis; model: string | null }) {
+// Derive the honest cap from the run itself; early-stop means "up to N", not N.
+function tournamentSubtitle(plannedTrials: number | null): string {
+  const n = plannedTrials ?? null;
+  const budget = n ? `Up to ${n} reruns per lane` : 'Reruns';
+  return `One hypothesis per lane. Evidence eliminates. ${budget} decide the winner — early-stop when the confidence interval is decisive.`;
+}
+
+const LANE_STATUS_TEXT: Record<Hypothesis['status'], string> = {
+  winner: 'WINNER',
+  eliminated: 'ELIMINATED',
+  verified: 'VERIFIED',
+  inconclusive: 'INCONCLUSIVE',
+  racing: 'RACING',
+};
+
+function Lane({
+  h,
+  model,
+  threshold,
+}: {
+  h: Hypothesis;
+  model: string | null;
+  threshold?: number | null;
+}) {
   const eliminated = h.status === 'eliminated';
+  const inconclusive = h.status === 'inconclusive';
   const winner = h.status === 'winner';
-  const statusText =
-    winner ? 'WINNER' : eliminated ? 'ELIMINATED' : h.status === 'verified' ? 'VERIFIED' : 'RACING';
+  const statusText = LANE_STATUS_TEXT[h.status];
 
   return (
     <article className={`lane ${h.status}`}>
@@ -58,13 +81,18 @@ function Lane({ h, model }: { h: Hypothesis; model: string | null }) {
         {eliminated && h.eliminatedReason && (
           <p className="lane-reason">ELIMINATED — {h.eliminatedReason}</p>
         )}
+        {inconclusive && (
+          <p className="lane-reason inconclusive-reason">
+            INCONCLUSIVE — {h.eliminatedReason ?? 'CI straddles threshold'}
+          </p>
+        )}
       </div>
 
       <div className="lane-mid">
         <div className="lane-counter mono">
           {h.trials.length} <span className="dim">reruns</span>
         </div>
-        <TrialGrid trials={h.trials} size="sm" muted={eliminated} />
+        <TrialGrid trials={h.trials} size="sm" muted={eliminated || inconclusive} />
       </div>
 
       <div className="lane-right">
@@ -72,6 +100,7 @@ function Lane({ h, model }: { h: Hypothesis; model: string | null }) {
           rate={h.flakeRate}
           ci={h.wilsonCi}
           label={winner ? 'flake rate' : 'live flake rate'}
+          threshold={threshold}
         />
       </div>
 
