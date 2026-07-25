@@ -327,7 +327,8 @@ def _cmd_matrix(args):
 def _cmd_repo(args):
     """Measure a REAL pytest test in a REAL repository at a pinned commit."""
     try:
-        spec = RepoSpec(args.repo, args.ref, args.test, install=args.install)
+        spec = RepoSpec(args.repo, args.ref, args.test, install=args.install,
+                        suite=args.suite)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -353,6 +354,8 @@ def _cmd_repo(args):
 
     lo, hi = result["wilson_ci"]
     print(f"repo:      {spec.slug}@{spec.ref[:7]}")
+    print(f"mode:      {'suite (randomised order)' if spec.suite else 'isolated node id'}"
+          + (f" — {spec.suite}" if spec.suite else ""))
     print(f"test:      {spec.node_id}")
     print(f"trials:    {result['trials']} valid"
           + (f" (+{result['errors']} infra errors)" if result["errors"] else "")
@@ -431,11 +434,16 @@ def build_parser():
             "pytest into each pooled sandbox once, then reruns ONE pytest node "
             "id across the swarm and reports the flake rate with a Wilson 95% "
             "interval.\n\n"
-            "IMPORTANT SCOPE: this runs the node id in ISOLATION. Order-dependent "
-            "flakes — where the test only fails because another test ran first, "
-            "and which are the largest class of Python flakiness — cannot "
-            "reproduce this way and will read as stable. A STABLE verdict here "
-            "means 'not flaky when run alone', not 'not flaky'."))
+            "SCOPE — this runs the node id in ISOLATION, and roughly HALF of real "
+            "flaky tests are deterministic when run alone. Gruber et al. (ICST 2021, n=7,571): 3,168 'victims' always PASS alone and 738 'brittles' always "
+            "FAIL alone — 51.6% of flaky tests. Lam et al. (ISSRE 2020) reran "
+            "each flaky test 4,000 times in isolation and reproduced only 47%.\n\n"
+            "So isolation fails BOTH ways: a victim reads STABLE ('nothing to fix') and a brittle reads ALWAYS_FAILING -> REGRESSION ('fix the code, not the "
+            "test'). Both are confident and wrong. A STABLE verdict here means "
+            "'not flaky when run alone', never 'not flaky'. For order-dependent "
+            "flakes you need suite context — see `retrial bisect`.\n\n"
+            "Budget note: 50 trials bounds the 10% threshold; Gruber measured "
+            "~170 reruns for 95% confidence a test is NOT flaky."))
     rp2.add_argument("--repo", required=True, help="owner/name or a GitHub URL")
     rp2.add_argument("--ref", required=True, help="full 40-char commit sha")
     rp2.add_argument("--test", required=True, help="pytest node id, e.g. tests/test_x.py::test_y")
@@ -445,6 +453,12 @@ def build_parser():
     rp2.add_argument("--isolation", choices=["process", "sandbox"], default="process")
     rp2.add_argument("--timeout", type=int, default=180,
                      help="per-trial seconds; the first trial in each sandbox pays the ~6s bootstrap")
+    rp2.add_argument("--suite", default=None,
+                     help=("run the WHOLE suite at this path in a RANDOMISED order "
+                           "each trial and score only --test. This is the only way "
+                           "to see order-dependent flakiness, which isolation "
+                           "structurally cannot reproduce (~51.6%% of flaky tests "
+                           "are deterministic when run alone). Slower per trial."))
     rp2.add_argument("--install", default=None,
                      help="pip args for the project (default '-e .')")
     rp2.add_argument("--json", action="store_true")

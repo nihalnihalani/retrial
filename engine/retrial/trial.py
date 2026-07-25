@@ -19,7 +19,9 @@ import shlex
 import time
 
 from .registry import REGISTRY
-from .repo import build_command as _repo_command, diagnose_exit as _repo_diagnose
+from .repo import (build_command as _repo_command,
+                   build_suite_command as _repo_suite_command,
+                   diagnose_exit as _repo_diagnose)
 from .settings import get_settings
 
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
@@ -132,7 +134,9 @@ def run_trial(pool, test_code, timeout=60, isolation="process", env=None,
         # tests look flaky is an instrument biased toward selling itself.
         # 97 is outside _VERDICT_EXIT_CODES, so it lands in `errors` instead.
         if repo_spec is not None:
-            cmd = _env_prefix(env) + _repo_command(repo_spec, _preview_tail())
+            builder = (_repo_suite_command if getattr(repo_spec, "suite", None)
+                       else _repo_command)
+            cmd = _env_prefix(env) + builder(repo_spec, _preview_tail())
         else:
             cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
                    f"{_env_prefix(env)}python3 /tmp/seed.py; RC=$?; "

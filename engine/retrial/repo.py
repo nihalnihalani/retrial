@@ -28,6 +28,49 @@ Two design decisions follow from those numbers:
    no extra Daytona round-trip. There is no setup step that can drift out of
    sync with the pool.
 
+WHAT RUNNING ONE NODE ID IN ISOLATION CAN AND CANNOT SEE — read this before
+believing any verdict this module produces.
+
+Gruber et al., ICST 2021, 7,571 flaky tests mined from 22,352 PyPI projects
+(they rerun the WHOLE suite 200x in order and 200x shuffled; they never rerun a
+test alone to detect flakiness):
+
+    order-dependent            4,461  59%   <- of which 3,168 are "victims"
+                                              (always PASS alone) and 738 are
+                                              "brittles" (always FAIL alone)
+    test-infrastructure        2,158  28%
+    non-order-dependent (NOD)    952  13%
+
+So 3,906 of 7,571 flaky tests — **51.6%** — are provably DETERMINISTIC when run
+alone. Only the 952 NOD tests are plausibly reproducible by rerunning one test.
+
+Measured directly, in Java: Lam et al., ISSRE 2020 reran each flaky test 4,000
+times in isolation. **50 of 107 (46.7%) reproduced; 53.3% did not reproduce even
+at 4,000 isolated reruns.**
+
+That means isolation fails in BOTH directions, and the second one is worse:
+
+    a "victim"  passes 100% alone  -> Retrial reports STABLE / ALREADY_STABLE
+                                      ("nothing to fix") for a genuinely flaky test
+    a "brittle" fails  100% alone  -> Retrial reports ALWAYS_FAILING -> REGRESSION
+                                      ("fix the code, not the test") for a test
+                                      that is fine when its setter runs first
+
+Neither is a hedge; both are confident, precise, wrong answers. This is why the
+CLI states the limit in --help rather than leaving it implicit, and why suite-
+context measurement (running a prefix or the whole suite, which is what
+`bisect.py` already does) is the next capability rather than a nice-to-have.
+
+Also worth knowing before quoting a trial budget: Gruber measured that **≥170
+reruns** are needed for 95% confidence that a test is NOT NOD-flaky (31 shuffled
+suite runs for OD). Retrial's default of 50 buys a bound on the 10% threshold,
+not a clean bill of health.
+
+The one thing this design does BETTER than suite-rerun tools: a fresh sandbox
+per trial is exactly the instrument FlaPy uses to separate the 28%
+infrastructure bucket, which iDFlakies-style suite reordering cannot distinguish
+at all.
+
 PYTEST EXIT CODES ARE NOT BOOLEAN, and getting this wrong is how a measurement
 tool lies. pytest reserves:
 
@@ -71,18 +114,22 @@ PYTEST_NON_VERDICT = {
 }
 # Retrial's own bootstrap failures, chosen outside pytest's range.
 BOOTSTRAP_FAILED = 98
+TARGET_NOT_IN_REPORT = 96
 BOOTSTRAP_DIAGNOSIS = {
     BOOTSTRAP_FAILED: ("repo bootstrap failed — could not download the ref or "
                        "install dependencies in the sandbox"),
+    TARGET_NOT_IN_REPORT: ("the target test was not in the suite's junit report "
+                           "— it was never collected, or the suite died before "
+                           "reaching it. Not scored as a failure."),
 }
 
 
 class RepoSpec:
     """What to measure: one pytest node id, in one repo, at one pinned commit."""
 
-    __slots__ = ("slug", "ref", "node_id", "install")
+    __slots__ = ("slug", "ref", "node_id", "install", "suite")
 
-    def __init__(self, slug, ref, node_id, install=None):
+    def __init__(self, slug, ref, node_id, install=None, suite=None):
         slug = (slug or "").strip()
         # Accept a full GitHub URL as a convenience; store the slug.
         m = re.match(r"^(?:https?://github\.com/)?([^/]+/[^/]+?)(?:\.git)?/?$", slug)
@@ -103,6 +150,10 @@ class RepoSpec:
         # How to install the project. `-e .` covers the common case; a caller can
         # override for repos that need requirements files or extras.
         self.install = install or "-e ."
+        # When set, trials run the WHOLE suite at this path in a randomised
+        # order and score only `node_id` — the only way to see order-dependent
+        # flakiness, which isolation structurally cannot reproduce.
+        self.suite = (suite or "").strip() or None
 
     @property
     def tarball_url(self):
@@ -113,7 +164,66 @@ class RepoSpec:
 
     def as_dict(self):
         return {"repo": self.slug, "ref": self.ref, "test": self.node_id,
-                "install": self.install}
+                "install": self.install, "suite": self.suite,
+                "mode": "suite" if self.suite else "isolated"}
+
+
+# Extracts ONE test's outcome from a whole-suite junit report and re-emits it as
+# a 0/1 exit code, so suite-context trials flow through the same verdict channel
+# as isolated ones. Without this, a suite run's exit code reflects every test in
+# the suite, and a different test failing would be scored against the target.
+_EXTRACT = (
+    "import sys,glob,xml.etree.ElementTree as E;"
+    "f=glob.glob('/tmp/retrial-r.xml');"
+    "sys.exit(96) if not f else None;"
+    "r=E.parse(f[0]).getroot();"
+    "cs=[c for c in r.iter('testcase') "
+    "if (c.get('file','')+'::'+c.get('classname','').split('.')[-1]+'::'+c.get('name','')) "
+    "  .endswith(TARGET) or c.get('name')==TARGET.split('::')[-1]];"
+    "sys.exit(96) if not cs else None;"
+    "c=cs[0];"
+    "sys.exit(1 if (c.find('failure') is not None or c.find('error') is not None) else 0)"
+)
+
+
+def build_suite_command(spec, preview_tail=""):
+    """Run the whole suite in a RANDOMISED order and score only the target test.
+
+    This is the answer to the isolation blind spot documented at the top of this
+    module: ~51.6% of flaky tests are deterministic when run alone, because their
+    flakiness comes from what ran BEFORE them. Reproducing that requires suite
+    context, and randomised order is how iDFlakies and FlaPy expose it.
+
+    The suite's own exit code is useless here — it reflects every test in the
+    suite, so an unrelated failure elsewhere would be scored against the target.
+    Instead the suite writes a junit report and a tiny extractor re-emits ONLY
+    the target's outcome as 0/1. If the target is absent from the report (never
+    collected, or the suite died before reaching it) that is exit 96 — a
+    non-verdict, excluded from the flake-rate denominator rather than counted as
+    a failure.
+    """
+    url = shlex.quote(spec.tarball_url)
+    suite = shlex.quote(spec.suite or ".")
+    target_py = spec.node_id.replace("\\", "\\\\").replace("'", "\\'")
+    extract = shlex.quote(f"TARGET='{target_py}';" + _EXTRACT)
+    install = spec.install
+    return (
+        f"if [ ! -f {_READY} ]; then "
+        f"  rm -rf {REPO_DIR} && mkdir -p {REPO_DIR} && "
+        f"  curl -sSL --fail {url} | tar xz -C {REPO_DIR} --strip-components=1 && "
+        f"  cd {REPO_DIR} && "
+        f"  python3 -m pip install --quiet --disable-pip-version-check {install} "
+        f"    pytest pytest-random-order >/dev/null 2>&1 && "
+        f"  touch {_READY} || {{ echo EXIT:{BOOTSTRAP_FAILED}; exit 0; }}; "
+        f"fi; "
+        f"cd {REPO_DIR} && rm -f /tmp/retrial-r.xml; "
+        # --random-order re-shuffles per process, so each trial is a different
+        # order — which is exactly the axis an order-dependent flake lives on.
+        f"python3 -m pytest {suite} -q -p no:cacheprovider "
+        f"--random-order --junitxml=/tmp/retrial-r.xml >/dev/null 2>&1; "
+        f"python3 -c {extract}; RC=$?; "
+        f"{preview_tail}echo EXIT:$RC"
+    )
 
 
 def build_command(spec, preview_tail=""):

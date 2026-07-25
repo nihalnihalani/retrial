@@ -98,3 +98,41 @@ def test_command_disables_plugins_that_would_add_variance():
 def test_command_runs_inside_the_repo_dir():
     cmd = build_command(RepoSpec("owner/name", SHA, "tests/t.py::test_x"))
     assert f"cd {REPO_DIR} && python3 -m pytest" in cmd
+
+
+# ---------------------------- suite mode --------------------------------
+from retrial.repo import TARGET_NOT_IN_REPORT, build_suite_command
+
+
+def _suite_spec():
+    return RepoSpec("owner/name", SHA, "tests/t.py::test_x", suite="tests")
+
+
+def test_suite_mode_is_recorded_in_the_spec():
+    assert _suite_spec().as_dict()["mode"] == "suite"
+    assert RepoSpec("owner/name", SHA, "tests/t.py::test_x").as_dict()["mode"] == "isolated"
+
+
+def test_suite_command_randomises_order_every_trial():
+    """Order-dependent flakiness lives on the ordering axis; a fixed order would
+    measure one arbitrary point on it forever."""
+    assert "--random-order" in build_suite_command(_suite_spec())
+
+
+def test_suite_command_scores_only_the_target_not_the_suite_exit_code():
+    """A suite's exit code reflects EVERY test in it, so an unrelated failure
+    elsewhere would be scored against the target."""
+    cmd = build_suite_command(_suite_spec())
+    assert "--junitxml=" in cmd
+    assert "testcase" in cmd  # the extractor reads per-test outcomes
+
+
+def test_target_missing_from_the_report_is_a_non_verdict():
+    """Never collected, or the suite died first — excluded from the denominator
+    rather than counted as a failure."""
+    msg = diagnose_exit(TARGET_NOT_IN_REPORT)
+    assert msg and "not scored as a failure" in msg.lower()
+
+
+def test_suite_mode_installs_the_random_order_plugin():
+    assert "pytest-random-order" in build_suite_command(_suite_spec())
