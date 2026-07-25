@@ -15,6 +15,7 @@ regardless of isolation — a broken sandbox must not serve another trial.
 """
 import base64
 import re
+import shlex
 import time
 
 from .registry import REGISTRY
@@ -34,6 +35,8 @@ _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 # here. Distinguishing a bare ImportError from a real failure needs the harness
 # to own the import, not a wider exit-code table.
 _VERDICT_EXIT_CODES = (0, 1)
+
+_ENV_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 _PREVIEW_DIR = "/tmp/retrial-preview"
@@ -72,8 +75,26 @@ def _preview_tail():
     )
 
 
-def run_trial(pool, test_code, timeout=60, isolation="process"):
+def _env_prefix(env):
+    """`FOO=bar BAZ=qux ` for the interpreter invocation, or "" for no env."""
+    if not env:
+        return ""
+    parts = []
+    for k, v in env.items():
+        if not _ENV_NAME_RE.fullmatch(str(k)):
+            raise ValueError(f"illegal env var name: {k!r}")
+        parts.append(f"{k}={shlex.quote(str(v))}")
+    return " ".join(parts) + " "
+
+
+def run_trial(pool, test_code, timeout=60, isolation="process", env=None):
     """Run test_code once in a leased sandbox.
+
+    `env` is an optional {name: value} prefixed onto the interpreter invocation.
+    It exists for the flake matrix: rerunning the SAME test under deliberately
+    varied environments (PYTHONHASHSEED, TZ, locale, ...) to find which axis
+    flips the outcome. Values are shell-quoted; names are restricted to
+    [A-Za-z_][A-Za-z0-9_]* so nothing here can escape into the command.
 
     Returns {"passed": bool, "duration_s": float, "log_tail": str,
              "exit_code": int|None, "error": str|None}. `error` is non-None only
@@ -105,7 +126,8 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         # tests look flaky is an instrument biased toward selling itself.
         # 97 is outside _VERDICT_EXIT_CODES, so it lands in `errors` instead.
         cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
-               f"python3 /tmp/seed.py; RC=$?; {_preview_tail()}echo EXIT:$RC")
+               f"{_env_prefix(env)}python3 /tmp/seed.py; RC=$?; "
+               f"{_preview_tail()}echo EXIT:$RC")
         # Observatory hook: this pooled sandbox is now running a command. The
         # registry's @_safe guarantees this never affects the trial (a
         # test-constructed pool with a private registry merely double-books into

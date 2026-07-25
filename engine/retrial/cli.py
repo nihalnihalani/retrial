@@ -29,6 +29,7 @@ from .pool import make_pool
 from .preflight import run_preflight
 from .settings import get_settings
 from .guards import inert_seed_reason
+from .matrix import format_matrix, run_matrix
 from .verifier import verify
 from .diagnosis import diagnose
 
@@ -296,6 +297,32 @@ def _cmd_doctor(args, preflight_fn=run_preflight):
     return 0 if res.get("ok") else 1
 
 
+def _cmd_matrix(args):
+    test_path = Path(args.test)
+    if not test_path.exists():
+        print(f"error: no such file: {test_path}", file=sys.stderr)
+        return 2
+    test_code = test_path.read_text()
+    inert = inert_seed_reason(test_code)
+    if inert:
+        print(f"error: {inert}", file=sys.stderr)
+        return 2
+    pool = make_pool()
+    try:
+        pool.warm(min(args.conc, 16))
+        result = run_matrix(pool, test_code, trials=args.trials, conc=args.conc)
+    finally:
+        pool.destroy_all()
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"test:      {test_path.name}")
+        print(f"axes:      {len(result['cells'])} x {result['trials_per_axis']} trials")
+        print()
+        print(format_matrix(result))
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -338,6 +365,22 @@ def build_parser():
     bis.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
                      help="flake-rate decision threshold (matches the UI's 10%% marker)")
     bis.set_defaults(func=_cmd_bisect)
+
+    mx = sub.add_parser(
+        "matrix",
+        help="rerun a test across varied environments; report which axis flips it",
+        description=(
+            "Vary one environment axis at a time (hash seed, timezone, locale, "
+            "UTF-8 mode) and measure the flake rate under each with its own "
+            "Wilson interval. History-mining tools structurally cannot answer "
+            "this — a log has no counterfactual. An axis is reported only when "
+            "its interval is DISJOINT from the control's; overlap means this "
+            "budget did not separate them, NOT that the axis has no effect."))
+    mx.add_argument("test")
+    mx.add_argument("--trials", type=int, default=24, help="trials PER AXIS (default 24)")
+    mx.add_argument("--conc", type=int, default=16)
+    mx.add_argument("--json", action="store_true")
+    mx.set_defaults(func=_cmd_matrix)
 
     sb = sub.add_parser(
         "sandboxes",

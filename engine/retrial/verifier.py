@@ -68,7 +68,7 @@ def _verdict(fails, n, lo, hi, threshold, min_trials,
 
 def verify(pool, test_code, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
            min_trials=8, bus=None, label=None, timeout=60, isolation="process",
-           hypothesis_id=None, emit_trials=True):
+           hypothesis_id=None, emit_trials=True, env=None):
     """Rerun test_code up to max_trials times (conc at a time) and classify it.
 
     Emits a `trial_done` per valid trial (when emit_trials) carrying the UI
@@ -91,7 +91,8 @@ def verify(pool, test_code, max_trials=50, conc=16, threshold=DEFAULT_THRESHOLD,
         results = [None] * batch
 
         def worker(i):
-            results[i] = run_trial(pool, test_code, timeout=timeout, isolation=isolation)
+            results[i] = run_trial(pool, test_code, timeout=timeout,
+                                   isolation=isolation, env=env)
 
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(batch)]
         for t in threads:
