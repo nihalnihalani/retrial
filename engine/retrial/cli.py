@@ -33,7 +33,8 @@ from .amnesty import format_amnesty, run_amnesty
 from .matrix import format_matrix, run_matrix
 from .repo import RepoSpec
 from .localpool import LocalPool, build_local_command
-from .suitebatch import format_batch, run_suite_batch
+from .suitebatch import (build_bootstrap_command, format_batch,
+                         run_suite_batch)
 from .verifier import verify
 from .diagnosis import diagnose
 
@@ -471,17 +472,37 @@ def _cmd_sweep(args):
         return 2
     _s = get_settings()
     conc = args.conc or _s.conc or 16
-    pool = make_pool()
     t0 = time.monotonic()
+    if args.backend == "fork":
+        # Linux-VM fork backend. The clone+install is baked into ONE checkpoint
+        # and every clone starts past it byte-identically — so the bootstrap is
+        # paid once for the whole sweep rather than once per sandbox, and
+        # trial-to-trial variance is the flake rather than provisioning noise.
+        from .forkpool import ForkSandboxPool
+        pool = ForkSandboxPool(bootstrap_cmd=build_bootstrap_command(spec),
+                               bootstrap_timeout=args.bootstrap_timeout,
+                               labels={"retrial": "sweep-fork"})
+        if not args.json:
+            print(f"backend:   fork (Linux VM, {get_settings().resolved_fork_target()})"
+                  f" — bootstrap baked into one checkpoint", flush=True)
+    else:
+        pool = make_pool()
     try:
         pool.warm(min(conc, args.runs))
+        if args.backend == "fork" and getattr(pool, "degraded", False):
+            print("::warning:: fork backend DEGRADED to the snapshot pool — "
+                  "the bootstrap is now paid per sandbox, not once", flush=True)
 
         def progress(i, total, done):
             if not args.json:
                 print(f"  suite run {i}/{total} ({done} scored)", flush=True)
 
         report = run_suite_batch(pool, spec, runs=args.runs,
-                                 timeout=args.timeout, on_run=progress)
+                                 timeout=args.timeout, on_run=progress,
+                                 # Fork clones are single-use: a suite run
+                                 # mutates the tree, so a reused clone no longer
+                                 # starts from the checkpoint.
+                                 reuse_sandboxes=(args.backend != "fork"))
     finally:
         pool.destroy_all()
     wall = round(time.monotonic() - t0, 1)
@@ -736,6 +757,12 @@ def build_parser():
                     help="only print tests at or above this flake rate")
     sw.add_argument("--install", default=None)
     sw.add_argument("--timeout", type=int, default=900)
+    sw.add_argument("--backend", choices=["snapshot", "fork"], default="snapshot",
+                    help=("snapshot = containers, bootstrap paid per sandbox. "
+                          "fork = Linux VMs, bootstrap baked into ONE checkpoint "
+                          "and every clone starts from it byte-identically"))
+    sw.add_argument("--bootstrap-timeout", type=int, default=600,
+                    help="seconds for the one-time clone+install")
     sw.add_argument("--json", action="store_true")
     sw.set_defaults(func=_cmd_sweep)
 

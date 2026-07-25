@@ -58,13 +58,16 @@ class ForkSandboxPool:
     """Drop-in for SandboxPool: same 7-method surface, fork-clone provisioning."""
 
     def __init__(self, client=None, target=None, labels=None, hermetic=False,
-                 auto_delete_min=None, bus=None, fallback=None, registry=None):
+                 auto_delete_min=None, bus=None, fallback=None, registry=None,
+                 bootstrap_cmd=None, bootstrap_timeout=None):
         # Fork-capable VM snapshots live in us-east-1 (not "us", the snapshot
         # pool's default region) — Rewind's spike and live smoke both verified
         # against us-east-1. Overridable via RETRIAL_FORK_TARGET.
         self._client = client or Daytona(
             DaytonaConfig(target=target or get_settings().resolved_fork_target())
         )
+        self._bootstrap_cmd = bootstrap_cmd or ""
+        self._bootstrap_timeout = int(bootstrap_timeout or 600)
         # Remember ctor args so the lazy fallback SandboxPool is built with the
         # same shape (same client if one was injected — the mocked tests rely
         # on that; a fresh client otherwise).
@@ -159,9 +162,17 @@ class ForkSandboxPool:
             # Optional bootstrap (repo clone / deps / cache warm) baked into the
             # checkpoint so every clone starts past it. Default empty — retrial
             # seeds only need python3, which the snapshot image already has.
-            bootstrap = get_settings().retrial_fork_bootstrap_cmd.strip()
+            # Per-run bootstrap wins over the env default: a repo sweep needs a
+            # DIFFERENT bootstrap per (repo, ref), and baking it into a global
+            # env var would make two concurrent sweeps silently share one
+            # checkpoint built for whichever ran first.
+            bootstrap = (self._bootstrap_cmd
+                         or get_settings().retrial_fork_bootstrap_cmd).strip()
             if bootstrap:
-                root.process.exec(bootstrap, timeout=180)
+                # This is where a repo's clone+install is paid — ONCE, into the
+                # checkpoint, instead of once per sandbox. A heavy dependency
+                # tree is minutes, so the timeout is caller-settable.
+                root.process.exec(bootstrap, timeout=self._bootstrap_timeout)
             fork = _retry("ckpt.fork", lambda: root._experimental_fork(
                 name=f"retrial-ckpt-{uuid4().hex[:6]}"))
             _retry("ckpt.pause", fork.pause)

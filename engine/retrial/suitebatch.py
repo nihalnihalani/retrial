@@ -83,6 +83,26 @@ def build_batch_command(spec):
     )
 
 
+def build_bootstrap_command(spec):
+    """Everything a suite run needs, so a clone starts past it.
+
+    On the FORK backend this is baked into the checkpoint and paid ONCE for the
+    whole sweep, instead of once per sandbox as on the snapshot pool. It is also
+    the only shape that lets a clone run with egress blocked: a network-blocked
+    sandbox cannot pip install, so the install has to happen before the freeze.
+    """
+    url = shlex.quote(spec.tarball_url)
+    plugins = "pytest pytest-randomly" if spec.order == "shuffle" else "pytest"
+    return (
+        f"rm -rf {REPO_DIR} && mkdir -p {REPO_DIR} && "
+        f"curl -sSL --fail {url} | tar xz -C {REPO_DIR} --strip-components=1 && "
+        f"cd {REPO_DIR} && "
+        f"python3 -m pip install --quiet --disable-pip-version-check "
+        f"  {spec.install} {plugins} >/dev/null 2>&1 && "
+        f"touch {_ready_marker(spec)} && echo BOOTSTRAP_OK"
+    )
+
+
 def _parse_rows(out):
     """{node_id: 'PASS'|'FAIL'|'SKIP'|'ERR'} from one suite run's output."""
     rows = {}
@@ -96,11 +116,20 @@ def _parse_rows(out):
     return rows
 
 
-def run_suite_batch(pool, spec, runs=20, timeout=900, on_run=None):
+def run_suite_batch(pool, spec, runs=20, timeout=900, on_run=None,
+                    reuse_sandboxes=True):
     """Run the suite `runs` times and return a per-test report.
 
     Each run is one leased sandbox exec. Every test in the suite gets `runs`
     observations for the price of `runs` suite executions — not runs x tests.
+
+    `reuse_sandboxes` MUST be False on the fork backend. Reuse is right on the
+    snapshot pool — the bootstrap marker means a returned sandbox skips the
+    reinstall, which is the whole amortisation. It is WRONG on fork: a suite run
+    mutates the tree (junit report, __pycache__, whatever the tests write), so a
+    reused clone no longer starts from the checkpoint, and "every run starts
+    byte-identical" — the only reason to pay for VMs — becomes false while still
+    being claimed.
     """
     observations = {}   # nid -> {"pass": n, "fail": n, "nonverdict": n}
     completed = 0
@@ -132,7 +161,7 @@ def run_suite_batch(pool, spec, runs=20, timeout=900, on_run=None):
             ok = False
         finally:
             # Same rule as trial.py: a sandbox that misbehaved is not reused.
-            pool.release(sb, reusable=ok)
+            pool.release(sb, reusable=(ok and reuse_sandboxes))
         if on_run is not None:
             try:
                 on_run(i + 1, runs, completed)
