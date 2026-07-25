@@ -210,7 +210,11 @@ class FlakeBisector:
             r = sandbox.process.exec(cmd, timeout=self.timeout)
             out = r.result or ""  # .result may be None (rewind lesson)
             duration = time.monotonic() - t0
-            m = _EXIT_RE.search(out)
+            # LAST match: the marker is our final line, but the suite's own
+            # stdout precedes it and must not be able to forge a verdict.
+            # Same rule as trial.py — keep the two in step.
+            _ms = _EXIT_RE.findall(out)
+            m = _ms[-1] if _ms else None
             if m is None:
                 log_tail = out.strip()[-500:]
                 self._registry.exec_finished(sid, cmd, None, log_tail,
@@ -218,7 +222,7 @@ class FlakeBisector:
                 return {"passed": False, "duration_s": round(duration, 3),
                         "log_tail": log_tail, "exit_code": None,
                         "error": "no EXIT marker in output"}
-            code_n = int(m.group(1))
+            code_n = int(m)
             log_tail = out.strip()[-500:]
             self._registry.exec_finished(sid, cmd, code_n, log_tail,
                                          round(duration, 3))

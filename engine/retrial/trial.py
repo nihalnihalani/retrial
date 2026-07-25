@@ -96,7 +96,15 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         # next — and with previews on, something does run next. The EXIT marker
         # the verifier parses always reports the SEED's code, never the preview
         # write's.
-        cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py && "
+        # `|| { echo EXIT:97; exit 0; }` rather than `&&`: with `&&`, a failed
+        # WRITE short-circuits the run and `$?` carries the WRITE's status — 1 —
+        # which is indistinguishable from "the test failed". Measured: a
+        # redirect to an unwritable path emits exactly `EXIT:1`. /tmp filling up
+        # under 16 concurrent sandboxes is mundane, and it would silently RAISE
+        # every measured flake rate. An instrument whose error mode makes stable
+        # tests look flaky is an instrument biased toward selling itself.
+        # 97 is outside _VERDICT_EXIT_CODES, so it lands in `errors` instead.
+        cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
                f"python3 /tmp/seed.py; RC=$?; {_preview_tail()}echo EXIT:$RC")
         # Observatory hook: this pooled sandbox is now running a command. The
         # registry's @_safe guarantees this never affects the trial (a
@@ -106,7 +114,15 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         r = sb.process.exec(cmd, timeout=timeout)
         out = r.result or ""
         duration = time.monotonic() - t0
-        m = _EXIT_RE.search(out)
+        # LAST match, not first. The marker is always the final line we emit, but
+        # the seed's own stdout precedes it — and that output is LLM-generated
+        # (and, in the product, user-supplied). `search()` takes the FIRST match,
+        # so a test printing "expected EXIT:0 but got EXIT:1" scored as a PASS,
+        # and a patch that printed `EXIT:0` would read 0% flake and win the
+        # tournament outright. The verdict channel must not be forgeable by the
+        # thing being measured.
+        matches = _EXIT_RE.findall(out)
+        m = matches[-1] if matches else None
         if m is None:
             # Ran but produced no parseable exit marker -> treat as infra error.
             infra_error = True
@@ -119,7 +135,7 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
                 "exit_code": None,
                 "error": "no EXIT marker in output",
             }
-        code = int(m.group(1))
+        code = int(m)  # findall yields the capture group directly
         log_tail = out.strip()[-500:]
         REGISTRY.exec_finished(sid, cmd, code, log_tail, round(duration, 3))
         if code not in _VERDICT_EXIT_CODES:

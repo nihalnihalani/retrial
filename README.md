@@ -15,7 +15,7 @@
 [![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-REST%20%2B%20WebSocket-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React%2018-Vite%206-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Tests](https://img.shields.io/badge/tests-229%20passing-3fb950?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-247%20passing-3fb950?logo=pytest&logoColor=white)](tests/)
 [![CI](https://img.shields.io/badge/CI-credential--free-8957e5)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
 
@@ -32,7 +32,7 @@ Built for **Daytona HackSprint #5 — San Francisco, July 2026**
 | **What it is** | Point it at a flaky test. It measures the test's *empirical flake rate* across a Daytona sandbox swarm, races competing root-cause hypotheses against each other, and ships the statistically-proven winner as an evidence-backed PR. |
 | **The thesis** | **Verification asymmetry.** Flaky tests are the one bug class where *verification*, not generation, is the bottleneck — a green run proves nothing at 44% flake. Everyone builds machines that generate fixes. We built the machine that **proves** them. |
 | **Daytona's role** | **Load-bearing substrate.** Every statistical claim Retrial makes is backed by trials that ran in disposable Daytona sandboxes. No swarm, no product. See [How Retrial uses Daytona](#-how-retrial-uses-daytona-in-depth). |
-| **Live, not staged** | Measured full tournament (detect + 2 hypotheses + confirm, 80 trials): **17.3s**. `run_started` → first trial: **0.60s**. The 3-minute demo is genuinely live. |
+| **Live, not staged** | `run_started` → first trial: **0.60s** (pre-warmed pool). A full tournament that reaches FIXED needs detect + a lane at ≥35 clean trials + a ≥35-trial confirmation round, so it runs in minutes, not seconds — see the timing note below. The 3-minute demo is genuinely live. |
 | **Never dead-ends** | No winner ⇒ a **quarantine PR** with the full evidence dossier. Worst case is still a real, useful workflow output. |
 | **Honesty** | Every number in this README was measured in this repo, or is explicitly attributed to a cited source. See the [honesty ledger](#-honesty-ledger). |
 
@@ -301,7 +301,8 @@ Fork issuance is **serialized behind a lock** — concurrent forks from the same
 | Trial throughput, `sandbox` isolation | **2.7 trials/s** | Create-bound, as expected |
 | True unit cost | **~5s per 16-concurrent batch of execs** | Exec round-trips dominate, *not* create |
 | Pre-warm effect | `run_started` → first trial **0.60s** | Was 12.5s cold |
-| Full tournament, 80 trials | **17.3s** | detect + 2 hypotheses + confirm, verdict FIXED |
+| Sustained trial throughput | **6.1 trials/s** | process isolation, 16-concurrent (the number that sets every duration below) |
+| ~~Full tournament, 80 trials, 17.3s, FIXED~~ | **RETRACTED** | Arithmetically impossible at the default 10% threshold: STABLE at zero failures requires **n ≥ 35** (0/20 upper = 16.1%, 0/30 = 11.4%, 0/35 = 9.9%). 80 trials across detect + 2 lanes + confirm is 20 each, so no lane could be eligible and the verdict could not be FIXED. Re-measure at a config that can reach it (≥121 trials) before quoting a number here. |
 | Live 4-model Fireworks diagnosis | **23–29s** | Parallel, bounded by the slowest model |
 | Fully-generated run | detect **44%** (7/16, CI 23–67%) → winner **0/24** (CI ≤14%) | 3 of 4 models correctly identified the order dependency; the "timing" hypothesis stayed 56% flaky and was eliminated |
 
@@ -401,7 +402,7 @@ Only integrations with a **real code path** are claimed. The bar for the "Integr
 
 **Disclosed workflow, not an engine integration:** *CodeRabbit* — its GitHub App can review the PR PRSmith opens. There is no SDK call in this repo, and review latency is 1–5 minutes, so any demo use is **pre-run and disclosed unprompted**, never claimed as live on-stage turnaround.
 
-Everything above is exercised by the mocked-SDK suite in `tests/` (229 tests, `pytest`, **no credentials required**). Anything needing live keys is labelled as such.
+Everything above is exercised by the mocked-SDK suite in `tests/` (247 tests, `pytest`, **no credentials required**). Anything needing live keys is labelled as such.
 
 ---
 
@@ -411,7 +412,7 @@ Everything above is exercised by the mocked-SDK suite in `tests/` (229 tests, `p
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env   # fill in keys
 
-.venv/bin/python -m pytest tests/ -q                        # 229 tests, mocked SDK, no keys needed
+.venv/bin/python -m pytest tests/ -q                        # 247 tests, mocked SDK, no keys needed
 .venv/bin/python -m retrial.cli doctor                      # config check, offline, instant
 
 # live (needs DAYTONA_API_KEY):
@@ -507,13 +508,17 @@ Three things were in the way, all measured on live Daytona (2026-07-25):
 | Fetching that URL with nothing bound to the port | `502` |
 | Fetching it from a browser (no token header) | **`401 Unauthorized`** |
 | Fetching it with an `x-daytona-preview-token` header | `200` |
-| Fetching a **`public=True`** sandbox's URL anonymously | **`200`** ✓ |
+| **`create_signed_preview_url(port, expires_in_seconds=…)`**, fetched anonymously | **`200`** ✓ |
 
-So a preview needs *both* a listener and a publicly-created sandbox. With
-`RETRIAL_PREVIEW=1`:
+So a preview needs a listener **and** a link a browser can fetch without setting
+a header. The second is what `create_signed_preview_url` provides — an expiring,
+anonymously-fetchable url against a sandbox that stays **private**. An earlier
+version of this section claimed a `public=True` sandbox was required; that was
+wrong, and `public` is sandbox-scoped rather than port-scoped, so it would have
+exposed every port in the container. With `RETRIAL_PREVIEW=1`:
 
-- pool sandboxes are created with `public=True` (never combined with `HERMETIC`,
-  which would be contradictory);
+- sandboxes stay private; `registry.preview()` mints a signed, expiring url
+  (1h TTL) and falls back to the plain link only if signing is unavailable;
 - the warm exec — the one that already pays cold start — also leaves
   `python3 -m http.server` running on `RETRIAL_PREVIEW_PORT`, so **previews add
   zero extra Daytona round-trips to the trial hot path**;

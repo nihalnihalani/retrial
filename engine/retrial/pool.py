@@ -102,14 +102,14 @@ class SandboxPool:
             kwargs["auto_delete_interval"] = self._auto_delete_min
         if self._hermetic:
             kwargs["network_block_all"] = True
-        if get_settings().preview_on and not self._hermetic:
-            # MEASURED 2026-07-25: a preview URL on a private sandbox returns 401
-            # to a plain browser — the proxy wants an `x-daytona-preview-token`
-            # header, which a tab or an <iframe src> cannot attach. `public=True`
-            # is what makes the link openable by a human, verified end to end
-            # (anonymous GET, no token -> 200 + body). Never combined with
-            # hermetic: publishing a network-blocked sandbox is contradictory.
-            kwargs["public"] = True
+        # NOTE — deliberately NOT `public=True`. An earlier version of this file
+        # set it, on the inference that "a browser-openable preview requires a
+        # public sandbox". That inference was wrong: `Sandbox.create_signed_preview_url`
+        # mints an anonymously-fetchable, EXPIRING url against a PRIVATE sandbox,
+        # which defeats the 401 without publishing anything and can be revoked
+        # (`expire_signed_preview_url`). `public` is also sandbox-scoped, not
+        # port-scoped — it would expose every port in the container, while the
+        # code reasoned only about the preview port. See registry.preview().
         sb = self._client.create(CreateSandboxFromSnapshotParams(**kwargs), timeout=120)
         with self._lock:
             self._live[sb.id] = sb

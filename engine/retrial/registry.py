@@ -96,6 +96,10 @@ def as_safe(registry):
     return _SafeProxy(target)
 
 
+# Signed preview links expire. One hour outlives any demo run and bounds how
+# long a leaked url stays useful.
+_PREVIEW_TTL_S = 3600
+
 # The wire-shape of a `sandbox_registered` payload (mirrored verbatim by
 # ui/src/types.ts::SandboxRecordWire). Kept as a tuple so both register() and
 # the snapshot path stay in sync on the exact key set.
@@ -398,10 +402,23 @@ class SandboxRegistry:
             return None                            # destroyed / no handle
         if port is None:
             port = get_settings().retrial_preview_port
+        # Prefer a SIGNED url: anonymously fetchable (so a browser tab or an
+        # <iframe src> works without the x-daytona-preview-token header the
+        # plain link demands) and EXPIRING, against a sandbox that stays
+        # private. `get_preview_link` is the fallback — it returns a url whose
+        # unauthenticated fetch is 401, which is why previews looked broken.
+        link = None
         try:
-            link = handle.get_preview_link(port)
+            signer = getattr(handle, "create_signed_preview_url", None)
+            if signer is not None:
+                link = signer(port, expires_in_seconds=_PREVIEW_TTL_S)
         except Exception:
-            return None                            # negative: NOT cached here
+            link = None
+        if link is None:
+            try:
+                link = handle.get_preview_link(port)
+            except Exception:
+                return None                        # negative: NOT cached here
         url = getattr(link, "url", None)
         if url is None and isinstance(link, str):
             url = link

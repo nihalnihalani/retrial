@@ -62,38 +62,60 @@ def inert_seed_reason(code):
     feeds it, because it is what every real Python test looks like.
 
     Detect it statically and refuse, rather than measure nothing and report a
-    verdict. Conservative by construction: a file with ANY top-level statement
-    that could run the test (a call, an exit, an assert, a loop, an if) is
-    accepted, so this can only reject files that provably do nothing."""
+    verdict.
+
+    The check is framed as "does anything at module level ACTUALLY RUN?" rather
+    than "is every statement one of a known-inert kind". The second framing was
+    tried first and was wrong in both directions: it skipped `ast.Assign` as an
+    inert "module-level constant", so `result = test_x()` — a real invocation —
+    was refused with a message insisting the file never calls its tests, on the
+    line the reader can see it calling them. And it only scanned top-level
+    `FunctionDef`, so class-based tests (`class TestX: def test_a(self)`),
+    roughly half of real pytest suites, sailed through as "not a test file" and
+    hit the exact silent-stable failure this exists to prevent.
+
+    So: a top-level statement counts as executing if it contains a call, an
+    await, an assert, a loop, a conditional, a with-block, or a raise. Anything
+    that runs => accept."""
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
         return f"seed does not parse as Python ({e.msg} at line {e.lineno})"
 
-    test_defs = [n for n in tree.body
-                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-                 and n.name.startswith("test")]
-    if not test_defs:
-        return None
+    def _test_names(body):
+        for n in body:
+            if (isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and n.name.startswith("test")):
+                yield n.name
+            elif isinstance(n, ast.ClassDef):
+                for m in n.body:
+                    if (isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                            and m.name.startswith("test")):
+                        yield f"{n.name}.{m.name}"
 
-    # Any top-level statement that is not a pure definition/import/docstring
-    # could execute the test, so the file is not provably inert.
+    names = list(_test_names(tree.body))
+    if not names:
+        return None  # not a test file we recognise — not our business
+
+    _RUNS = (ast.Call, ast.Await, ast.Assert, ast.For, ast.AsyncFor, ast.While,
+             ast.If, ast.With, ast.AsyncWith, ast.Raise, ast.IfExp)
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
-                             ast.Import, ast.ImportFrom)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            # A decorator runs at import and may invoke the function it wraps.
+            if node.decorator_list:
+                return None
             continue
-        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
-            continue  # module docstring
-        if isinstance(node, ast.Assign):
-            continue  # module-level constant, still doesn't run anything
-        return None
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        if any(isinstance(sub, _RUNS) for sub in ast.walk(node)):
+            return None  # something here executes; not provably inert
 
-    names = ", ".join(n.name for n in test_defs[:3])
-    return (f"seed defines test function(s) ({names}) but never calls them at "
-            f"module level, so running it as a script executes no test and "
-            f"exits 0 — Retrial would measure nothing and report it as stable. "
-            f"Retrial runs a self-contained script, not pytest: call the test "
-            f"and signal the result with sys.exit(0) or sys.exit(1). "
+    shown = ", ".join(names[:3]) + ("…" if len(names) > 3 else "")
+    return (f"seed defines test(s) ({shown}) but nothing at module level runs "
+            f"them, so executing this file as a script runs no test and exits 0 "
+            f"— Retrial would measure nothing and report it as stable. Retrial "
+            f"runs a self-contained script, not pytest: call the test and signal "
+            f"the result with sys.exit(0) or sys.exit(1). "
             f"See seeds/test_dict_order.py for the shape.")
 
 
