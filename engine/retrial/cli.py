@@ -30,6 +30,7 @@ from .preflight import run_preflight
 from .settings import get_settings
 from .guards import inert_seed_reason
 from .matrix import format_matrix, run_matrix
+from .repo import RepoSpec
 from .verifier import verify
 from .diagnosis import diagnose
 
@@ -323,6 +324,60 @@ def _cmd_matrix(args):
     return 0
 
 
+def _cmd_repo(args):
+    """Measure a REAL pytest test in a REAL repository at a pinned commit."""
+    try:
+        spec = RepoSpec(args.repo, args.ref, args.test, install=args.install)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    _s = get_settings()
+    max_trials = args.runs or _s.max_trials or 50
+    conc = args.conc or _s.conc or 16
+
+    pool = make_pool()
+    t0 = time.monotonic()
+    try:
+        pool.warm(min(conc, max_trials))
+        result = verify(pool, "", max_trials=max_trials, conc=conc,
+                        threshold=args.threshold, isolation=args.isolation,
+                        timeout=args.timeout, repo_spec=spec)
+    finally:
+        pool.destroy_all()
+    wall = round(time.monotonic() - t0, 1)
+
+    if args.json:
+        print(json.dumps({**spec.as_dict(), "wallclock_s": wall, **result}))
+        return 0
+
+    lo, hi = result["wilson_ci"]
+    print(f"repo:      {spec.slug}@{spec.ref[:7]}")
+    print(f"test:      {spec.node_id}")
+    print(f"trials:    {result['trials']} valid"
+          + (f" (+{result['errors']} infra errors)" if result["errors"] else "")
+          + (", early-stopped" if result["stopped_early"] else ""))
+    print(f"flake:     {result['fails']}/{result['trials']} fail = "
+          f"{result['flake_rate']:.0%}")
+    print(f"95% CI:    {lo:.0%} - {hi:.0%}")
+    print(f"verdict:   {result['verdict']}"
+          + ("  <- your CI is lying to you" if result["verdict"] == "FLAKY" else ""))
+    print(f"wallclock: {wall}s")
+    # Surface WHY, not just that it failed: a wrong node id is exit 5, and that
+    # must never be mistaken for a flaky test.
+    errs = [h.get("error") for h in result.get("history", []) if h.get("error")]
+    if errs:
+        seen = []
+        for e in errs:
+            if e not in seen:
+                seen.append(e)
+        print()
+        print(f"infra errors ({len(errs)}), distinct causes:")
+        for e in seen[:3]:
+            print(f"  - {e}")
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -365,6 +420,35 @@ def build_parser():
     bis.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
                      help="flake-rate decision threshold (matches the UI's 10%% marker)")
     bis.set_defaults(func=_cmd_bisect)
+
+    rp2 = sub.add_parser(
+        "repo",
+        help="measure a real pytest test in a real GitHub repo at a pinned commit",
+        description=(
+            "Point Retrial at somebody's actual code. Downloads the repo at a "
+            "PINNED 40-char commit sha (a branch would let the source move "
+            "mid-run and silently invalidate the statistics), installs it plus "
+            "pytest into each pooled sandbox once, then reruns ONE pytest node "
+            "id across the swarm and reports the flake rate with a Wilson 95% "
+            "interval.\n\n"
+            "IMPORTANT SCOPE: this runs the node id in ISOLATION. Order-dependent "
+            "flakes — where the test only fails because another test ran first, "
+            "and which are the largest class of Python flakiness — cannot "
+            "reproduce this way and will read as stable. A STABLE verdict here "
+            "means 'not flaky when run alone', not 'not flaky'."))
+    rp2.add_argument("--repo", required=True, help="owner/name or a GitHub URL")
+    rp2.add_argument("--ref", required=True, help="full 40-char commit sha")
+    rp2.add_argument("--test", required=True, help="pytest node id, e.g. tests/test_x.py::test_y")
+    rp2.add_argument("--runs", type=int, default=None, help="max trials (default MAX_TRIALS)")
+    rp2.add_argument("--conc", type=int, default=None)
+    rp2.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
+    rp2.add_argument("--isolation", choices=["process", "sandbox"], default="process")
+    rp2.add_argument("--timeout", type=int, default=180,
+                     help="per-trial seconds; the first trial in each sandbox pays the ~6s bootstrap")
+    rp2.add_argument("--install", default=None,
+                     help="pip args for the project (default '-e .')")
+    rp2.add_argument("--json", action="store_true")
+    rp2.set_defaults(func=_cmd_repo)
 
     mx = sub.add_parser(
         "matrix",

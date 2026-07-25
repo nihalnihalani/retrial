@@ -19,6 +19,7 @@ import shlex
 import time
 
 from .registry import REGISTRY
+from .repo import build_command as _repo_command, diagnose_exit as _repo_diagnose
 from .settings import get_settings
 
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
@@ -87,7 +88,8 @@ def _env_prefix(env):
     return " ".join(parts) + " "
 
 
-def run_trial(pool, test_code, timeout=60, isolation="process", env=None):
+def run_trial(pool, test_code, timeout=60, isolation="process", env=None,
+              repo_spec=None):
     """Run test_code once in a leased sandbox.
 
     `env` is an optional {name: value} prefixed onto the interpreter invocation.
@@ -95,6 +97,10 @@ def run_trial(pool, test_code, timeout=60, isolation="process", env=None):
     varied environments (PYTHONHASHSEED, TZ, locale, ...) to find which axis
     flips the outcome. Values are shell-quoted; names are restricted to
     [A-Za-z_][A-Za-z0-9_]* so nothing here can escape into the command.
+
+    `repo_spec` switches the unit of measurement from a self-contained seed file
+    to a real pytest node id in a real repository (see repo.py). `test_code` is
+    ignored in that mode — the source comes from the pinned ref, not from us.
 
     Returns {"passed": bool, "duration_s": float, "log_tail": str,
              "exit_code": int|None, "error": str|None}. `error` is non-None only
@@ -125,9 +131,12 @@ def run_trial(pool, test_code, timeout=60, isolation="process", env=None):
         # every measured flake rate. An instrument whose error mode makes stable
         # tests look flaky is an instrument biased toward selling itself.
         # 97 is outside _VERDICT_EXIT_CODES, so it lands in `errors` instead.
-        cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
-               f"{_env_prefix(env)}python3 /tmp/seed.py; RC=$?; "
-               f"{_preview_tail()}echo EXIT:$RC")
+        if repo_spec is not None:
+            cmd = _env_prefix(env) + _repo_command(repo_spec, _preview_tail())
+        else:
+            cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
+                   f"{_env_prefix(env)}python3 /tmp/seed.py; RC=$?; "
+                   f"{_preview_tail()}echo EXIT:$RC")
         # Observatory hook: this pooled sandbox is now running a command. The
         # registry's @_safe guarantees this never affects the trial (a
         # test-constructed pool with a private registry merely double-books into
@@ -172,7 +181,7 @@ def run_trial(pool, test_code, timeout=60, isolation="process", env=None):
                 "duration_s": round(duration, 3),
                 "log_tail": log_tail,
                 "exit_code": code,
-                "error": f"non-verdict exit code {code} (harness/bootstrap failure)",
+                "error": _repo_diagnose(code),
             }
         return {
             "passed": code == 0,

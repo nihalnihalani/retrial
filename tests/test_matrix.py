@@ -24,7 +24,7 @@ class _FakePool:
 def _fake_run_trial(outcomes):
     calls = {"n": 0}
 
-    def run(pool, code, timeout=60, isolation="process", env=None):
+    def run(pool, code, timeout=60, isolation="process", env=None, **_):
         key = tuple(sorted((env or {}).items()))
         seq = outcomes[key]
         passed = seq[calls["n"] % len(seq)]
