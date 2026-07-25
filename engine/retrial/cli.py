@@ -32,6 +32,7 @@ from .guards import inert_seed_reason
 from .amnesty import format_amnesty, run_amnesty
 from .matrix import format_matrix, run_matrix
 from .repo import RepoSpec
+from .localpool import LocalPool, build_local_command
 from .suitebatch import format_batch, run_suite_batch
 from .verifier import verify
 from .diagnosis import diagnose
@@ -493,6 +494,110 @@ def _cmd_sweep(args):
     return 0
 
 
+def _cmd_local(args):
+    """Measure a test on THIS machine, against the checkout that already exists.
+
+    The GitHub Action's entry point. No Daytona, no tarball, no token, no
+    egress — what leaves is a rate and an interval."""
+    if not args.test and not args.suite:
+        print("error: give --test and/or --suite", file=sys.stderr)
+        return 2
+
+    orders = ["fixed", "shuffle"] if args.order == "both" else [args.order]
+    pool = LocalPool(cwd=args.working_directory, size=args.conc)
+    results = {}
+    t0 = time.monotonic()
+    try:
+        pool.warm(args.conc)
+        for order in orders:
+            code = build_local_command(node_id=args.test, suite=args.suite,
+                                       order=order)
+            # `code` IS the command here: run_trial writes a seed file only in
+            # seed mode. Local mode hands verify() a pre-built command via the
+            # repo path's shape, so reuse the same machinery by executing the
+            # command directly as the "test".
+            results[order] = verify(
+                pool, code, max_trials=args.runs, conc=args.conc,
+                threshold=args.threshold, timeout=args.timeout,
+                isolation="process", emit_trials=False,
+                repo_spec=_LocalSpec(code))
+    finally:
+        pool.destroy_all()
+    wall = round(time.monotonic() - t0, 1)
+
+    label = args.test or f"{args.suite} (whole suite)"
+    lines = [f"test:      {label}", f"runs:      {args.runs} per order",
+             f"backend:   local ({args.working_directory})", ""]
+    for order, r in results.items():
+        lo, hi = r["wilson_ci"]
+        lines.append(f"  {order:<8} {r['fails']}/{r['trials']} = {r['flake_rate']:>4.0%}"
+                     f"   95% CI {lo:.0%} - {hi:.0%}   {r['verdict']}"
+                     + (f"   (+{r['errors']} not-a-verdict)" if r["errors"] else ""))
+    # The honest comparison when both orders ran: disjoint intervals mean the
+    # ORDER is implicated; overlap means this budget did not separate them.
+    implicated = None
+    if len(results) == 2:
+        a, b = results["fixed"], results["shuffle"]
+        if a["trials"] and b["trials"]:
+            if b["wilson_ci"][0] > a["wilson_ci"][1]:
+                implicated = "shuffle destabilises it — this is order-dependent"
+            elif a["wilson_ci"][0] > b["wilson_ci"][1]:
+                implicated = "fixed order is the unstable one"
+        lines.append("")
+        lines.append("  " + (implicated or
+                     "the two orders were not separated at this budget — that is "
+                     "NOT 'order is irrelevant'"))
+    lines.append("")
+    lines.append(f"wallclock: {wall}s")
+    text = "\n".join(lines)
+    print(text)
+
+    worst = max(results.values(), key=lambda r: r["wilson_ci"][1])
+    if args.json_out:
+        Path(args.json_out).write_text(json.dumps(
+            {"test": args.test, "suite": args.suite, "runs": args.runs,
+             "results": results, "implicated": implicated,
+             "wallclock_s": wall}, indent=2))
+    if args.github_output:
+        with open(args.github_output, "a") as fh:
+            fh.write(f"verdict={worst['verdict']}\n")
+            fh.write(f"flake_rate={worst['flake_rate']}\n")
+            fh.write(f"ci_lower={worst['wilson_ci'][0]}\n")
+            fh.write(f"ci_upper={worst['wilson_ci'][1]}\n")
+            fh.write(f"trials={worst['trials']}\n")
+            fh.write(f"report_json={args.json_out or ''}\n")
+    if args.summary:
+        with open(args.summary, "a") as fh:
+            fh.write(f"### Retrial — `{label}`\n\n```\n{text}\n```\n")
+    Path(args.working_directory, "retrial-comment.md").write_text(
+        f"**Retrial** — `{label}`\n\n```\n{text}\n```\n")
+
+    # Gate on the BOUND, not the point estimate: 0/8 and 0/50 are both "0%" and
+    # only one of them is evidence.
+    if args.fail_on == "ci-upper" and worst["wilson_ci"][1] > args.threshold:
+        print(f"\nFAIL: upper bound {worst['wilson_ci'][1]:.1%} exceeds "
+              f"threshold {args.threshold:.0%}", file=sys.stderr)
+        return 1
+    if args.fail_on == "rate" and worst["flake_rate"] > args.threshold:
+        print(f"\nFAIL: rate {worst['flake_rate']:.1%} exceeds threshold",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+class _LocalSpec:
+    """Makes run_trial execute a pre-built command verbatim."""
+    suite = None
+    order = "fixed"
+
+    def __init__(self, cmd):
+        self._cmd = cmd
+        self.node_id = "local"
+        self.slug = "local"
+        self.ref = "0" * 40
+        self.install = ""
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -582,6 +687,34 @@ def build_parser():
                      help="pip args for the project (default '-e .')")
     rp2.add_argument("--json", action="store_true")
     rp2.set_defaults(func=_cmd_repo)
+
+    lo = sub.add_parser(
+        "local",
+        help="measure a test on THIS machine against the current checkout",
+        description=(
+            "Runs trials here — no Daytona, no tarball, no token, no egress. "
+            "This is what the GitHub Action uses: the measurement runs where the "
+            "code already is, so what leaves your infrastructure is a rate and "
+            "an interval.\n\n"
+            "Trade-off, stated plainly: no per-trial filesystem isolation, and "
+            "environment axes hit whatever this machine has installed. For "
+            "attribution, use the sandbox backend."))
+    lo.add_argument("--test", default=None, help="pytest node id")
+    lo.add_argument("--suite", default=None,
+                    help="suite path; with --test it provides ORDER CONTEXT")
+    lo.add_argument("--runs", type=int, default=50)
+    lo.add_argument("--conc", type=int, default=4,
+                    help="parallel trials; low by default — CPU contention is "
+                         "itself a flake mechanism")
+    lo.add_argument("--order", choices=["fixed", "shuffle", "both"], default="both")
+    lo.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
+    lo.add_argument("--timeout", type=int, default=600)
+    lo.add_argument("--working-directory", default=".")
+    lo.add_argument("--fail-on", choices=["none", "ci-upper", "rate"], default="none")
+    lo.add_argument("--json-out", default=None)
+    lo.add_argument("--github-output", default=None)
+    lo.add_argument("--summary", default=None)
+    lo.set_defaults(func=_cmd_local)
 
     sw = sub.add_parser(
         "sweep",

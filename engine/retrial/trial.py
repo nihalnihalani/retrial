@@ -134,10 +134,18 @@ def run_trial(pool, test_code, timeout=60, isolation="process", env=None,
         # tests look flaky is an instrument biased toward selling itself.
         # 97 is outside _VERDICT_EXIT_CODES, so it lands in `errors` instead.
         if repo_spec is not None:
-            builder = (_repo_suite_command if getattr(repo_spec, "suite", None)
-                       else _repo_command)
-            # env goes INSIDE, on the pytest call — see _build's docstring.
-            cmd = builder(repo_spec, _preview_tail(), _env_prefix(env))
+            prebuilt = getattr(repo_spec, "_cmd", None)
+            if prebuilt is not None:
+                # Local backend: the command is already built for this machine
+                # (no tarball, no install). Everything above and below this line
+                # — the EXIT parse, the verdict-code table, infra exclusion — is
+                # identical, which is what stops the two backends drifting.
+                cmd = _env_prefix(env) + prebuilt
+            else:
+                builder = (_repo_suite_command if getattr(repo_spec, "suite", None)
+                           else _repo_command)
+                # env goes INSIDE, on the pytest call — see _build's docstring.
+                cmd = builder(repo_spec, _preview_tail(), _env_prefix(env))
         else:
             cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
                    f"{_env_prefix(env)}python3 /tmp/seed.py; RC=$?; "

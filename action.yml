@@ -1,0 +1,142 @@
+name: 'Retrial — measure a flaky test'
+description: >-
+  Rerun a test many times and report how often it ACTUALLY fails, as a Wilson
+  95% confidence interval — never a bare percentage. Runs on your own runner
+  against your own checkout, so no source code leaves your infrastructure.
+author: 'Retrial'
+
+branding:
+  icon: 'repeat'
+  color: 'purple'
+
+# WHY THIS RUNS ON THE CUSTOMER'S RUNNER, NOT A HOSTED SERVICE.
+#
+# Every incumbent in this market (Trunk, Datadog, BuildPulse, CircleCI Insights)
+# is ingest-only: you upload JUnit XML and no source code ever leaves your CI.
+# Their security review is a 20-minute questionnaire. A hosted service that
+# EXECUTES your tests is a categorically harder sell — it wants your private
+# source, a repo-scoped token, and trust in someone else's sandbox isolation.
+#
+# So the first integration is this: the measurement runs where the code already
+# is. Your runner, your checkout, your concurrency, your secrets. What leaves is
+# a rate and an interval.
+inputs:
+  test:
+    description: >-
+      pytest node id to measure, e.g. tests/test_billing.py::test_invoice_totals.
+      Omit it and set `suite` to sweep every test in a suite instead.
+    required: false
+  suite:
+    description: >-
+      Suite path. With `test` set, the suite provides ORDER CONTEXT and only
+      `test` is scored. Without `test`, every test in the suite is scored from
+      each run — which is how you measure many tests for the price of a few
+      suite executions.
+    required: false
+  runs:
+    description: 'Executions. 50 bounds a 10% threshold; it is not a clean bill of health.'
+    required: false
+    default: '50'
+  order:
+    description: >-
+      fixed | shuffle | both. Order is part of a test's IDENTITY, not a tuning
+      knob: roughly half of real flaky tests are deterministic when run alone
+      (Gruber et al., ICST 2021 — 3,168 "victims" always pass alone, 738
+      "brittles" always fail alone, of 7,571). `both` measures each and reports
+      whether the intervals are disjoint, which is the honest answer.
+    required: false
+    default: 'both'
+  threshold:
+    description: 'Flake-rate decision threshold as a fraction.'
+    required: false
+    default: '0.10'
+  fail-on:
+    description: >-
+      Gate the job on the BOUND, not the point estimate. `ci-upper` fails when
+      the upper bound of the 95% interval exceeds `threshold` — the honest test,
+      because 0/8 and 0/50 are both "0%" and only one of them is evidence.
+      `none` never fails the job (report only). `rate` uses the point estimate,
+      offered for parity and not recommended.
+    required: false
+    default: 'none'
+  comment-on-pr:
+    description: 'Post the verdict as a PR comment. Needs pull-requests: write.'
+    required: false
+    default: 'true'
+  python-version:
+    description: 'Python used to run Retrial itself.'
+    required: false
+    default: '3.12'
+  working-directory:
+    description: 'Directory to run in (monorepo subproject).'
+    required: false
+    default: '.'
+
+outputs:
+  verdict:
+    description: 'FLAKY | STABLE | INCONCLUSIVE | ALWAYS_FAILING | ERROR'
+    value: ${{ steps.measure.outputs.verdict }}
+  flake-rate:
+    description: 'Observed failure rate, 0..1.'
+    value: ${{ steps.measure.outputs.flake_rate }}
+  ci-lower:
+    description: 'Wilson 95% lower bound.'
+    value: ${{ steps.measure.outputs.ci_lower }}
+  ci-upper:
+    description: 'Wilson 95% upper bound — the number to gate on.'
+    value: ${{ steps.measure.outputs.ci_upper }}
+  trials:
+    description: 'Valid trials. Excludes infra errors, skips and xfails.'
+    value: ${{ steps.measure.outputs.trials }}
+  report-json:
+    description: 'Path to the full JSON report.'
+    value: ${{ steps.measure.outputs.report_json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Retrial
+      shell: bash
+      run: python -m pip install --quiet --disable-pip-version-check retrial
+
+    - name: Measure
+      id: measure
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        RETRIAL_TEST: ${{ inputs.test }}
+        RETRIAL_SUITE: ${{ inputs.suite }}
+        RETRIAL_RUNS: ${{ inputs.runs }}
+        RETRIAL_ORDER: ${{ inputs.order }}
+        RETRIAL_THRESHOLD: ${{ inputs.threshold }}
+        RETRIAL_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -euo pipefail
+        # `local` backend: trials run right here, on this runner, against the
+        # checkout actions/checkout already made. No tarball, no token, no egress.
+        python -m retrial.cli local \
+          ${RETRIAL_TEST:+--test "$RETRIAL_TEST"} \
+          ${RETRIAL_SUITE:+--suite "$RETRIAL_SUITE"} \
+          --runs "$RETRIAL_RUNS" \
+          --order "$RETRIAL_ORDER" \
+          --threshold "$RETRIAL_THRESHOLD" \
+          --fail-on "$RETRIAL_FAIL_ON" \
+          --github-output "$GITHUB_OUTPUT" \
+          --summary "$GITHUB_STEP_SUMMARY" \
+          --json-out retrial-report.json
+
+    - name: Comment on the PR
+      if: ${{ inputs.comment-on-pr == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Best-effort: a failed comment must never fail the measurement.
+        gh pr comment "${{ github.event.number }}" \
+          --body-file "${{ github.workspace }}/${{ inputs.working-directory }}/retrial-comment.md" \
+          || echo "::warning::could not post the PR comment (needs pull-requests: write)"
