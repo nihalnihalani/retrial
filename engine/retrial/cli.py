@@ -29,6 +29,7 @@ from .pool import make_pool
 from .preflight import run_preflight
 from .settings import get_settings
 from .guards import inert_seed_reason
+from .amnesty import format_amnesty, run_amnesty
 from .matrix import format_matrix, run_matrix
 from .repo import RepoSpec
 from .verifier import verify
@@ -382,6 +383,59 @@ def _cmd_repo(args):
     return 0
 
 
+def _cmd_amnesty(args):
+    """Re-measure a LIST of tests and rank them for triage."""
+    tests = []
+    if args.tests_file:
+        p = Path(args.tests_file)
+        if not p.exists():
+            print(f"error: no such file: {p}", file=sys.stderr)
+            return 2
+        tests = [ln.strip() for ln in p.read_text().splitlines()
+                 if ln.strip() and not ln.strip().startswith("#")]
+    tests += list(args.test or [])
+    if not tests:
+        print("error: no tests given (--tests-file or --test)", file=sys.stderr)
+        return 2
+
+    try:
+        specs = [RepoSpec(args.repo, args.ref, t, install=args.install,
+                          suite=args.suite, order=args.order) for t in tests]
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    _s = get_settings()
+    conc = args.conc or _s.conc or 16
+    pool = make_pool()
+    t0 = time.monotonic()
+    try:
+        pool.warm(min(conc, 16))
+
+        def progress(i, total, row):
+            if not args.json:
+                lo, hi = row["wilson_ci"]
+                print(f"  [{i}/{total}] {row['verdict']:<15} {row['test'][:52]:<52} "
+                      f"{row['flake_rate']:.0%} (CI {lo:.0%}-{hi:.0%}, n={row['trials']})",
+                      flush=True)
+
+        report = run_amnesty(pool, specs, trials=args.runs, conc=conc,
+                             threshold=args.threshold, timeout=args.timeout,
+                             on_result=progress)
+    finally:
+        pool.destroy_all()
+    wall = round(time.monotonic() - t0, 1)
+
+    if args.json:
+        print(json.dumps({"repo": args.repo, "ref": args.ref,
+                          "wallclock_s": wall, **report}, indent=2))
+        return 0
+    print()
+    print(format_amnesty(report))
+    print(f"\nwallclock: {wall}s")
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -471,6 +525,34 @@ def build_parser():
                      help="pip args for the project (default '-e .')")
     rp2.add_argument("--json", action="store_true")
     rp2.set_defaults(func=_cmd_repo)
+
+    am = sub.add_parser(
+        "amnesty",
+        help="re-measure a list of quarantined tests and rank them for triage",
+        description=(
+            "Quarantine lists only ever grow: the automatic exits on the market "
+            "are PASSIVE clocks (BuildPulse 7 days clean, Datadog 30 days, Trunk "
+            "none). This actively re-measures every test on the list and ranks "
+            "them by evidence.\n\n"
+            "It reports what was measured. It never says a test is safe to "
+            "reinstate — that needs a human who knows what the test gates. Tests "
+            "that could NOT be measured are their own category, never folded "
+            "into 'clean'."))
+    am.add_argument("--repo", required=True)
+    am.add_argument("--ref", required=True, help="full 40-char commit sha")
+    am.add_argument("--tests-file", default=None,
+                    help="file with one pytest node id per line (# comments ok)")
+    am.add_argument("--test", action="append",
+                    help="a node id; repeatable, combines with --tests-file")
+    am.add_argument("--runs", type=int, default=50, help="trials PER TEST")
+    am.add_argument("--conc", type=int, default=None)
+    am.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
+    am.add_argument("--order", choices=["fixed", "shuffle"], default="fixed")
+    am.add_argument("--suite", default=None)
+    am.add_argument("--install", default=None)
+    am.add_argument("--timeout", type=int, default=180)
+    am.add_argument("--json", action="store_true")
+    am.set_defaults(func=_cmd_amnesty)
 
     mx = sub.add_parser(
         "matrix",
