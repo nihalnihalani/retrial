@@ -328,7 +328,7 @@ def _cmd_repo(args):
     """Measure a REAL pytest test in a REAL repository at a pinned commit."""
     try:
         spec = RepoSpec(args.repo, args.ref, args.test, install=args.install,
-                        suite=args.suite)
+                        suite=args.suite, order=args.order)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -354,8 +354,9 @@ def _cmd_repo(args):
 
     lo, hi = result["wilson_ci"]
     print(f"repo:      {spec.slug}@{spec.ref[:7]}")
-    print(f"mode:      {'suite (randomised order)' if spec.suite else 'isolated node id'}"
-          + (f" — {spec.suite}" if spec.suite else ""))
+    print(f"mode:      {'suite' if spec.suite else 'isolated node id'}"
+          + (f' — {spec.suite}' if spec.suite else '')
+          + f"  |  order: {spec.order}")
     print(f"test:      {spec.node_id}")
     print(f"trials:    {result['trials']} valid"
           + (f" (+{result['errors']} infra errors)" if result["errors"] else "")
@@ -453,6 +454,13 @@ def build_parser():
     rp2.add_argument("--isolation", choices=["process", "sandbox"], default="process")
     rp2.add_argument("--timeout", type=int, default=180,
                      help="per-trial seconds; the first trial in each sandbox pays the ~6s bootstrap")
+    rp2.add_argument("--order", choices=["fixed", "shuffle"], default="fixed",
+                     help=("order/RNG policy, which is part of the test's IDENTITY, "
+                           "not a tuning knob. fixed = the repo's natural order. "
+                           "shuffle = pytest-randomly, which reshuffles AND reseeds "
+                           "the global RNG per test. Measured on penman's real "
+                           "test_rearrange: 0/40 fail fixed, 39/40 fail shuffled. "
+                           "Run both and report which one flips the verdict."))
     rp2.add_argument("--suite", default=None,
                      help=("run the WHOLE suite at this path in a RANDOMISED order "
                            "each trial and score only --test. This is the only way "

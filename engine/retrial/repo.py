@@ -88,13 +88,26 @@ precise lie about a test it never ran. Retrial already excludes non-{0,1} exits
 from the flake-rate denominator; this module adds the specific diagnosis so the
 operator is told *which* of those things happened.
 """
+import hashlib
 import re
 import shlex
 
 # Where the repo is unpacked inside the sandbox. /tmp is the only reliably
 # writable path in the container image.
 REPO_DIR = "/tmp/retrial-repo"
-_READY = f"{REPO_DIR}/.retrial-ready"
+def _ready_marker(spec):
+    """Marker path keyed by everything the bootstrap installs.
+
+    A single fixed marker was a real bug, caught live: a `--order fixed` run
+    bootstraps WITHOUT pytest-randomly and touches the marker; a later
+    `--order shuffle` run leases the same warm sandboxes, sees the marker, skips
+    the bootstrap, and `-p randomly` then loads nothing. The shuffle measurement
+    silently degrades into the fixed one and reports 0% — the exact false
+    negative the order policy exists to prevent. Key the marker to the install
+    set so a different policy re-bootstraps instead of inheriting the wrong one."""
+    sig = hashlib.sha256(
+        f"{spec.ref}|{spec.install}|{spec.order}".encode()).hexdigest()[:12]
+    return f"{REPO_DIR}/.retrial-ready-{sig}"
 
 # A pinned 40-char commit sha. Deliberately not a branch or tag: every trial in a
 # run must measure the same bytes, and a moving ref silently invalidates the
@@ -121,12 +134,19 @@ TARGET_NOT_IN_REPORT = 96
 # real suite is skipif-gated on exactly those. Scoring those as passes would
 # produce "<=7% at 95% confidence" about an experiment that never happened.
 DID_NOT_RUN = 95
+# pytest exit 1 with junit errors>=1 and failures==0: a fixture/setup error,
+# not a test verdict.
+FIXTURE_ERROR = 94
 BOOTSTRAP_DIAGNOSIS = {
     BOOTSTRAP_FAILED: ("repo bootstrap failed — could not download the ref or "
                        "install dependencies in the sandbox"),
     TARGET_NOT_IN_REPORT: ("the target test was not in the suite's junit report "
                            "— it was never collected, or the suite died before "
                            "reaching it. Not scored as a failure."),
+    FIXTURE_ERROR: ("a fixture or setup step errored — pytest exits 1 for that "
+                    "exactly as it does for a real failure, and the junit report "
+                    "is what tells them apart. Usually a missing service, "
+                    "credential or dependency in the sandbox, not a flaky test."),
     DID_NOT_RUN: ("the test did not actually run — pytest exited 0 but reported "
                   "no passing test (skipped, xfailed, or deselected). A sandbox "
                   "has no database, credentials or services, so skipif-gated "
@@ -135,12 +155,74 @@ BOOTSTRAP_DIAGNOSIS = {
 }
 
 
+
+# ONE verdict extractor for both modes, reading pytest's junit report rather
+# than its exit code.
+#
+# Exit 1 is AMBIGUOUS: pytest returns it both for "the test failed" and for
+# "a fixture raised during setup". Measured:
+#     assert 1 == 2   -> exit 1, junit failures=1 errors=0   <- a real verdict
+#     fixture raises  -> exit 1, junit failures=0 errors=1   <- infrastructure
+# Scoring the second as a failure is how a tool tells a user
+# "REGRESSION — fix the code, not the test" about its own broken bootstrap.
+# --junit-xml is pytest core (no plugin) and measured at no detectable cost.
+_VERDICT_PY = r"""
+import sys, glob, xml.etree.ElementTree as E
+f = glob.glob(%(xml)s)
+if not f:
+    sys.exit(%(no_report)d)
+r = E.parse(f[0]).getroot()
+cases = [c for c in r.iter('testcase')]
+if %(target)s:
+    t = %(target)s
+    leaf = t.split('::')[-1]
+    cases = [c for c in cases
+             if c.get('name') == leaf or (c.get('name') or '').startswith(leaf + '[')]
+if not cases:
+    sys.exit(%(no_report)d)
+c = cases[0]
+if c.find('error') is not None:
+    sys.exit(%(infra)d)
+if c.find('skipped') is not None:
+    sys.exit(%(didnt_run)d)
+if c.find('failure') is not None:
+    sys.exit(1)
+sys.exit(0)
+"""
+
+
+def _extract_cmd(target=None):
+    """python3 -c '<extractor>' for the junit report, targeting one test or the
+    single test that ran."""
+    body = _VERDICT_PY % {
+        "xml": "'/tmp/retrial-j.xml'",
+        "no_report": TARGET_NOT_IN_REPORT,
+        "infra": FIXTURE_ERROR,
+        "didnt_run": DID_NOT_RUN,
+        "target": (repr(target) if target else "None"),
+    }
+    return "python3 -c " + shlex.quote(body)
+
+
+def _order_flags(order):
+    """Shuffle policy. `pytest-randomly` is deliberate and NOT interchangeable
+    with `pytest-random-order`: randomly also RESEEDS the global RNG before each
+    test, and shared-RNG state is precisely the mechanism behind the largest
+    real order-dependency class. Measured on penman's real test_rearrange:
+    fixed order 0/40 fail, under pytest-randomly 39/40 fail. A tool that only
+    shuffles order would report that flake as stable."""
+    if order == "shuffle":
+        return "-p randomly "
+    return "-p no:randomly "
+
+
 class RepoSpec:
     """What to measure: one pytest node id, in one repo, at one pinned commit."""
 
-    __slots__ = ("slug", "ref", "node_id", "install", "suite")
+    __slots__ = ("slug", "ref", "node_id", "install", "suite", "order")
 
-    def __init__(self, slug, ref, node_id, install=None, suite=None):
+    def __init__(self, slug, ref, node_id, install=None, suite=None,
+                 order="fixed"):
         slug = (slug or "").strip()
         # Accept a full GitHub URL as a convenience; store the slug.
         m = re.match(r"^(?:https?://github\.com/)?([^/]+/[^/]+?)(?:\.git)?/?$", slug)
@@ -165,6 +247,12 @@ class RepoSpec:
         # order and score only `node_id` — the only way to see order-dependent
         # flakiness, which isolation structurally cannot reproduce.
         self.suite = (suite or "").strip() or None
+        if order not in ("fixed", "shuffle"):
+            raise ValueError(f"order must be 'fixed' or 'shuffle' (got {order!r})")
+        # Order policy is part of the test's IDENTITY, not a tuning knob: the
+        # same node id is 0/40 in fixed order and 39/40 under shuffle when the
+        # flake lives in shared RNG or suite state.
+        self.order = order
 
     @property
     def tarball_url(self):
@@ -175,7 +263,7 @@ class RepoSpec:
 
     def as_dict(self):
         return {"repo": self.slug, "ref": self.ref, "test": self.node_id,
-                "install": self.install, "suite": self.suite,
+                "install": self.install, "suite": self.suite, "order": self.order,
                 "mode": "suite" if self.suite else "isolated"}
 
 
@@ -199,77 +287,39 @@ _EXTRACT = (
 
 
 def build_suite_command(spec, preview_tail=""):
-    """Run the whole suite in a RANDOMISED order and score only the target test.
+    """Run the whole suite and score ONLY the target test, from the junit report.
 
-    This is the answer to the isolation blind spot documented at the top of this
-    module: ~51.6% of flaky tests are deterministic when run alone, because their
-    flakiness comes from what ran BEFORE them. Reproducing that requires suite
-    context, and randomised order is how iDFlakies and FlaPy expose it.
-
-    The suite's own exit code is useless here — it reflects every test in the
-    suite, so an unrelated failure elsewhere would be scored against the target.
-    Instead the suite writes a junit report and a tiny extractor re-emits ONLY
-    the target's outcome as 0/1. If the target is absent from the report (never
-    collected, or the suite died before reaching it) that is exit 96 — a
-    non-verdict, excluded from the flake-rate denominator rather than counted as
-    a failure.
+    The suite's exit code is useless here — it reflects every test in the suite,
+    so an unrelated failure elsewhere would be charged to the target.
     """
-    url = shlex.quote(spec.tarball_url)
-    suite = shlex.quote(spec.suite or ".")
-    target_py = spec.node_id.replace("\\", "\\\\").replace("'", "\\'")
-    extract = shlex.quote(f"TARGET='{target_py}';" + _EXTRACT)
-    install = spec.install
-    return (
-        f"if [ ! -f {_READY} ]; then "
-        f"  rm -rf {REPO_DIR} && mkdir -p {REPO_DIR} && "
-        f"  curl -sSL --fail {url} | tar xz -C {REPO_DIR} --strip-components=1 && "
-        f"  cd {REPO_DIR} && "
-        f"  python3 -m pip install --quiet --disable-pip-version-check {install} "
-        f"    pytest pytest-random-order >/dev/null 2>&1 && "
-        f"  touch {_READY} || {{ echo EXIT:{BOOTSTRAP_FAILED}; exit 0; }}; "
-        f"fi; "
-        f"cd {REPO_DIR} && rm -f /tmp/retrial-r.xml; "
-        # --random-order re-shuffles per process, so each trial is a different
-        # order — which is exactly the axis an order-dependent flake lives on.
-        f"python3 -m pytest {suite} -q -p no:cacheprovider "
-        f"--random-order --junitxml=/tmp/retrial-r.xml >/dev/null 2>&1; "
-        f"python3 -c {extract}; RC=$?; "
-        f"{preview_tail}echo EXIT:$RC"
-    )
+    return _build(spec, suite=True, preview_tail=preview_tail)
 
 
 def build_command(spec, preview_tail=""):
-    """The single exec that bootstraps-if-needed and runs one trial.
+    """Run one pytest node id and score it from the junit report."""
+    return _build(spec, suite=False, preview_tail=preview_tail)
 
-    One round-trip, like the seed path — the bootstrap rides inside the first
-    trial rather than costing a separate call. `set -e` is deliberately NOT used:
-    every failure mode is mapped to an explicit exit code so nothing reaches the
-    verdict parser as an ambiguous non-zero.
-    """
+
+def _build(spec, suite, preview_tail=""):
+    ready = _ready_marker(spec)
     url = shlex.quote(spec.tarball_url)
-    node = shlex.quote(spec.node_id)
-    install = spec.install  # operator-supplied pip args, not user input
+    what = shlex.quote(spec.suite or ".") if suite else shlex.quote(spec.node_id)
+    extract = _extract_cmd(spec.node_id if suite else None)
+    plugins = "pytest pytest-randomly" if spec.order == "shuffle" else "pytest"
     return (
-        f"if [ ! -f {_READY} ]; then "
+        f"if [ ! -f {ready} ]; then "
         f"  rm -rf {REPO_DIR} && mkdir -p {REPO_DIR} && "
         f"  curl -sSL --fail {url} | tar xz -C {REPO_DIR} --strip-components=1 && "
         f"  cd {REPO_DIR} && "
-        f"  python3 -m pip install --quiet --disable-pip-version-check {install} pytest "
-        f"    >/dev/null 2>&1 && "
-        f"  touch {_READY} || {{ echo EXIT:{BOOTSTRAP_FAILED}; exit 0; }}; "
+        f"  python3 -m pip install --quiet --disable-pip-version-check "
+        f"    {spec.install} {plugins} >/dev/null 2>&1 && "
+        f"  touch {ready} || {{ echo EXIT:{BOOTSTRAP_FAILED}; exit 0; }}; "
         f"fi; "
-        # -p no:randomly / -p no:cacheprovider: a plugin that shuffles order or
-        # writes .pytest_cache would add variance Retrial did not ask for, and
-        # variance is the thing being measured.
-        f"cd {REPO_DIR}; "
-        f"OUT=$(python3 -m pytest {node} -q -p no:randomly -p no:cacheprovider 2>&1); "
-        f"RC=$?; "
-        # An exit of 0 is only a PASS if pytest actually passed something. All
-        # -skipped / all-xfailed / all-deselected also exit 0, and scoring those
-        # as passes is how a tool reports a clean bill of health for a test that
-        # never ran.
-        f"if [ $RC -eq 0 ] && ! printf '%s' \"$OUT\" | grep -qE '[0-9]+ passed'; "
-        f"then RC={DID_NOT_RUN}; fi; "
+        f"cd {REPO_DIR} && rm -f /tmp/retrial-j.xml; "
+        f"python3 -m pytest {what} -q -p no:cacheprovider --tb=no "
+        f"{_order_flags(spec.order)}--junit-xml=/tmp/retrial-j.xml "
+        f">/dev/null 2>&1; "
+        f"{extract}; RC=$?; "
         f"{preview_tail}echo EXIT:$RC"
     )
 

@@ -100,13 +100,14 @@ def test_command_runs_inside_the_repo_dir():
     assert f"cd {REPO_DIR}" in cmd and "python3 -m pytest" in cmd
 
 
-def test_exit_zero_alone_is_not_a_pass():
+def test_a_skipped_test_is_not_a_pass():
     """pytest exits 0 for skipped and xfailed too. A sandbox has no database,
     credentials or services, so skipif-gated tests are common — and scoring them
-    as passes reports a clean bill of health for a test that never ran."""
+    as passes reports a clean bill of health for a test that never ran. The
+    junit report distinguishes them; the exit code cannot."""
     cmd = build_command(RepoSpec("owner/name", SHA, "tests/t.py::test_x"))
-    assert "passed" in cmd          # the summary must confirm an actual pass
-    assert str(DID_NOT_RUN) in cmd  # otherwise it is a non-verdict
+    assert "skipped" in cmd
+    assert str(DID_NOT_RUN) in cmd
 
 
 def test_did_not_run_is_diagnosed_and_excluded():
@@ -133,17 +134,30 @@ def test_suite_mode_is_recorded_in_the_spec():
     assert RepoSpec("owner/name", SHA, "tests/t.py::test_x").as_dict()["mode"] == "isolated"
 
 
-def test_suite_command_randomises_order_every_trial():
-    """Order-dependent flakiness lives on the ordering axis; a fixed order would
-    measure one arbitrary point on it forever."""
-    assert "--random-order" in build_suite_command(_suite_spec())
+def test_shuffle_uses_pytest_randomly_not_pytest_random_order():
+    """NOT interchangeable. pytest-randomly also RESEEDS the global RNG before
+    each test, and shared-RNG state is the mechanism behind the largest real
+    order-dependency class. Measured on penman's real test_rearrange: 0/40 fail
+    in fixed order, 39/40 fail under pytest-randomly. A tool that only shuffled
+    ORDER would report that flake as stable."""
+    shuffled = build_command(RepoSpec("o/n", SHA, "t.py::x", order="shuffle"))
+    assert "pytest-randomly" in shuffled and "-p randomly " in shuffled
+    fixed = build_command(RepoSpec("o/n", SHA, "t.py::x", order="fixed"))
+    assert "-p no:randomly" in fixed and "pytest-randomly" not in fixed
+
+
+def test_order_is_part_of_the_spec_and_validated():
+    assert RepoSpec("o/n", SHA, "t.py::x").order == "fixed"
+    assert RepoSpec("o/n", SHA, "t.py::x", order="shuffle").as_dict()["order"] == "shuffle"
+    with pytest.raises(ValueError, match="fixed"):
+        RepoSpec("o/n", SHA, "t.py::x", order="random")
 
 
 def test_suite_command_scores_only_the_target_not_the_suite_exit_code():
     """A suite's exit code reflects EVERY test in it, so an unrelated failure
     elsewhere would be scored against the target."""
     cmd = build_suite_command(_suite_spec())
-    assert "--junitxml=" in cmd
+    assert "--junit-xml=" in cmd
     assert "testcase" in cmd  # the extractor reads per-test outcomes
 
 
@@ -154,5 +168,12 @@ def test_target_missing_from_the_report_is_a_non_verdict():
     assert msg and "not scored as a failure" in msg.lower()
 
 
-def test_suite_mode_installs_the_random_order_plugin():
-    assert "pytest-random-order" in build_suite_command(_suite_spec())
+def test_fixture_error_is_separated_from_a_real_failure():
+    """pytest exits 1 for BOTH "the test failed" and "a fixture raised in setup".
+    Measured: assert 1==2 -> failures=1 errors=0; fixture raises -> failures=0
+    errors=1. Scoring the second as a failure is how a tool says "REGRESSION,
+    fix the code" about its own broken bootstrap."""
+    from retrial.repo import FIXTURE_ERROR
+    msg = diagnose_exit(FIXTURE_ERROR)
+    assert msg and "fixture" in msg and "not a flaky test" in msg
+    assert "error" in build_command(RepoSpec("o/n", SHA, "t.py::x"))
