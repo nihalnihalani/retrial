@@ -69,3 +69,34 @@ def test_every_cell_carries_its_own_interval_and_n(monkeypatch):
         assert len(cell["wilson_ci"]) == 2
         assert cell["trials"] > 0
         assert "flake_rate" in cell and "errors" in cell
+
+
+def test_an_axis_that_does_not_apply_is_UNAVAILABLE_not_no_effect(monkeypatch):
+    """MEASURED 2026-07-25: tr_TR is not a generated locale in the default
+    container, so LC_ALL silently falls back and 'I'.lower() stays 'i'. Without a
+    probe the axis produced an interval overlapping the control, which a reader
+    correctly reads as "locale is not the cause" — evidence of absence
+    manufactured from an experiment that never ran."""
+    import retrial.matrix as M
+
+    def probe_fails(pool, code, timeout=60, isolation="process", env=None, **_):
+        # the probe program itself: exits non-zero => perturbation inert
+        return {"passed": False, "duration_s": 0.0, "log_tail": "",
+                "exit_code": 1, "error": None}
+
+    monkeypatch.setattr(M, "run_trial", probe_fails)
+    axes = [("control", {}, "baseline", None),
+            ("locale_tr", {"LC_ALL": "tr_TR.UTF-8"}, "turkish", "probe")]
+    monkeypatch.setattr(M, "verify", lambda *a, **k: {
+        "trials": 20, "fails": 10, "errors": 0, "flake_rate": 0.5,
+        "wilson_ci": [0.3, 0.7], "verdict": "FLAKY"})
+    res = M.run_matrix(_FakePool({}), "x", axes=axes, trials=20)
+
+    dead = [c for c in res["cells"] if c["axis"] == "locale_tr"][0]
+    assert dead["verdict"] == "UNAVAILABLE"
+    assert dead["trials"] == 0
+    assert "did not take effect" in dead["unavailable_reason"]
+    # and it must never be implicated, in either direction
+    assert all(i["axis"] != "locale_tr" for i in res["implicated"])
+    text = M.format_matrix(res)
+    assert "NOT evidence of no effect" in text
