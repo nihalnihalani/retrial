@@ -102,9 +102,15 @@ class LedgerRun:
                 # The permalink is pitched as "the audit receipt" and gets pasted
                 # into PR bodies. A private experiment serves an anonymous reader
                 # a login wall, which makes the receipt unreadable by exactly the
-                # audience it exists for (verified 2026-07-25: unauthenticated GET
-                # returned a sign-in shell). Public = the evidence is checkable.
-                is_public=True,
+                # audience it exists for (verified 2026-07-25).
+                #
+                # But "readable by anyone with the link" is exactly wrong once the
+                # measured repo is a customer's private code: the experiment's
+                # metadata carries the repo slug and the test node ids, and those
+                # leak structure even without source. RETRIAL_PUBLIC_RECEIPTS=0
+                # keeps them private. Default stays public — today's behaviour,
+                # correct for public repos and for a receipt someone must check.
+                is_public=get_settings().public_receipts_on,
             )
             for trial_index, passed in rows:
                 exp.log(input={"trial_index": trial_index},

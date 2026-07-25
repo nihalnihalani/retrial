@@ -108,6 +108,13 @@ class Settings(BaseSettings):
     # Comma-separated origins allowed to make cross-origin requests. Empty =
     # localhost dev origins only. Never "*": see the CORS block in server.py.
     retrial_allowed_origins: str = ""
+    # Braintrust experiments public (anyone with the permalink can read) or
+    # private. Public is right when the permalink IS the artifact — a judge or a
+    # reviewer following it from a PR body. It is wrong the moment the measured
+    # repo is a customer's private code, because experiment metadata carries the
+    # repo slug and test node ids. Default public preserves today's behaviour;
+    # set to 0 for anything private.
+    retrial_public_receipts: str = "1"
     # --- new in this plan ---
     retrial_auth_token: str | None = None                      # T1-5
     retrial_est_rate_per_sandbox_hour: float | None = None     # T1-4 (None = no $ estimate)
@@ -157,6 +164,10 @@ class Settings(BaseSettings):
     @property
     def narrate_on(self) -> bool:
         return self.narrate != "0"
+
+    @property
+    def public_receipts_on(self) -> bool:
+        return self.retrial_public_receipts != "0"
 
     @property
     def preview_on(self) -> bool:

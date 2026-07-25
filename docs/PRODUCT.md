@@ -295,6 +295,45 @@ any UI work keyed to a fixed lane count or the `seeds/` directory.
 
 ---
 
+## 6a. The two components that decide whether this works on a real repo
+
+**Environment snapshot cache — the highest-leverage thing not yet built.**
+Measured here: penman bootstraps in ~6s (0.8s tarball + 5.3s
+`pip install -e . pytest`). That is a small pure-Python best case. A 200-dependency
+service with a C extension is 2–10 **minutes**, paid by all 16 sandboxes. That
+single fact kills the "60 seconds" promise on every real repo.
+
+Fix: key a Daytona snapshot on `(base image, python version, hash(lockfile))`,
+build once, reuse across every trial of every run until the lockfile changes.
+`forkpool.py` already uses `CreateSandboxFromSnapshotParams`, so the primitive is
+proven in-tree. It pays three times:
+
+1. **Latency** — bootstrap leaves the hot path.
+2. **Security** — a sandbox created with `network_block_all=True` *cannot* pip
+   install. Bootstrap networked → snapshot → run trials hermetically is the only
+   way to combine a real dependency tree with blocked egress. It is also what
+   makes the existing `hermetic_diagnosis` usable on customer code instead of toy
+   seeds.
+3. **Onboarding** — "point us at the image your CI already uses" replaces a
+   dependency-resolution project.
+
+**Ingest is the targeting system; execution is the product. Give ingest away.**
+Ingest costs ~zero compute and answers *which* test. Three vendors ship it and
+Trunk charges $0. It is also the only cure for Retrial's cold-start problem,
+which today is "the user must already know a pytest node id." Charging for it
+leaves the wedge on the table.
+
+## 6b. Retention defaults
+
+| Artifact | Retention |
+|---|---|
+| Source tarball | object store, 1-hour lifecycle; sandbox destroyed at run end. Never in a DB, never in a log |
+| JUnit XML | 30 days — **contains failure messages, which contain source and data**. `--tb=no` (already set in `repo.py`) is doing real work; keep it |
+| `log_tail` (500 chars) | 30 days, tenant-encrypted, same warning |
+| Candidate patches | deleted when the PR opens; GitHub is the durable copy |
+| Rates, intervals, verdicts, node ids | indefinite — this is the product, and it holds no source |
+| Braintrust experiments | **`RETRIAL_PUBLIC_RECEIPTS=0` for private repos.** Default is public because the permalink IS the artifact for a public-repo receipt — but the metadata carries the repo slug and node ids, which leak structure even without source |
+
 ## 7. What is still not true, stated plainly
 
 - **No tenancy.** One run lock, one shared pool, `isolation="process"` reuses
@@ -306,6 +345,16 @@ any UI work keyed to a fixed lane count or the `seeds/` directory.
 - **The neutering guard is a deleted-assertion detector**, not a semantic
   preservation check. Its own docstring says so.
 - **Python only**, and only pytest.
+- **Suite mode costs ~500x more than it should.** `build_suite_command` runs the
+  whole suite and scores ONE node id, but the junit report it produces contains
+  every test. For 500 tests x 50 trials x a 10-minute suite that is ~$278 and
+  ~11 days of wall clock, against ~$0.55 and ~31 minutes if every test in each
+  report were scored. The API shape — "measure a test" — is the bug; the unit
+  should be "measure a suite run and score everything in it."
+- **`retrial matrix` cannot be pointed at a real repo.** `run_matrix` takes
+  `test_code` and has no `repo_spec`, so the most differentiated capability only
+  works on seed files. `run_trial` already accepts `env` and `repo_spec`
+  together and `verify()` forwards both — roughly 15 lines.
 - **Retrial's own test suite has a ~50% flaky test** (`test_observatory_e2e.py::
   test_real_pool_trial_chain_feeds_the_endpoints_singleton`: 6/12 full-suite
   runs fail, 15/15 pass in isolation) — an order-dependent victim, exactly the
