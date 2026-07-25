@@ -72,12 +72,18 @@ AXES = [
 
 def run_matrix(pool, test_code, axes=None, trials=24, conc=16,
                threshold=DEFAULT_THRESHOLD, timeout=60, isolation="process",
-               bus=None):
+               bus=None, repo_spec=None):
     """Measure `test_code` once per axis. Returns a result dict.
 
     Every cell is a full `verify()` — same Wilson math, same verdict table, same
     infra-error exclusion as a detect run. `trials` is per cell, so the total
     cost is len(axes) * trials.
+
+    `repo_spec` points the matrix at a REAL repository instead of a seed file.
+    Without it the most differentiated capability in the product only worked on
+    hand-written seeds — the axes could never be applied to anybody's actual
+    test. `run_trial` already accepts `env` and `repo_spec` together and
+    `verify()` forwards both, so this is a pass-through, not a new mechanism.
     """
     axes = axes if axes is not None else AXES
     cells = []
@@ -110,7 +116,8 @@ def run_matrix(pool, test_code, axes=None, trials=24, conc=16,
 
         v = verify(pool, test_code, max_trials=trials, conc=conc,
                    threshold=threshold, bus=bus, timeout=timeout,
-                   isolation=isolation, emit_trials=False, env=env or None)
+                   isolation=isolation, emit_trials=False, env=env or None,
+                   repo_spec=repo_spec)
         cells.append({
             "axis": name,
             "env": dict(env),

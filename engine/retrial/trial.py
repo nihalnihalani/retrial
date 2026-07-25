@@ -136,7 +136,8 @@ def run_trial(pool, test_code, timeout=60, isolation="process", env=None,
         if repo_spec is not None:
             builder = (_repo_suite_command if getattr(repo_spec, "suite", None)
                        else _repo_command)
-            cmd = _env_prefix(env) + builder(repo_spec, _preview_tail())
+            # env goes INSIDE, on the pytest call — see _build's docstring.
+            cmd = builder(repo_spec, _preview_tail(), _env_prefix(env))
         else:
             cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py || {{ echo EXIT:97; exit 0; }}; "
                    f"{_env_prefix(env)}python3 /tmp/seed.py; RC=$?; "

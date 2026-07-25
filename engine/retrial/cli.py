@@ -32,6 +32,7 @@ from .guards import inert_seed_reason
 from .amnesty import format_amnesty, run_amnesty
 from .matrix import format_matrix, run_matrix
 from .repo import RepoSpec
+from .suitebatch import format_batch, run_suite_batch
 from .verifier import verify
 from .diagnosis import diagnose
 
@@ -300,25 +301,48 @@ def _cmd_doctor(args, preflight_fn=run_preflight):
 
 
 def _cmd_matrix(args):
-    test_path = Path(args.test)
-    if not test_path.exists():
-        print(f"error: no such file: {test_path}", file=sys.stderr)
-        return 2
-    test_code = test_path.read_text()
-    inert = inert_seed_reason(test_code)
-    if inert:
-        print(f"error: {inert}", file=sys.stderr)
-        return 2
+    spec, test_code, label = None, "", None
+    if args.repo or args.ref or args.test_id:
+        missing = [f for f, v in (("--repo", args.repo), ("--ref", args.ref),
+                                  ("--test-id", args.test_id)) if not v]
+        if missing:
+            print(f"error: repo mode needs {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            spec = RepoSpec(args.repo, args.ref, args.test_id,
+                            install=args.install, suite=args.suite,
+                            order=args.order)
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        label = spec.label()
+    else:
+        if not args.test:
+            print("error: give a seed file, or --repo/--ref/--test-id",
+                  file=sys.stderr)
+            return 2
+        test_path = Path(args.test)
+        if not test_path.exists():
+            print(f"error: no such file: {test_path}", file=sys.stderr)
+            return 2
+        test_code = test_path.read_text()
+        inert = inert_seed_reason(test_code)
+        if inert:
+            print(f"error: {inert}", file=sys.stderr)
+            return 2
+        label = test_path.name
+
     pool = make_pool()
     try:
         pool.warm(min(args.conc, 16))
-        result = run_matrix(pool, test_code, trials=args.trials, conc=args.conc)
+        result = run_matrix(pool, test_code, trials=args.trials, conc=args.conc,
+                            timeout=args.timeout, repo_spec=spec)
     finally:
         pool.destroy_all()
     if args.json:
         print(json.dumps(result, indent=2))
     else:
-        print(f"test:      {test_path.name}")
+        print(f"test:      {label}")
         print(f"axes:      {len(result['cells'])} x {result['trials_per_axis']} trials")
         print()
         print(format_matrix(result))
@@ -436,6 +460,39 @@ def _cmd_amnesty(args):
     return 0
 
 
+def _cmd_sweep(args):
+    """Run a suite N times and score EVERY test in it from each run."""
+    try:
+        spec = RepoSpec(args.repo, args.ref, "sweep::all", install=args.install,
+                        suite=args.suite, order=args.order)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    _s = get_settings()
+    conc = args.conc or _s.conc or 16
+    pool = make_pool()
+    t0 = time.monotonic()
+    try:
+        pool.warm(min(conc, args.runs))
+
+        def progress(i, total, done):
+            if not args.json:
+                print(f"  suite run {i}/{total} ({done} scored)", flush=True)
+
+        report = run_suite_batch(pool, spec, runs=args.runs,
+                                 timeout=args.timeout, on_run=progress)
+    finally:
+        pool.destroy_all()
+    wall = round(time.monotonic() - t0, 1)
+    if args.json:
+        print(json.dumps({**report, "wallclock_s": wall}, indent=2))
+        return 0
+    print()
+    print(format_batch(report, top=args.top, min_rate=args.min_rate))
+    print(f"\nwallclock: {wall}s")
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="retrial", description="Flaky-test lie detector.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -526,6 +583,29 @@ def build_parser():
     rp2.add_argument("--json", action="store_true")
     rp2.set_defaults(func=_cmd_repo)
 
+    sw = sub.add_parser(
+        "sweep",
+        help="run a suite N times and score EVERY test in it (the cheap way)",
+        description=(
+            "Measuring N tests used to cost N full suite runs, because each run "
+            "scored one node id while its junit report already held an outcome "
+            "for every test. This scores them all. For 500 tests x 50 trials "
+            "against a 10-minute suite that is the difference between ~250,000 "
+            "sandbox-minutes and ~500."))
+    sw.add_argument("--repo", required=True)
+    sw.add_argument("--ref", required=True, help="full 40-char commit sha")
+    sw.add_argument("--suite", default=".", help="suite path inside the repo")
+    sw.add_argument("--runs", type=int, default=20, help="suite executions")
+    sw.add_argument("--conc", type=int, default=None)
+    sw.add_argument("--order", choices=["fixed", "shuffle"], default="shuffle")
+    sw.add_argument("--top", type=int, default=25, help="rows to print")
+    sw.add_argument("--min-rate", type=float, default=0.0,
+                    help="only print tests at or above this flake rate")
+    sw.add_argument("--install", default=None)
+    sw.add_argument("--timeout", type=int, default=900)
+    sw.add_argument("--json", action="store_true")
+    sw.set_defaults(func=_cmd_sweep)
+
     am = sub.add_parser(
         "amnesty",
         help="re-measure a list of quarantined tests and rank them for triage",
@@ -564,7 +644,15 @@ def build_parser():
             "this — a log has no counterfactual. An axis is reported only when "
             "its interval is DISJOINT from the control's; overlap means this "
             "budget did not separate them, NOT that the axis has no effect."))
-    mx.add_argument("test")
+    mx.add_argument("test", nargs="?", default=None,
+                    help="a seed file, OR omit and use --repo/--ref/--test-id")
+    mx.add_argument("--repo", default=None, help="owner/name — point the axes at a real repo")
+    mx.add_argument("--ref", default=None, help="full 40-char commit sha")
+    mx.add_argument("--test-id", default=None, help="pytest node id inside --repo")
+    mx.add_argument("--order", choices=["fixed", "shuffle"], default="fixed")
+    mx.add_argument("--suite", default=None)
+    mx.add_argument("--install", default=None)
+    mx.add_argument("--timeout", type=int, default=180)
     mx.add_argument("--trials", type=int, default=24, help="trials PER AXIS (default 24)")
     mx.add_argument("--conc", type=int, default=16)
     mx.add_argument("--json", action="store_true")

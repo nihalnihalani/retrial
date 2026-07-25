@@ -286,21 +286,29 @@ _EXTRACT = (
 )
 
 
-def build_suite_command(spec, preview_tail=""):
+def build_suite_command(spec, preview_tail="", env_prefix=""):
     """Run the whole suite and score ONLY the target test, from the junit report.
 
     The suite's exit code is useless here — it reflects every test in the suite,
     so an unrelated failure elsewhere would be charged to the target.
     """
-    return _build(spec, suite=True, preview_tail=preview_tail)
+    return _build(spec, suite=True, preview_tail=preview_tail,
+                  env_prefix=env_prefix)
 
 
-def build_command(spec, preview_tail=""):
+def build_command(spec, preview_tail="", env_prefix=""):
     """Run one pytest node id and score it from the junit report."""
-    return _build(spec, suite=False, preview_tail=preview_tail)
+    return _build(spec, suite=False, preview_tail=preview_tail,
+                  env_prefix=env_prefix)
 
 
-def _build(spec, suite, preview_tail=""):
+def _build(spec, suite, preview_tail="", env_prefix=""):
+    """`env_prefix` goes on the pytest invocation, NOT on the whole command.
+
+    The command begins with `if [ ! -f ... ]; then` — a shell keyword — and
+    `PYTHONHASHSEED=0 if [ ... ]` is a syntax error, so prefixing the whole
+    thing made every matrix axis fail with an infra error while the control
+    (empty prefix) worked. Caught by pointing the matrix at a real repo."""
     ready = _ready_marker(spec)
     url = shlex.quote(spec.tarball_url)
     what = shlex.quote(spec.suite or ".") if suite else shlex.quote(spec.node_id)
@@ -316,7 +324,7 @@ def _build(spec, suite, preview_tail=""):
         f"  touch {ready} || {{ echo EXIT:{BOOTSTRAP_FAILED}; exit 0; }}; "
         f"fi; "
         f"cd {REPO_DIR} && rm -f /tmp/retrial-j.xml; "
-        f"python3 -m pytest {what} -q -p no:cacheprovider --tb=no "
+        f"{env_prefix}python3 -m pytest {what} -q -p no:cacheprovider --tb=no "
         f"{_order_flags(spec.order)}--junit-xml=/tmp/retrial-j.xml "
         f">/dev/null 2>&1; "
         f"{extract}; RC=$?; "
