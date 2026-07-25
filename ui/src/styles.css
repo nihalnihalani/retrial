@@ -2902,22 +2902,22 @@ body {
   border: 1px solid var(--line-2);
   color: var(--ink-dim);
 }
-.runs-verdict.fixed {
+.runs-verdict.is-fixed {
   color: var(--pass);
   background: rgba(35, 209, 139, 0.1);
   border-color: rgba(35, 209, 139, 0.32);
 }
-.runs-verdict.quarantine {
+.runs-verdict.is-quarantine {
   color: var(--gold);
   background: rgba(242, 193, 78, 0.1);
   border-color: rgba(242, 193, 78, 0.4);
 }
-.runs-verdict.polluter {
+.runs-verdict.is-polluter {
   color: #c792ea;
   background: rgba(199, 146, 234, 0.1);
   border-color: rgba(199, 146, 234, 0.4);
 }
-.runs-verdict.error {
+.runs-verdict.is-error {
   color: var(--fail);
   background: rgba(255, 84, 104, 0.1);
   border-color: rgba(255, 84, 104, 0.4);

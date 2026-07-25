@@ -65,11 +65,12 @@ type BoardView = 'grid' | 'tree';
 
 interface Props {
   onRestart: () => void;
+  onBackToHome?: () => void;
 }
 
 // The whole board is a pure function of the event stream. It owns nothing but
 // layout + the phase router.
-export function TournamentBoard({ onRestart }: Props) {
+export function TournamentBoard({ onRestart, onBackToHome }: Props) {
   const { state, mode, connectionMessage } = useEventStream();
   const health = useDaytonaHealth(mode);
   const {
@@ -247,6 +248,7 @@ export function TournamentBoard({ onRestart }: Props) {
         terminal={terminal}
         runsOpen={runsOpen}
         onRunsToggle={() => setRunsOpen((o) => !o)}
+        onBackToHome={onBackToHome}
       />
 
       {toast && (
@@ -360,6 +362,7 @@ function TopBar({
   terminal,
   runsOpen,
   onRunsToggle,
+  onBackToHome,
 }: {
   mode: ConnectionMode;
   phase: Phase;
@@ -384,14 +387,25 @@ function TopBar({
   terminal: boolean;
   runsOpen: boolean;
   onRunsToggle: () => void;
+  onBackToHome?: () => void;
 }) {
-  const activeIndex = PHASE_STEP[phase];
+  // Idle must light NOTHING. `initialState.phase` is 'detect' and
+  // PHASE_STEP.detect === 0, so a board with no run showed step 01 already
+  // active — the one navigational affordance claiming work had begun before GO
+  // was pressed.
+  const idle = !runActive && !terminal;
+  const activeIndex = idle ? -1 : PHASE_STEP[phase];
   return (
     <header className="topbar">
       <div className="topbar-primary">
-        <div className="brand">
-          <Scale className="brand-mark" aria-hidden="true" />
-          <span className="brand-name">RETRIAL</span>
+        <div 
+          className={`brand ${onBackToHome ? 'cursor-pointer hover:opacity-85 transition-all active:scale-95' : ''}`}
+          onClick={onBackToHome}
+          role={onBackToHome ? "button" : undefined}
+          title={onBackToHome ? "Go back to product homepage" : undefined}
+        >
+          <Scale className="brand-mark text-amber-500 filter drop-shadow-[0_0_8px_rgba(245,158,11,0.3)]" aria-hidden="true" />
+          <span className="brand-name font-bold tracking-wider">RETRIAL</span>
           {testName ? (
             <span className="brand-test mono" title={testName}>
               {shortTestName(testName)}

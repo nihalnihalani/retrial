@@ -24,11 +24,14 @@ interface RunRow {
 // prefix; everything unrecognized falls to the neutral grey.
 function verdictClass(verdict: string | null): string {
   const v = verdict ?? '';
-  if (v === 'FIXED') return 'runs-verdict fixed';
-  if (v === 'QUARANTINE') return 'runs-verdict quarantine';
-  if (v.startsWith('POLLUTER')) return 'runs-verdict polluter';
-  if (v === 'ERROR') return 'runs-verdict error';
-  return 'runs-verdict inconclusive';
+  // `is-` prefixes, NOT bare state words: Tailwind v4 ships a `.fixed
+  // { position: fixed }` utility, so 'runs-verdict fixed' pinned every FIXED
+  // badge to the viewport and dropped it on top of the row's kind badge.
+  if (v === 'FIXED') return 'runs-verdict is-fixed';
+  if (v === 'QUARANTINE') return 'runs-verdict is-quarantine';
+  if (v.startsWith('POLLUTER')) return 'runs-verdict is-polluter';
+  if (v === 'ERROR') return 'runs-verdict is-error';
+  return 'runs-verdict is-inconclusive';
 }
 
 function whenText(finished_at: number | null): string {

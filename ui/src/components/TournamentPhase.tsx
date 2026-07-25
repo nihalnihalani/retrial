@@ -38,6 +38,7 @@ export function TournamentPhase({ hypotheses, modelNames, plannedTrials, thresho
             h={h}
             model={displayModel(h.model, modelForHypothesis(modelNames, i))}
             threshold={threshold}
+            plannedTrials={plannedTrials}
           />
         ))}
       </div>
@@ -64,10 +65,12 @@ function Lane({
   h,
   model,
   threshold,
+  plannedTrials,
 }: {
   h: Hypothesis;
   model: string | null;
   threshold?: number | null;
+  plannedTrials: number | null;
 }) {
   // A model that returned no parseable patch never races — no trials, no meter,
   // just an honest "no valid patch" note. Render it as its own thing.
@@ -94,7 +97,6 @@ function Lane({
 
   const eliminated = h.status === 'eliminated';
   const inconclusive = h.status === 'inconclusive';
-  const winner = h.status === 'winner';
   const statusText = LANE_STATUS_TEXT[h.status];
 
   return (
@@ -120,14 +122,19 @@ function Lane({
         <div className="lane-counter mono">
           {h.trials.length} <span className="dim">reruns</span>
         </div>
-        <TrialGrid trials={h.trials} size="sm" muted={eliminated || inconclusive} />
+        {/* `total` gives every lane the SAME track, so four lanes read as a
+            race to a shared finish line instead of four ragged strips of
+            different lengths. Without it you cannot tell ahead from behind
+            from early-stopped. */}
+        <TrialGrid trials={h.trials} total={plannedTrials ?? undefined} size="sm"
+                   muted={eliminated || inconclusive} />
       </div>
 
       <div className="lane-right">
         <FlakeMeter
           rate={h.flakeRate}
           ci={h.wilsonCi}
-          label={winner ? 'flake rate' : 'live flake rate'}
+          label={h.status === 'racing' ? 'live flake rate' : 'flake rate'}
           threshold={threshold}
         />
       </div>

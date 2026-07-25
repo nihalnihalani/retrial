@@ -1358,11 +1358,17 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* !important is load-bearing: the universal selector has specificity (0,0,0)
+     and every animation in this app is class-scoped (.cell.fresh, .diag-chip,
+     .obs-pulse, .dot-pulse) at (0,2,0) — so without it this block was a no-op
+     and a reduced-motion user still got the full 50-cell pop, the pulsing dots
+     and the scanline. */
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms;
-    animation-iteration-count: 1;
-    transition-duration: 0.01ms;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

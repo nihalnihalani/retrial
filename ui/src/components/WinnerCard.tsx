@@ -25,8 +25,17 @@ const causeLabel = (c: string) =>
 export function WinnerCard({ winner, hypothesis, detect, prUrl, model }: Props) {
   // prefer the confirmed winner's own numbers; fall back to detect/hypothesis
   const before = winner.origFlakeRate ?? detect.flakeRate ?? 0.48;
-  const trials = hypothesis?.trials.length ?? 50;
+  // `winner.wilsonCi` is the CONFIRMATION round's interval, so it must be
+  // paired with the confirmation round's n. Pairing it with the tournament
+  // lane's trial count rendered "across 40 trials (95% CI ≤7.4%)" while the
+  // chip below said "confirmed 0/48" — ≤7.4% is the bound for 0/48, not 0/40
+  // (which is 8.76%). A checkable arithmetic mismatch on the hero screen is
+  // exactly the class of error this product exists to catch.
+  const laneTrials = hypothesis?.trials.length ?? null;
   const ci = winner.wilsonCi ?? hypothesis?.wilsonCi ?? null;
+  const ciTrials = winner.wilsonCi != null
+    ? (winner.confirmTrials ?? null)
+    : laneTrials;
   const confirmChip =
     winner.confirmTrials != null
       ? `confirmed ${Math.round(winner.confirmFlakeRate * winner.confirmTrials)}/${winner.confirmTrials} in a fresh round`
@@ -49,23 +58,32 @@ export function WinnerCard({ winner, hypothesis, detect, prUrl, model }: Props) 
         <div className="winner-numbers">
           <span className="winner-before">{pct(before)}</span>
           <span className="winner-arrow">→</span>
-          <span className="winner-after">{pct(winner.confirmFlakeRate)}</span>
+          {/* NEVER a bare rate here. CLAUDE.md's statistics law: "0/50 is
+              reported as '<=7% at 95% confidence', never '0%'". This is the
+              single biggest number in the product; it was the one place that
+              broke the rule. */}
+          <span className="winner-after">{ci ? ciUpper(ci) : pct(winner.confirmFlakeRate)}</span>
         </div>
         <p className="winner-caption">
-          flake rate across <strong>{trials} trials</strong>
-          {ci ? (
+          {ci && ciTrials != null ? (
             <>
-              {' '}
-              (<span className="mono">95% CI {ciUpper(ci)}</span>)
+              <strong>{Math.round(winner.confirmFlakeRate * ciTrials)} of {ciTrials}</strong>{' '}
+              reruns failed in a dedicated confirmation round —{' '}
+              <span className="mono">{ciUpper(ci)} at 95% confidence</span>.
             </>
-          ) : null}
-          , held at <strong>{pct(winner.confirmFlakeRate)}</strong> through a dedicated
-          confirmation round.
+          ) : (
+            <>
+              held through a dedicated confirmation round
+              {laneTrials != null ? <> after {laneTrials} tournament reruns</> : null}.
+            </>
+          )}
         </p>
 
         <div className="verdict-chips">
           <span className="verdict-chip">{confirmChip}</span>
-          <span className="verdict-chip">{trials} trials</span>
+          {laneTrials != null && (
+            <span className="verdict-chip">{laneTrials} tournament reruns</span>
+          )}
           {ci && <span className="verdict-chip mono">95% CI {ciUpper(ci)}</span>}
         </div>
 
