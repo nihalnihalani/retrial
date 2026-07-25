@@ -99,11 +99,15 @@ class Settings(BaseSettings):
     retrial_exec_history: int = 20
     retrial_destroyed_retain: int = 50
     retrial_preview_port: int = 8080
-    # Sandbox Observatory previews. Default OFF: turning it on marks every pool
-    # sandbox `public=True`, which makes its preview URL readable by ANYONE who
-    # has the link — no API key, no token. That is exactly what makes a preview
-    # shareable, and exactly why it is opt-in.
+    # Sandbox Observatory previews. Default OFF. Sandboxes stay PRIVATE — the
+    # link is a signed, 1h-expiring preview URL (create_signed_preview_url), not
+    # a public sandbox. Still opt-in: anyone holding the link can read the served
+    # page for its lifetime, and the served directory is writable by the code
+    # under test.
     retrial_preview: str = "0"
+    # Comma-separated origins allowed to make cross-origin requests. Empty =
+    # localhost dev origins only. Never "*": see the CORS block in server.py.
+    retrial_allowed_origins: str = ""
     # --- new in this plan ---
     retrial_auth_token: str | None = None                      # T1-5
     retrial_est_rate_per_sandbox_hour: float | None = None     # T1-4 (None = no $ estimate)

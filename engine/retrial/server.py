@@ -17,9 +17,12 @@ PREWARM in the background, keeping it bounded and ready for the next run.
 
 Run: uvicorn retrial.server:app --port 8000   (the UI expects ws://localhost:8000/ws)
 
-Binds 127.0.0.1 by default (loopback only) — CORS is wide-open (allow_origins=*)
-and there is no auth, so the server must not be exposed on 0.0.0.0 without a proxy
-in front. Set HOST=0.0.0.0 explicitly only behind a trusted network boundary.
+Binds 127.0.0.1 by default (loopback only). CORS is restricted to the UI's own
+origins (RETRIAL_ALLOWED_ORIGINS to override) because loopback is NOT a defence
+against a browser — any page the operator visits shares that loopback, and
+POST /promote opens a real GitHub PR with their token. Auth (RETRIAL_AUTH_TOKEN)
+is still opt-in and the UI does not send it, so do not expose this on 0.0.0.0
+without a proxy that adds authentication.
 """
 import asyncio
 import atexit
@@ -289,11 +292,30 @@ async def lifespan(app):
 
 
 app = FastAPI(title="Retrial", lifespan=lifespan)
+# CORS is a real security control here, not boilerplate. With allow_origins=["*"]
+# ANY page the operator visits could drive this engine from their browser:
+# POST /tournament (burn credit), POST /sandboxes/destroy_all?force=1 (kill a
+# run), and worst POST /promote — which hands a result to PRSmith and opens a
+# real pull request on the operator's GitHub with their repo-scoped token.
+# Binding to loopback is NOT a defence against that: the browser is on loopback.
+#
+# This was bounded while seed_path had to resolve inside seeds/. `retrial repo`
+# removed that bound, so it is now closed properly: only the UI's own origins may
+# make cross-origin requests, and a preflight from anywhere else is refused.
+# RETRIAL_ALLOWED_ORIGINS overrides for a real deployment.
+_ALLOWED_ORIGINS = [
+    o.strip() for o in (get_settings().retrial_allowed_origins or "").split(",")
+    if o.strip()
+] or [
+    "http://localhost:5173", "http://127.0.0.1:5173",
+    "http://localhost:5174", "http://127.0.0.1:5174",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
