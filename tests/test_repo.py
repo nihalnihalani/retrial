@@ -6,8 +6,8 @@ id as a 100% flaky test — a precise, confident lie about a test it never ran.
 """
 import pytest
 
-from retrial.repo import (BOOTSTRAP_FAILED, REPO_DIR, RepoSpec, build_command,
-                          diagnose_exit)
+from retrial.repo import (BOOTSTRAP_FAILED, DID_NOT_RUN, REPO_DIR, RepoSpec,
+                          build_command, build_suite_command, diagnose_exit)
 
 SHA = "7770dfe14b3d0d197cedc6640f3ff7e3bd695726"
 
@@ -97,7 +97,27 @@ def test_command_disables_plugins_that_would_add_variance():
 
 def test_command_runs_inside_the_repo_dir():
     cmd = build_command(RepoSpec("owner/name", SHA, "tests/t.py::test_x"))
-    assert f"cd {REPO_DIR} && python3 -m pytest" in cmd
+    assert f"cd {REPO_DIR}" in cmd and "python3 -m pytest" in cmd
+
+
+def test_exit_zero_alone_is_not_a_pass():
+    """pytest exits 0 for skipped and xfailed too. A sandbox has no database,
+    credentials or services, so skipif-gated tests are common — and scoring them
+    as passes reports a clean bill of health for a test that never ran."""
+    cmd = build_command(RepoSpec("owner/name", SHA, "tests/t.py::test_x"))
+    assert "passed" in cmd          # the summary must confirm an actual pass
+    assert str(DID_NOT_RUN) in cmd  # otherwise it is a non-verdict
+
+
+def test_did_not_run_is_diagnosed_and_excluded():
+    msg = diagnose_exit(DID_NOT_RUN)
+    assert msg and "did not actually run" in msg
+    assert "rather than counted as a pass" in msg
+
+
+def test_suite_mode_treats_a_skipped_target_as_a_non_verdict():
+    assert "skipped" in build_suite_command(
+        RepoSpec("owner/name", SHA, "tests/t.py::test_x", suite="tests"))
 
 
 # ---------------------------- suite mode --------------------------------

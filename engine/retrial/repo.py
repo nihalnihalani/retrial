@@ -115,12 +115,23 @@ PYTEST_NON_VERDICT = {
 # Retrial's own bootstrap failures, chosen outside pytest's range.
 BOOTSTRAP_FAILED = 98
 TARGET_NOT_IN_REPORT = 96
+# pytest exits 0 for a test that was SKIPPED or XFAILED — it never ran, but the
+# exit code is indistinguishable from a pass. A Daytona container has no
+# database, no credentials, no services and no $DISPLAY, so a large share of any
+# real suite is skipif-gated on exactly those. Scoring those as passes would
+# produce "<=7% at 95% confidence" about an experiment that never happened.
+DID_NOT_RUN = 95
 BOOTSTRAP_DIAGNOSIS = {
     BOOTSTRAP_FAILED: ("repo bootstrap failed — could not download the ref or "
                        "install dependencies in the sandbox"),
     TARGET_NOT_IN_REPORT: ("the target test was not in the suite's junit report "
                            "— it was never collected, or the suite died before "
                            "reaching it. Not scored as a failure."),
+    DID_NOT_RUN: ("the test did not actually run — pytest exited 0 but reported "
+                  "no passing test (skipped, xfailed, or deselected). A sandbox "
+                  "has no database, credentials or services, so skipif-gated "
+                  "tests land here. Excluded from the flake rate rather than "
+                  "counted as a pass."),
 }
 
 
@@ -182,7 +193,8 @@ _EXTRACT = (
     "  .endswith(TARGET) or c.get('name')==TARGET.split('::')[-1]];"
     "sys.exit(96) if not cs else None;"
     "c=cs[0];"
-    "sys.exit(1 if (c.find('failure') is not None or c.find('error') is not None) else 0)"
+    "sys.exit(1 if (c.find('failure') is not None or c.find('error') is not None) "
+"     else (95 if c.find('skipped') is not None else 0))"
 )
 
 
@@ -249,8 +261,15 @@ def build_command(spec, preview_tail=""):
         # -p no:randomly / -p no:cacheprovider: a plugin that shuffles order or
         # writes .pytest_cache would add variance Retrial did not ask for, and
         # variance is the thing being measured.
-        f"cd {REPO_DIR} && python3 -m pytest {node} -q "
-        f"-p no:randomly -p no:cacheprovider >/dev/null 2>&1; RC=$?; "
+        f"cd {REPO_DIR}; "
+        f"OUT=$(python3 -m pytest {node} -q -p no:randomly -p no:cacheprovider 2>&1); "
+        f"RC=$?; "
+        # An exit of 0 is only a PASS if pytest actually passed something. All
+        # -skipped / all-xfailed / all-deselected also exit 0, and scoring those
+        # as passes is how a tool reports a clean bill of health for a test that
+        # never ran.
+        f"if [ $RC -eq 0 ] && ! printf '%s' \"$OUT\" | grep -qE '[0-9]+ passed'; "
+        f"then RC={DID_NOT_RUN}; fi; "
         f"{preview_tail}echo EXIT:$RC"
     )
 

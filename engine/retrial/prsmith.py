@@ -215,7 +215,13 @@ class PRSmith:
 
             if verdict == "FIXED":
                 branch = f"retrial/fix-{slug}-{short}"
-                path = f"seeds/fixed/{test_name}"
+                # `slug`, not raw test_name: test_name used to be a Path.name
+                # inside seeds/, but a pytest node id from a user-supplied repo
+                # is now a legitimate value here — and it contains "/" and "::".
+                # Interpolating it raw made
+                # `seeds/fixed/../../.github/workflows/x.yml` a write primitive
+                # against a repo-scoped GitHub token.
+                path = f"seeds/fixed/{slug}.py"
                 file_content = result["winner"]["patched_code"]
                 title = (f"fix: {test_name} flaky test "
                          f"({result['winner'].get('cause_class')}, "
@@ -223,7 +229,7 @@ class PRSmith:
                          f"{_pct((result.get('confirmation') or {}).get('flake_rate'))})")
             else:
                 branch = f"retrial/quarantine-{slug}-{short}"
-                path = f"seeds/quarantine/{test_name}.md"
+                path = f"seeds/quarantine/{slug}.md"
                 file_content = body
                 title = f"quarantine: {test_name} flaky test (no fix survived)"
 
