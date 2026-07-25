@@ -18,6 +18,7 @@ import re
 import time
 
 from .registry import REGISTRY
+from .settings import get_settings
 
 _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 
@@ -33,6 +34,42 @@ _EXIT_RE = re.compile(r"EXIT:(-?\d+)")
 # here. Distinguishing a bare ImportError from a real failure needs the harness
 # to own the import, not a wider exit-code table.
 _VERDICT_EXIT_CODES = (0, 1)
+
+
+_PREVIEW_DIR = "/tmp/retrial-preview"
+
+
+def _preview_tail():
+    """Shell fragment that refreshes this sandbox's preview page with the trial
+    that just ran, or "" when previews are off (the default).
+
+    Three properties this must not break, in order of importance:
+
+    1. The EXIT marker must still carry the SEED's exit code. The caller captures
+       it into `RC` BEFORE this fragment runs and echoes `$RC`, so anything in
+       here may clobber `$?` freely.
+    2. It must never fail a trial. The write is `2>/dev/null || true` — a sandbox
+       warmed before previews were enabled has no preview dir, and that must be
+       invisible to the measurement.
+    3. It must not add a round-trip. This rides inside the SAME exec as the
+       trial, so previews cost no extra Daytona calls on the hot path.
+
+    The page states only what was measured: this sandbox's own last exit code."""
+    if not get_settings().preview_on:
+        return ""
+    return (
+        f"{{ printf '%s' "
+        f"'<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=2>"
+        f"<title>retrial sandbox</title>"
+        f"<body style=\"font:14px/1.6 ui-monospace,monospace;background:#0b0d12;"
+        f"color:#e6e9ef;padding:2rem\">"
+        f"<h1 style=\"font-size:15px;letter-spacing:.12em\">RETRIAL &middot; SANDBOX</h1>"
+        f"<p>last trial exit code: '\"$RC\"'</p>"
+        f"<p style=\"color:#8b93a7\">0 = the test passed &middot; 1 = it failed. "
+        f"This sandbox is one of a swarm rerunning the same test to measure how "
+        f"often it lies.</p>' "
+        f"> {_PREVIEW_DIR}/index.html; }} 2>/dev/null || true; "
+    )
 
 
 def run_trial(pool, test_code, timeout=60, isolation="process"):
@@ -55,8 +92,12 @@ def run_trial(pool, test_code, timeout=60, isolation="process"):
         # shell metacharacters) and break out of the write. base64 has no shell-
         # special chars, so the payload can never escape its own decode.
         b64 = base64.b64encode(test_code.encode("utf-8")).decode("ascii")
+        # RC is captured immediately, because `$?` is clobbered by whatever runs
+        # next — and with previews on, something does run next. The EXIT marker
+        # the verifier parses always reports the SEED's code, never the preview
+        # write's.
         cmd = (f"echo '{b64}' | base64 -d > /tmp/seed.py && "
-               f"python3 /tmp/seed.py; echo EXIT:$?")
+               f"python3 /tmp/seed.py; RC=$?; {_preview_tail()}echo EXIT:$RC")
         # Observatory hook: this pooled sandbox is now running a command. The
         # registry's @_safe guarantees this never affects the trial (a
         # test-constructed pool with a private registry merely double-books into

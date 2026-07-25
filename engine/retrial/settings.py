@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     retrial_exec_history: int = 20
     retrial_destroyed_retain: int = 50
     retrial_preview_port: int = 8080
+    # Sandbox Observatory previews. Default OFF: turning it on marks every pool
+    # sandbox `public=True`, which makes its preview URL readable by ANYONE who
+    # has the link — no API key, no token. That is exactly what makes a preview
+    # shareable, and exactly why it is opt-in.
+    retrial_preview: str = "0"
     # --- new in this plan ---
     retrial_auth_token: str | None = None                      # T1-5
     retrial_est_rate_per_sandbox_hour: float | None = None     # T1-4 (None = no $ estimate)
@@ -148,6 +153,15 @@ class Settings(BaseSettings):
     @property
     def narrate_on(self) -> bool:
         return self.narrate != "0"
+
+    @property
+    def preview_on(self) -> bool:
+        """Serve a shareable Observatory preview from every pool sandbox.
+
+        Note this one is `== "1"`, not the `!= "0"` convention used by the other
+        flags: it publishes sandboxes to anyone holding the URL, so an empty or
+        malformed value must mean OFF, never ON."""
+        return self.retrial_preview == "1"
 
     # -- resolved chains (one place each) -------------------------------
     def resolved_fork_target(self) -> str:

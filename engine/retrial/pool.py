@@ -24,6 +24,43 @@ from .registry import as_safe
 from .settings import get_settings
 
 
+def _warm_cmd():
+    """The first exec on a fresh sandbox — pays cold start, and (when previews
+    are on) leaves a tiny static server running on the preview port.
+
+    Why a server at all: `get_preview_link(port)` happily returns a URL for a
+    sandbox with nothing bound to that port, and the proxy then answers 502.
+    A preview link is only "working" if something is listening. `http.server`
+    is stdlib, already present, costs one background process, and is started in
+    the SAME exec that pays cold start — so previews add ZERO extra round-trips
+    to the trial hot path.
+
+    The page is deliberately plain: it identifies the sandbox and is overwritten
+    by each trial with that trial's real verdict. Nothing here is invented — if
+    no trial has run yet it says exactly that."""
+    s = get_settings()
+    if not s.preview_on:
+        return "echo warm"
+    port = s.retrial_preview_port
+    return (
+        f"mkdir -p {_PREVIEW_DIR} && "
+        f"printf '%s' '<!doctype html><meta charset=utf-8>"
+        f"<title>retrial sandbox</title>"
+        f"<body style=\"font:14px/1.6 ui-monospace,monospace;background:#0b0d12;"
+        f"color:#e6e9ef;padding:2rem\">"
+        f"<h1 style=\"font-size:15px;letter-spacing:.12em\">RETRIAL &middot; SANDBOX</h1>"
+        f"<p>warm &mdash; no trial has run in this sandbox yet.</p>' "
+        f"> {_PREVIEW_DIR}/index.html && "
+        f"cd {_PREVIEW_DIR} && "
+        f"(nohup python3 -m http.server {port} >/dev/null 2>&1 &) ; echo warm"
+    )
+
+
+# Where the preview page lives inside a sandbox. /tmp is the only reliably
+# writable path in the container image (see CLAUDE.md).
+_PREVIEW_DIR = "/tmp/retrial-preview"
+
+
 class SandboxPool:
     """Thread-safe pool of fresh Daytona sandboxes for trial execution."""
 
@@ -65,6 +102,14 @@ class SandboxPool:
             kwargs["auto_delete_interval"] = self._auto_delete_min
         if self._hermetic:
             kwargs["network_block_all"] = True
+        if get_settings().preview_on and not self._hermetic:
+            # MEASURED 2026-07-25: a preview URL on a private sandbox returns 401
+            # to a plain browser — the proxy wants an `x-daytona-preview-token`
+            # header, which a tab or an <iframe src> cannot attach. `public=True`
+            # is what makes the link openable by a human, verified end to end
+            # (anonymous GET, no token -> 200 + body). Never combined with
+            # hermetic: publishing a network-blocked sandbox is contradictory.
+            kwargs["public"] = True
         sb = self._client.create(CreateSandboxFromSnapshotParams(**kwargs), timeout=120)
         with self._lock:
             self._live[sb.id] = sb
@@ -118,7 +163,7 @@ class SandboxPool:
                 # a multi-second stall. A freshly created container's first exec is
                 # slow; every exec after it is fast.
                 try:
-                    sb.process.exec("echo warm")
+                    sb.process.exec(_warm_cmd())
                 except Exception:
                     pass
                 # Cold-start paid: the sandbox is warm and ready to lease.
